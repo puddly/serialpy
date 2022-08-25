@@ -230,9 +230,10 @@ class DescriptorTransport(asyncio.transports.Transport):
             self.write_eof()
 
     def __del__(self):
-        if self._file is not None:
+        if getattr(self, "_file", None) is not None:
             warnings.warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
             self._file.close()
+            self._file = None
 
     def _fatal_error(self, exc, message=f"Fatal error in {transport_name} transport"):
         # should be called by exception handler only
