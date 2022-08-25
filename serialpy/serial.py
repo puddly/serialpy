@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import fcntl
+import typing
 import logging
 import termios
 import dataclasses
@@ -48,14 +49,18 @@ class ModemBits:
     }
 
     @classmethod
+    def all_off(cls) -> ModemBits:
+        return cls.from_int(0x00000000)
+
+    @classmethod
     def from_int(cls, n: int) -> ModemBits:
-        return cls(**{name: bool(n & bit) for name, bit in self._mapping.items()})
+        return cls(**{name: bool(n & bit) for name, bit in cls._mapping.items()})
 
     @property
     def all_bits_set(self) -> bool:
         return all(getattr(self, name) is not None for name in self._mapping.keys())
 
-    def mask_of_value(self, mask):
+    def mask_of_value(self, mask: typing.Literal[True, False, None]) -> int:
         result = 0x00000000
 
         for name, bit in self._mapping.items():
@@ -75,7 +80,7 @@ class ModemBits:
         for name, bit in self._mapping.items():
             result |= bit if getattr(self, name) else 0x00000000
 
-        return value
+        return result
 
 
 class Serial:
@@ -198,7 +203,8 @@ class Serial:
         return self._baudrate
 
     def get_modem_bits(self) -> ModemBits:
-        result = (0x00000000).to_bytes(4, "little")
+        # A `bytearray` is critical here: `bytes` will not be mutated
+        result = bytearray((0x00000000).to_bytes(4, "little"))
         fcntl.ioctl(self._fileno, termios.TIOCMGET, result)
 
         return ModemBits.from_int(int.from_bytes(result, "little"))
