@@ -108,7 +108,6 @@ class Serial:
             self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
             self._should_cleanup = True
 
-        self._file = os.fdopen(self._fileno, "rb+", buffering=0)
         self.configure_port()
 
     def configure_port(self) -> None:
@@ -251,17 +250,14 @@ class Serial:
         buffer = bytearray()
 
         while n > 0:
-            chunk = self._file.read(n - len(buffer))
+            chunk = os.read(self._fileno, n - len(buffer))
             n -= len(chunk)
             buffer += chunk
 
         return buffer
 
-    def readline(self, n) -> bytes:
-        return self._file.readline()
-
     def write(self, data: bytes):
-        self._file.write(data)
+        os.write(self._fileno, data)
 
     def __enter__(self) -> Serial:
         return self

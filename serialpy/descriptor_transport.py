@@ -35,7 +35,6 @@ class DescriptorTransport(asyncio.transports.Transport):
         super().__init__(extra)
         self._path: os.PathLike | None = path
         self._fileno: int | None = os.open(self._path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
-        self._file: typing.BinaryIO | None = os.fdopen(self._fileno)
 
         self._loop: asyncio.BaseEventLoop = loop
         self._set_write_buffer_limits()
@@ -214,7 +213,6 @@ class DescriptorTransport(asyncio.transports.Transport):
     def write_eof(self) -> None:
         if self._closing:
             return
-        assert self._file
         self._closing = True
         if not self._buffer:
             self._loop.remove_reader(self._fileno)
@@ -230,14 +228,14 @@ class DescriptorTransport(asyncio.transports.Transport):
         return self._closing
 
     def close(self) -> None:
-        if self._file is not None and not self._closing:
+        if self._fileno is not None and not self._closing:
             self.write_eof()
 
     def __del__(self) -> None:
-        if getattr(self, "_file", None) is not None:
+        if getattr(self, "_fileno", None) is not None:
             warnings.warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
-            self._file.close()
-            self._file = None
+            os.close(self._fileno)
+            self._fileno = None
 
     def _fatal_error(self, exc: Exception | None, message: str = f"Fatal error in {transport_name} transport") -> None:
         # should be called by exception handler only
@@ -270,7 +268,6 @@ class DescriptorTransport(asyncio.transports.Transport):
         try:
             self._protocol.connection_lost(exc)
         finally:
-            self._file.close()
-            self._file = None
+            os.close(self._fileno)
             self._protocol = None
             self._loop = None
