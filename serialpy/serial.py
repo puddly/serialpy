@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import io
 import fcntl
 import typing
 import logging
@@ -83,7 +84,7 @@ class ModemBits:
         return result
 
 
-class Serial:
+class Serial(io.RawIOBase):
     def __init__(
         self,
         path,
@@ -246,15 +247,13 @@ class Serial:
             os.close(self._fileno)
             self._fileno = None
 
-    def read(self, n: int) -> bytes:
-        buffer = bytearray()
+    def readinto(self, b: bytearray) -> int:
+        # `io.IOBase` implements `read`, `readline`, using `readinto`
+        chunk = os.read(self._fileno, len(b))
+        n = len(chunk)
+        b[:n] = chunk
 
-        while n > 0:
-            chunk = os.read(self._fileno, n - len(buffer))
-            n -= len(chunk)
-            buffer += chunk
-
-        return buffer
+        return n
 
     def write(self, data: bytes):
         os.write(self._fileno, data)
