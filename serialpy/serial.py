@@ -108,7 +108,7 @@ class Serial:
             self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
             self._should_cleanup = True
 
-        self._file = os.fdopen(self._fileno, "rb+")
+        self._file = os.fdopen(self._fileno, "rb+", buffering=0)
         self.configure_port()
 
     def configure_port(self) -> None:
