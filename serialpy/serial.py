@@ -103,7 +103,7 @@ class Serial:
             self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
             self._should_cleanup = True
 
-        self._file = os.fdopen(self._fileno)
+        self._file = os.fdopen(self._fileno, "rb+")
         self.configure_port()
 
     def configure_port(self):
@@ -242,20 +242,20 @@ class Serial:
             self._fileno = None
 
     def read(self, n: int) -> bytes:
-        return self._file.read(n)
-
-    def readexactly(self, n: int) -> bytes:
         buffer = bytearray()
 
         while n > 0:
-            chunk = self.read(n - len(buffer))
+            chunk = self._file.read(n - len(buffer))
             n -= len(chunk)
             buffer += chunk
 
         return buffer
 
+    def readline(self, n) -> bytes:
+        return self._file.readline()
+
     def write(self, data: bytes):
-        self._file.write(n)
+        self._file.write(data)
 
     def __enter__(self):
         return self
