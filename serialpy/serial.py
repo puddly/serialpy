@@ -111,7 +111,7 @@ class Serial:
         self._file = os.fdopen(self._fileno, "rb+")
         self.configure_port()
 
-    def configure_port(self):
+    def configure_port(self) -> None:
         if self._fileno is None:
             raise ValueError("Cannot configure, serial port is not open")
 
@@ -191,15 +191,15 @@ class Serial:
         )
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self.path
 
     @property
-    def path(self):
+    def path(self) -> str:
         return self._path
 
     @property
-    def baudrate(self):
+    def baudrate(self) -> int:
         return self._baudrate
 
     def get_modem_bits(self) -> ModemBits:
@@ -209,7 +209,7 @@ class Serial:
 
         return ModemBits.from_int(int.from_bytes(result, "little"))
 
-    def set_modem_bits(self, modem_bits: ModemBits):
+    def set_modem_bits(self, modem_bits: ModemBits) -> None:
         if modem_bits.all_bits_set:
             value = modem_bits.as_int()
             LOGGER.debug("Setting all modem bits: 0x%08X", value)
@@ -227,22 +227,22 @@ class Serial:
                 fcntl.ioctl(self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little"))
 
     @property
-    def dtr(self):
+    def dtr(self) -> bool:
         return self.get_modem_bits().dtr
 
     @dtr.setter
-    def dtr(self, value):
-        return self.set_modem_bits(ModemBits(dtr=bool(value)))
+    def dtr(self, value) -> None:
+        self.set_modem_bits(ModemBits(dtr=bool(value)))
 
     @property
-    def rts(self):
+    def rts(self) -> bool:
         return self.get_modem_bits().rts
 
     @rts.setter
-    def rts(self, value):
-        return self.set_modem_bits(ModemBits(rts=bool(value)))
+    def rts(self, value) -> None:
+        self.set_modem_bits(ModemBits(rts=bool(value)))
 
-    def close(self):
+    def close(self) -> None:
         if self._should_cleanup and self._fileno is not None:
             os.close(self._fileno)
             self._fileno = None
@@ -263,11 +263,11 @@ class Serial:
     def write(self, data: bytes):
         self._file.write(data)
 
-    def __enter__(self):
+    def __enter__(self) -> Serial:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         self.close()
