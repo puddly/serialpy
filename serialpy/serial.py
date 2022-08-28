@@ -243,7 +243,7 @@ class Serial(io.RawIOBase):
         self.set_modem_bits(ModemBits(rts=bool(value)))
 
     def close(self) -> None:
-        if self._should_cleanup and self._fileno is not None:
+        if getattr(self, "_should_cleanup", False) and self._fileno is not None:
             os.close(self._fileno)
             self._fileno = None
 
