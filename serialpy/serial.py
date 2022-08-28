@@ -255,6 +255,16 @@ class Serial(io.RawIOBase):
 
         return n
 
+    def readexactly(self, n: int) -> bytes:
+        buffer = bytearray(n)
+        view = memoryview(buffer)
+        remaining = n
+
+        while remaining > 0:
+            remaining -= self.readinto(view)
+
+        return bytes(buffer)
+
     def write(self, data: bytes):
         os.write(self._fileno, data)
 
