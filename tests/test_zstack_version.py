@@ -9,7 +9,7 @@ if __name__ == "__main__":
         assert serial.get_modem_bits() == serialpy.ModemBits.from_int(0)
 
         serial.write(b"\xFE\x00\x21\x02\x23")
-        rsp = serial.read(len(EXPECTED_RSP))
+        rsp = serial.readexactly(len(EXPECTED_RSP))
         assert rsp == EXPECTED_RSP, repr(rsp)
 
         serial.set_modem_bits(serialpy.ModemBits(rts=True))
