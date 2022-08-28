@@ -247,6 +247,9 @@ class Serial(io.RawIOBase):
             os.close(self._fileno)
             self._fileno = None
 
+    def fileno(self) -> int:
+        return self._fileno
+
     def readinto(self, b: bytearray) -> int:
         # `io.IOBase` implements `read`, `readline`, using `readinto`
         chunk = os.read(self._fileno, len(b))
