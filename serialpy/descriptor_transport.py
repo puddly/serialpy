@@ -231,11 +231,14 @@ class DescriptorTransport(asyncio.transports.Transport):
         if self._fileno is not None and not self._closing:
             self.write_eof()
 
+    def _cleanup(self):
+        os.close(self._fileno)
+        self._fileno = None
+
     def __del__(self) -> None:
         if getattr(self, "_fileno", None) is not None:
             warnings.warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
-            os.close(self._fileno)
-            self._fileno = None
+            self._cleanup()
 
     def _fatal_error(self, exc: Exception | None, message: str = f"Fatal error in {transport_name} transport") -> None:
         # should be called by exception handler only
@@ -268,6 +271,6 @@ class DescriptorTransport(asyncio.transports.Transport):
         try:
             self._protocol.connection_lost(exc)
         finally:
-            os.close(self._fileno)
+            self._cleanup()
             self._protocol = None
             self._loop = None
