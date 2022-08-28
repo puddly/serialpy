@@ -55,7 +55,7 @@ async def create_serial_connection(
     rtscts=False,
     *,
     transport_factory=SerialTransport,
-):
+) -> tuple[SerialTransport, asyncio.Protocol]:
     parsed_path = urllib.parse.urlparse(url)
 
     if parsed_path.scheme in ("socket", "tcp"):
@@ -75,3 +75,14 @@ async def create_serial_connection(
         )
 
     return transport, protocol
+
+
+async def open_serial_connection(*args, **kwargs) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    loop = asyncio.get_running_loop()
+
+    reader = asyncio.StreamReader(loop=loop)
+    protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
+    transport, _ = await create_serial_connection(loop, lambda: protocol, *args, **kwargs)
+    writer = asyncio.StreamWriter(transport, protocol, reader, loop)
+
+    return reader, writer
