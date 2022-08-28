@@ -209,7 +209,12 @@ class Serial(io.RawIOBase):
 
         return ModemBits.from_int(int.from_bytes(result, "little"))
 
-    def set_modem_bits(self, modem_bits: ModemBits) -> None:
+    def set_modem_bits(self, modem_bits: ModemBits | None = None, **kwargs) -> None:
+        if modem_bits is None:
+            modem_bits = ModemBits(**kwargs)
+        elif kwargs:
+            raise ValueError("`modem_bits` and keyword arguments are mutually exclusive")
+
         if modem_bits.all_bits_set:
             value = modem_bits.as_int()
             LOGGER.debug("Setting all modem bits: 0x%08X", value)
