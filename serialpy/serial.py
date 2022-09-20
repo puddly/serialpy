@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import io
+import array
 import fcntl
 import typing
 import logging
@@ -15,6 +16,7 @@ PARITY_NONE = None
 STOPBITS_ONE = 1
 STOPBITS_TWO = 2
 
+ASYNC_LOW_LATENCY = (1 << 13)
 CMSPAR = 0o10000000000
 
 if hasattr(termios, "CRTSCTS"):
@@ -190,6 +192,8 @@ class Serial(io.RawIOBase):
             [iflag, oflag, cflag, lflag, ispeed, ospeed, cc],
         )
 
+        self.set_low_latency(True)
+
     @property
     def name(self) -> str:
         return self.path
@@ -204,10 +208,25 @@ class Serial(io.RawIOBase):
 
     def get_modem_bits(self) -> ModemBits:
         # A `bytearray` is critical here: `bytes` will not be mutated
-        result = bytearray((0x00000000).to_bytes(4, "little"))
-        fcntl.ioctl(self._fileno, termios.TIOCMGET, result)
+        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+        fcntl.ioctl(self._fileno, termios.TIOCMGET, buffer)
 
-        return ModemBits.from_int(int.from_bytes(result, "little"))
+        return ModemBits.from_int(int.from_bytes(buffer, "little"))
+
+    def set_low_latency(self, low_latency: bool) -> None:
+        buffer = array.array("i", [0x00000000] * 19 * 8)
+        fcntl.ioctl(self._fileno, termios.TIOCGSERIAL, buffer)
+
+        LOGGER.debug("Read low latency %r", buffer)
+
+        if low_latency:
+            buffer[4] |= ASYNC_LOW_LATENCY
+        else:
+            buffer[4] &= ~ASYNC_LOW_LATENCY
+
+        LOGGER.debug("Writing low latency %r", buffer)
+
+        fcntl.ioctl(self._fileno, termios.TIOCSSERIAL, buffer)
 
     def set_modem_bits(self, modem_bits: ModemBits | None = None, **kwargs) -> None:
         if modem_bits is None:
