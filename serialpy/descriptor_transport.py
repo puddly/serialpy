@@ -61,6 +61,7 @@ class DescriptorTransport(asyncio.transports.Transport):
             self._fatal_error(exc, f"Fatal read error in {self.transport_name} transport")
         else:
             if data:
+                LOGGER.debug("Received %r", data)
                 self._protocol.data_received(data)
             else:
                 if self._loop.get_debug():
@@ -147,6 +148,8 @@ class DescriptorTransport(asyncio.transports.Transport):
 
     def write(self, data) -> None:
         assert isinstance(data, (bytes, bytearray, memoryview)), repr(data)
+        LOGGER.debug("Immediately writing %r", data)
+
         if isinstance(data, bytearray):
             data = memoryview(data)
         if not data:
@@ -170,12 +173,15 @@ class DescriptorTransport(asyncio.transports.Transport):
                 self._conn_lost_count += 1
                 self._fatal_error(exc, f"Fatal write error in {self.transport_name} transport")
                 return
+
+            LOGGER.debug("Sent %d of %d", bytes, n, len(data))
             if n == len(data):
                 return
             elif n > 0:
                 data = memoryview(data)[n:]
             self._loop.add_writer(self._fileno, self._write_ready)
 
+        LOGGER.debug("Buffering %r", data)
         self._buffer += data
         self._maybe_pause_protocol()
 
