@@ -162,9 +162,9 @@ class Serial(io.RawIOBase):
 
         # Hardware flow control
         if self._rtscts:
-            cflag &= ~CRTSCTS
-        else:
             cflag |= CRTSCTS
+        else:
+            cflag &= ~CRTSCTS
 
         # Disable canonical mode (newlines)
         lflag &= ~termios.ICANON
