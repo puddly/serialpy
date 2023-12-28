@@ -214,6 +214,10 @@ class Serial(io.RawIOBase):
         return ModemBits.from_int(int.from_bytes(buffer, "little"))
 
     def set_low_latency(self, low_latency: bool) -> None:
+        if not hasattr(termios, "TIOCGSERIAL"):
+            LOGGER.warning("Platform does not support low latency mode")
+            return
+
         buffer = array.array("i", [0x00000000] * 19 * 8)
         fcntl.ioctl(self._fileno, termios.TIOCGSERIAL, buffer)
 
