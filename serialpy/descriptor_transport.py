@@ -53,6 +53,7 @@ class DescriptorTransport(asyncio.transports.Transport):
             self._loop.call_soon(waiter.set_result, None)
 
     def _read_ready(self) -> None:
+        LOGGER.debug("Event loop woke up reader")
         try:
             data = os.read(self._fileno, self.max_size)
         except (BlockingIOError, InterruptedError):
@@ -174,7 +175,7 @@ class DescriptorTransport(asyncio.transports.Transport):
                 self._fatal_error(exc, f"Fatal write error in {self.transport_name} transport")
                 return
 
-            LOGGER.debug("Sent %d of %d", bytes, n, len(data))
+            LOGGER.debug("Sent %d of %d bytes", n, len(data))
             if n == len(data):
                 return
             elif n > 0:
@@ -234,11 +235,15 @@ class DescriptorTransport(asyncio.transports.Transport):
         return self._closing
 
     def close(self) -> None:
+        LOGGER.debug("Closing at the request of the application")
         if self._fileno is not None and not self._closing:
             self.write_eof()
 
     def _cleanup(self):
+        LOGGER.debug("Closing file descriptor %s", self._fileno)
+        self._loop.remove_reader(self._fileno)
         os.close(self._fileno)
+        LOGGER.debug("Closing file descriptor %s: DONE", self._fileno)
         self._fileno = None
 
     def __del__(self) -> None:
@@ -274,6 +279,7 @@ class DescriptorTransport(asyncio.transports.Transport):
         self._loop.call_soon(self._call_connection_lost, exc)
 
     def _call_connection_lost(self, exc: Exception | None) -> None:
+        LOGGER.debug("Connection was lost: %r", exc)
         try:
             self._protocol.connection_lost(exc)
         finally:
