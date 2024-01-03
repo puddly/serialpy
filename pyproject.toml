@@ -1,6 +1,22 @@
 [build-system]
-requires = ["setuptools>=34.4.0", "wheel"]
+requires = ["setuptools>=61.0.0", "wheel", "setuptools-git-versioning<2"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "serialpy"
+dynamic = ["version"]
+description = "POSIX serial library with native async support"
+urls = {repository = "https://github.com/puddly/serialpy"}
+authors = [
+    {name = "puddly", email = "puddly3@gmail.com"}
+]
+readme = "README.md"
+license = {text = "GPL-3.0"}
+requires-python = ">=3.8"
+dependencies = []
+
+[tool.setuptools-git-versioning]
+enabled = true
 
 [tool.black]
 safe = true
