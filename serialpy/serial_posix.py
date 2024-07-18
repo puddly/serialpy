@@ -82,8 +82,6 @@ class Serial(BaseSerial):
             self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
             self._should_cleanup = True
 
-        self.configure_port()
-
     def configure_port(self) -> None:
         if self._fileno is None:
             raise ValueError("Cannot configure, serial port is not open")
@@ -251,6 +249,7 @@ class Serial(BaseSerial):
         os.write(self._fileno, data)
 
     def __enter__(self) -> Serial:
+        self.configure_port()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
