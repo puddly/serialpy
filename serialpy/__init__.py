@@ -1,6 +1,7 @@
 import sys
 
-from serialpy.serial import ModemBits, Serial, STOPBITS_ONE, PARITY_NONE
+from serialpy.common import ModemBits, STOPBITS_ONE, PARITY_NONE
+from serialpy.serial_posix import Serial
 from serialpy.async_serial import SerialTransport, create_serial_connection, open_serial_connection
 
 _MODULES_TO_PATCH = ["serial", "serial_asyncio", "serial_asyncio_fast"]

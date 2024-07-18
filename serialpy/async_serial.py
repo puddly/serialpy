@@ -4,7 +4,8 @@ import asyncio
 import logging
 import urllib.parse
 
-from serialpy.serial import ModemBits, Serial, STOPBITS_ONE, PARITY_NONE
+from serialpy.common import ModemBits, STOPBITS_ONE, PARITY_NONE
+from serialpy.serial_posix import Serial
 from serialpy.descriptor_transport import DescriptorTransport
 
 

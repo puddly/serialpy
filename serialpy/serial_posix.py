@@ -7,16 +7,12 @@ import fcntl
 import typing
 import logging
 import termios
-import dataclasses
+
+from .common import BaseSerial, ModemBits, PARITY_NONE, STOPBITS_ONE, STOPBITS_TWO
 
 LOGGER = logging.getLogger(__name__)
 
-PARITY_NONE = None
-
-STOPBITS_ONE = 1
-STOPBITS_TWO = 2
-
-ASYNC_LOW_LATENCY = (1 << 13)
+ASYNC_LOW_LATENCY = 1 << 13
 CMSPAR = 0o10000000000
 
 if hasattr(termios, "CRTSCTS"):
@@ -27,66 +23,41 @@ else:
     raise RuntimeError("termios.CRTSCTS missing")
 
 
-@dataclasses.dataclass(frozen=True)
-class ModemBits:
-    le: bool | None = None
-    dtr: bool | None = None
-    rts: bool | None = None
-    st: bool | None = None
-    sr: bool | None = None
-    cts: bool | None = None
-    car: bool | None = None
-    rng: bool | None = None
-    dsr: bool | None = None
-
-    _mapping = {
-        "le": termios.TIOCM_LE,
-        "dtr": termios.TIOCM_DTR,
-        "rts": termios.TIOCM_RTS,
-        "st": termios.TIOCM_ST,
-        "sr": termios.TIOCM_SR,
-        "cts": termios.TIOCM_CTS,
-        "car": termios.TIOCM_CAR,
-        "rng": termios.TIOCM_RNG,
-        "dsr": termios.TIOCM_DSR,
-    }
-
-    @classmethod
-    def all_off(cls) -> ModemBits:
-        return cls.from_int(0x00000000)
-
-    @classmethod
-    def from_int(cls, n: int) -> ModemBits:
-        return cls(**{name: bool(n & bit) for name, bit in cls._mapping.items()})
-
-    @property
-    def all_bits_set(self) -> bool:
-        return all(getattr(self, name) is not None for name in self._mapping.keys())
-
-    def mask_of_value(self, mask: typing.Literal[True, False, None]) -> int:
-        result = 0x00000000
-
-        for name, bit in self._mapping.items():
-            value = getattr(self, name)
-
-            if value == mask:
-                result |= bit
-
-        return result
-
-    def as_int(self) -> int:
-        if not self.all_bits_set:
-            raise ValueError(f"Cannot convert to int when bit is not set: {self!r}")
-
-        result = 0x00000000
-
-        for name, bit in self._mapping.items():
-            result |= bit if getattr(self, name) else 0x00000000
-
-        return result
+MODEM_BIT_MAPPING = {
+    "le": termios.TIOCM_LE,
+    "dtr": termios.TIOCM_DTR,
+    "rts": termios.TIOCM_RTS,
+    "st": termios.TIOCM_ST,
+    "sr": termios.TIOCM_SR,
+    "cts": termios.TIOCM_CTS,
+    "car": termios.TIOCM_CAR,
+    "rng": termios.TIOCM_RNG,
+    "dsr": termios.TIOCM_DSR,
+}
 
 
-class Serial(io.RawIOBase):
+def modem_bits_mask_of_value(modem_bits: ModemBits, mask: typing.Literal[True, False, None]) -> int:
+    result = 0x00000000
+
+    for name, bit in MODEM_BIT_MAPPING.items():
+        value = getattr(modem_bits, name)
+
+        if value == mask:
+            result |= bit
+
+    return result
+
+
+def modem_bits_as_int(modem_bits: ModemBits) -> int:
+    result = 0x00000000
+
+    for name, bit in MODEM_BIT_MAPPING.items():
+        result |= bit if getattr(modem_bits, name) else 0x00000000
+
+    return result
+
+
+class Serial(BaseSerial):
     def __init__(
         self,
         path,
@@ -211,7 +182,10 @@ class Serial(io.RawIOBase):
         buffer = bytearray((0x00000000).to_bytes(4, "little"))
         fcntl.ioctl(self._fileno, termios.TIOCMGET, buffer)
 
-        return ModemBits.from_int(int.from_bytes(buffer, "little"))
+        n = int.from_bytes(buffer, "little")
+        return ModemBits(
+            **{name: bool(n & bit) for name, bit in MODEM_BIT_MAPPING.items()}
+        )
 
     def set_low_latency(self, low_latency: bool) -> None:
         if not hasattr(termios, "TIOCGSERIAL"):
@@ -233,42 +207,29 @@ class Serial(io.RawIOBase):
         fcntl.ioctl(self._fileno, termios.TIOCSSERIAL, buffer)
 
     def set_modem_bits(self, modem_bits: ModemBits | None = None, **kwargs) -> None:
-        if modem_bits is None:
-            modem_bits = ModemBits(**kwargs)
-        elif kwargs:
-            raise ValueError("`modem_bits` and keyword arguments are mutually exclusive")
+        all_bits_set = all(
+            getattr(self, name) is not None for name in MODEM_BIT_MAPPING.keys()
+        )
 
-        if modem_bits.all_bits_set:
-            value = modem_bits.as_int()
+        if all_bits_set:
+            value = modem_bits_as_int(modem_bits)
             LOGGER.debug("Setting all modem bits: 0x%08X", value)
             fcntl.ioctl(self._fileno, termios.TIOCMSET, value.to_bytes(4, "little"))
         else:
-            to_set = modem_bits.mask_of_value(True)
-            to_clear = modem_bits.mask_of_value(False)
+            to_set = modem_bits_mask_of_value(modem_bits, True)
+            to_clear = modem_bits_mask_of_value(modem_bits, False)
 
             if to_set:
                 LOGGER.debug("Setting modem bits: 0x%08X", to_set)
-                fcntl.ioctl(self._fileno, termios.TIOCMBIS, to_set.to_bytes(4, "little"))
+                fcntl.ioctl(
+                    self._fileno, termios.TIOCMBIS, to_set.to_bytes(4, "little")
+                )
 
             if to_clear:
                 LOGGER.debug("Clearing modem bits: 0x%08X", to_clear)
-                fcntl.ioctl(self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little"))
-
-    @property
-    def dtr(self) -> bool:
-        return self.get_modem_bits().dtr
-
-    @dtr.setter
-    def dtr(self, value) -> None:
-        self.set_modem_bits(ModemBits(dtr=bool(value)))
-
-    @property
-    def rts(self) -> bool:
-        return self.get_modem_bits().rts
-
-    @rts.setter
-    def rts(self, value) -> None:
-        self.set_modem_bits(ModemBits(rts=bool(value)))
+                fcntl.ioctl(
+                    self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little")
+                )
 
     def close(self) -> None:
         if getattr(self, "_should_cleanup", False) and self._fileno is not None:
@@ -285,16 +246,6 @@ class Serial(io.RawIOBase):
         b[:n] = chunk
 
         return n
-
-    def readexactly(self, n: int) -> bytes:
-        buffer = bytearray(n)
-        view = memoryview(buffer)
-        remaining = n
-
-        while remaining > 0:
-            remaining -= self.readinto(view)
-
-        return bytes(buffer)
 
     def write(self, data: bytes):
         os.write(self._fileno, data)
