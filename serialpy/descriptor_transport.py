@@ -281,8 +281,9 @@ class DescriptorTransport(asyncio.transports.Transport):
     def _call_connection_lost(self, exc: Exception | None) -> None:
         LOGGER.debug("Connection was lost: %r", exc)
         try:
-            self._protocol.connection_lost(exc)
-        finally:
             self._cleanup()
-            self._protocol = None
+        finally:
+            protocol = self._protocol
             self._loop = None
+            self._protocol = None
+            protocol.connection_lost(exc)
