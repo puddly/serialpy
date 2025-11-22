@@ -1,25 +1,21 @@
+"""File descriptor-based asyncio transport."""
+
 from __future__ import annotations
 
-import os
-import errno
-import typing
 import asyncio
+import errno
 import logging
+import os
+import typing
+from typing import Any
 import warnings
-
 
 LOGGER = logging.getLogger(__name__)
 LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
 
 
 class DescriptorTransport(asyncio.transports.Transport):
-    """
-    A mixture of three private asyncio mixins and base transports:
-
-      1. `asyncio.transports._FlowControlMixin`
-      2. `asyncio.unix_events._UnixWritePipeTransport`
-      3. `asyncio.unix_events._UnixReadPipeTransport`
-    """
+    """File descriptor transport using asyncio."""
 
     max_size = 256 * 1024  # max bytes we read in one event loop iteration
     transport_name = "file"
@@ -28,13 +24,10 @@ class DescriptorTransport(asyncio.transports.Transport):
         self,
         loop: asyncio.BaseEventLoop,
         protocol: asyncio.Protocol,
-        path: os.PathLike,
-        waiter: asyncio.Future | None = None,
         extra: dict[str, typing.Any] | None = None,
     ) -> None:
-        super().__init__(extra)
-        self._path: os.PathLike | None = path
-        self._fileno: int | None = os.open(self._path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        """Initialize the descriptor transport."""
+        self._fileno: int | None = None
 
         self._loop: asyncio.BaseEventLoop = loop
         self._set_write_buffer_limits()
@@ -45,21 +38,28 @@ class DescriptorTransport(asyncio.transports.Transport):
         self._conn_lost_count = 0
         self._closing = False
         self._paused = False
+        self._extra: dict[str, Any] = {}
 
-        self._loop.call_soon(self._protocol.connection_made, self)
-        self._loop.call_soon(self._loop.add_reader, self._fileno, self._read_ready)
+    async def _open(self, path: os.PathLike) -> None:
+        self._fileno = await self._loop.run_in_executor(
+            None, os.open, path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
+        )
 
-        if waiter is not None:
-            self._loop.call_soon(waiter.set_result, None)
+    async def _connect(self) -> None:
+        assert self._fileno is not None
+        self._loop.add_reader(self._fileno, self._read_ready)
 
     def _read_ready(self) -> None:
         LOGGER.debug("Event loop woke up reader")
+        assert self._fileno is not None
         try:
             data = os.read(self._fileno, self.max_size)
         except (BlockingIOError, InterruptedError):
             pass
         except OSError as exc:
-            self._fatal_error(exc, f"Fatal read error in {self.transport_name} transport")
+            self._fatal_error(
+                exc, f"Fatal read error in {self.transport_name} transport"
+            )
         else:
             if data:
                 LOGGER.debug("Received %r", data)
@@ -73,16 +73,20 @@ class DescriptorTransport(asyncio.transports.Transport):
                 self._loop.call_soon(self._call_connection_lost, None)
 
     def pause_reading(self) -> None:
+        """Pause reading from the file descriptor."""
         if self._closing or self._paused:
             return
+        assert self._fileno is not None
         self._paused = True
         self._loop.remove_reader(self._fileno)
         if self._loop.get_debug():
             LOGGER.debug("%r pauses reading", self)
 
     def resume_reading(self) -> None:
+        """Resume reading from the file descriptor."""
         if self._closing or not self._paused:
             return
+        assert self._fileno is not None
         self._paused = False
         self._loop.add_reader(self._fileno, self._read_ready)
         if self._loop.get_debug():
@@ -99,35 +103,39 @@ class DescriptorTransport(asyncio.transports.Transport):
             except (SystemExit, KeyboardInterrupt):
                 raise
             except BaseException as exc:
-                self._loop.call_exception_handler({
-                    'message': 'protocol.pause_writing() failed',
-                    'exception': exc,
-                    'transport': self,
-                    'protocol': self._protocol,
-                })
+                self._loop.call_exception_handler(
+                    {
+                        "message": "protocol.pause_writing() failed",
+                        "exception": exc,
+                        "transport": self,
+                        "protocol": self._protocol,
+                    }
+                )
 
     def _maybe_resume_protocol(self) -> None:
-        if (self._protocol_paused and
-                self.get_write_buffer_size() <= self._low_water):
+        if self._protocol_paused and self.get_write_buffer_size() <= self._low_water:
             self._protocol_paused = False
             try:
                 self._protocol.resume_writing()
             except (SystemExit, KeyboardInterrupt):
                 raise
             except BaseException as exc:
-                self._loop.call_exception_handler({
-                    'message': 'protocol.resume_writing() failed',
-                    'exception': exc,
-                    'transport': self,
-                    'protocol': self._protocol,
-                })
+                self._loop.call_exception_handler(
+                    {
+                        "message": "protocol.resume_writing() failed",
+                        "exception": exc,
+                        "transport": self,
+                        "protocol": self._protocol,
+                    }
+                )
 
     def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Get the write buffer low and high water limits."""
         return (self._low_water, self._high_water)
 
     def _set_write_buffer_limits(self, high=None, low=None):
         if high is None:
-            if low is None:
+            if low is None:  # noqa: SIM108
                 high = 64 * 1024
             else:
                 high = 4 * low
@@ -135,19 +143,22 @@ class DescriptorTransport(asyncio.transports.Transport):
             low = high // 4
 
         if not high >= low >= 0:
-            raise ValueError(f'high ({high!r}) must be >= low ({low!r}) must be >= 0')
+            raise ValueError(f"high ({high!r}) must be >= low ({low!r}) must be >= 0")
 
         self._high_water = high
         self._low_water = low
 
     def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer low and high water limits."""
         self._set_write_buffer_limits(high=high, low=low)
         self._maybe_pause_protocol()
 
     def get_write_buffer_size(self) -> int:
+        """Get the number of bytes currently in the write buffer."""
         return len(self._buffer)
 
     def write(self, data) -> None:
+        """Write data to the file descriptor."""
         assert isinstance(data, (bytes, bytearray, memoryview)), repr(data)
         LOGGER.debug("Immediately writing %r", data)
 
@@ -162,6 +173,8 @@ class DescriptorTransport(asyncio.transports.Transport):
             self._conn_lost_count += 1
             return
 
+        assert self._fileno is not None
+
         if not self._buffer:
             # Attempt to send it right away first.
             try:
@@ -172,7 +185,12 @@ class DescriptorTransport(asyncio.transports.Transport):
                 raise
             except BaseException as exc:
                 self._conn_lost_count += 1
-                self._fatal_error(exc, f"Fatal write error in {self.transport_name} transport")
+                # XXX: `exc` could actually be a BaseException here, which doesn't match
+                # with the typing for `Protocol.connection_lost`
+                self._fatal_error(
+                    exc,  # type: ignore[arg-type]
+                    f"Fatal write error in {self.transport_name} transport",
+                )
                 return
 
             LOGGER.debug("Sent %d of %d bytes", n, len(data))
@@ -188,6 +206,7 @@ class DescriptorTransport(asyncio.transports.Transport):
 
     def _write_ready(self) -> None:
         assert self._buffer, "Data should not be empty"
+        assert self._fileno is not None
 
         try:
             n = os.write(self._fileno, self._buffer)
@@ -201,7 +220,10 @@ class DescriptorTransport(asyncio.transports.Transport):
             # Remove writer here, _fatal_error() doesn't it
             # because _buffer is empty.
             self._loop.remove_writer(self._fileno)
-            self._fatal_error(exc, f"Fatal write error in {self.transport_name} transport")
+            self._fatal_error(
+                exc,  # type: ignore[arg-type]
+                f"Fatal write error in {self.transport_name} transport",
+            )
         else:
             if n == len(self._buffer):
                 self._buffer.clear()
@@ -215,31 +237,35 @@ class DescriptorTransport(asyncio.transports.Transport):
                 del self._buffer[:n]
 
     def can_write_eof(self) -> bool:
+        """Check if EOF can be written."""
         return True
 
     def write_eof(self) -> None:
+        """Write EOF to the file descriptor."""
         if self._closing:
             return
+        assert self._fileno is not None
         self._closing = True
         if not self._buffer:
             self._loop.remove_reader(self._fileno)
             self._loop.call_soon(self._call_connection_lost, None)
 
-    def set_protocol(self, protocol: asyncio.Protocol) -> None:
-        self._protocol = protocol
+    def set_protocol(self, protocol: asyncio.BaseProtocol) -> None:
+        """Set the protocol to use with this transport."""
+        self._protocol = protocol  # type: ignore[assignment]
 
     def get_protocol(self) -> asyncio.Protocol:
+        """Get the protocol used by this transport."""
         return self._protocol
 
-    def is_closing(self) -> bool:
-        return self._closing
-
     def close(self) -> None:
+        """Close the transport."""
         LOGGER.debug("Closing at the request of the application")
         if self._fileno is not None and not self._closing:
             self.write_eof()
 
     def _cleanup(self):
+        assert self._fileno is not None
         LOGGER.debug("Closing file descriptor %s", self._fileno)
         self._loop.remove_reader(self._fileno)
         os.close(self._fileno)
@@ -247,11 +273,16 @@ class DescriptorTransport(asyncio.transports.Transport):
         self._fileno = None
 
     def __del__(self) -> None:
+        """Clean up transport on deletion."""
         if getattr(self, "_fileno", None) is not None:
             warnings.warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
             self._cleanup()
 
-    def _fatal_error(self, exc: Exception | None, message: str = f"Fatal error in {transport_name} transport") -> None:
+    def _fatal_error(
+        self,
+        exc: Exception | None,
+        message: str = f"Fatal error in {transport_name} transport",
+    ) -> None:
         # should be called by exception handler only
         if isinstance(exc, OSError) and exc.errno in (errno.EIO, errno.ENXIO):
             if self._loop.get_debug():
@@ -268,10 +299,12 @@ class DescriptorTransport(asyncio.transports.Transport):
         self._close(exc)
 
     def abort(self) -> None:
+        """Abort the transport immediately."""
         self._close(None)
 
     def _close(self, exc: Exception | None = None) -> None:
         self._closing = True
+        assert self._fileno is not None
         if self._buffer:
             self._loop.remove_writer(self._fileno)
         self._buffer.clear()
@@ -284,6 +317,6 @@ class DescriptorTransport(asyncio.transports.Transport):
             self._cleanup()
         finally:
             protocol = self._protocol
-            self._loop = None
-            self._protocol = None
+            self._loop = None  # type: ignore[assignment]
+            self._protocol = None  # type: ignore[assignment]
             protocol.connection_lost(exc)

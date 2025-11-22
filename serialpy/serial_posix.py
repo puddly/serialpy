@@ -1,19 +1,26 @@
+"""POSIX serial port implementation."""
+
 from __future__ import annotations
 
-import os
-import io
 import array
 import fcntl
-import typing
 import logging
+import os
 import termios
+from typing import Literal
 
-from .common import BaseSerial, ModemBits, PARITY_NONE, STOPBITS_ONE, STOPBITS_TWO
+from typing_extensions import Buffer
+
+from .common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
+from .descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
 
 ASYNC_LOW_LATENCY = 1 << 13
 CMSPAR = 0o10000000000
+
+TIOCGSERIAL = getattr(termios, "TIOCGSERIAL", None)
+TIOCSSERIAL = getattr(termios, "TIOCSSERIAL", None)
 
 if hasattr(termios, "CRTSCTS"):
     CRTSCTS = termios.CRTSCTS
@@ -35,8 +42,18 @@ MODEM_BIT_MAPPING = {
     "dsr": termios.TIOCM_DSR,
 }
 
+POSIX_CHARACTER_SIZE_MAPPING = {
+    5: termios.CS5,
+    6: termios.CS6,
+    7: termios.CS7,
+    8: termios.CS8,
+}
 
-def modem_bits_mask_of_value(modem_bits: ModemBits, mask: typing.Literal[True, False, None]) -> int:
+
+def modem_bits_mask_of_value(
+    modem_bits: ModemBits, mask: Literal[True, False, None]
+) -> int:
+    """Get modem bit mask for bits matching the specified value."""
     result = 0x00000000
 
     for name, bit in MODEM_BIT_MAPPING.items():
@@ -49,6 +66,7 @@ def modem_bits_mask_of_value(modem_bits: ModemBits, mask: typing.Literal[True, F
 
 
 def modem_bits_as_int(modem_bits: ModemBits) -> int:
+    """Convert modem bits to integer."""
     result = 0x00000000
 
     for name, bit in MODEM_BIT_MAPPING.items():
@@ -57,36 +75,43 @@ def modem_bits_as_int(modem_bits: ModemBits) -> int:
     return result
 
 
-class Serial(BaseSerial):
-    def __init__(
-        self,
-        path,
-        baudrate,
-        stopbits=STOPBITS_ONE,
-        xonxoff=False,
-        rtscts=False,
-        *,
-        fileno=None,
-    ):
-        super().__init__()
-        self._path = path
-        self._baudrate = baudrate
-        self._stopbits = stopbits
-        self._xonxoff = xonxoff
-        self._rtscts = rtscts
+class PosixSerial(BaseSerial):
+    """POSIX serial port implementation."""
 
-        if fileno is not None:
-            self._fileno = fileno
-            self._should_cleanup = False
-        else:
-            self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
-            self._should_cleanup = True
+    def __init__(
+        self, *args, fileno: int | None = None, low_latency: bool = True, **kwargs
+    ):
+        """Initialize POSIX serial port."""
+        super().__init__(*args, **kwargs)
+        self._fileno: int | None = fileno
+        self._low_latency = low_latency
+
+    def open(self) -> None:
+        """Open the serial port."""
+        LOGGER.debug("Opening serial port %r", self._path)
+
+        if self._fileno is not None:
+            raise ValueError("Serial port is already open")
+
+        self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
+        self._auto_close = True
 
     def configure_port(self) -> None:
+        """Configure the serial port settings."""
+        LOGGER.debug("Configuring serial port %r", self._path)
+
         if self._fileno is None:
             raise ValueError("Cannot configure, serial port is not open")
 
-        iflag, oflag, cflag, lflag, ispeed, ospeed, cc = termios.tcgetattr(self._fileno)
+        (
+            iflag,
+            oflag,
+            cflag,
+            lflag,
+            ispeed,
+            ospeed,
+            cc,
+        ) = termios.tcgetattr(self._fileno)
 
         # Software flow control
         if self._xonxoff:
@@ -116,18 +141,31 @@ class Serial(BaseSerial):
         # Disable modem-specific signal lines
         cflag |= termios.CLOCAL
 
-        # No parity bit
-        cflag &= ~(termios.PARENB | termios.PARODD | CMSPAR)
+        if self._parity == Parity.NONE:
+            cflag &= ~(termios.PARENB | termios.PARODD | CMSPAR)
+        elif self._parity == Parity.EVEN:
+            cflag |= termios.PARENB
+            cflag &= ~(termios.PARODD | CMSPAR)
+        elif self._parity == Parity.ODD:
+            cflag |= termios.PARENB | termios.PARODD
+            cflag &= ~CMSPAR
+        elif self._parity == Parity.MARK:
+            cflag |= termios.PARENB | termios.PARODD | CMSPAR
+        elif self._parity == Parity.SPACE:
+            cflag |= termios.PARENB
+            cflag &= ~(termios.PARODD | CMSPAR)
 
         # Stop bits
-        if self._stopbits == STOPBITS_ONE:
-            cflag &= ~termios.CSTOPB
-        else:
+        if self._stopbits == StopBits.TWO:
             cflag |= termios.CSTOPB
+        elif self._stopbits == StopBits.ONE_POINT_FIVE:
+            LOGGER.warning("1.5 stop bits not supported on POSIX, using 1 stop bit")
+            cflag &= ~termios.CSTOPB
+        elif self._stopbits == StopBits.ONE:
+            cflag &= ~termios.CSTOPB
 
-        # 8 bits per byte
         cflag &= ~termios.CSIZE
-        cflag |= termios.CS8
+        cflag |= POSIX_CHARACTER_SIZE_MAPPING[self._byte_size]
 
         # Hardware flow control
         if self._rtscts:
@@ -151,9 +189,23 @@ class Serial(BaseSerial):
         ispeed = getattr(termios, f"B{self._baudrate}")
         ospeed = getattr(termios, f"B{self._baudrate}")
 
-        # Non-blocking reads
-        cc[termios.VMIN] = 0
-        cc[termios.VTIME] = 0
+        # Only emit reads if VMIN characters have been read, after no more data comes in
+        # for VTIME seconds
+        vmin = self._buffer_character_count
+        vtime = int(self._buffer_burst_timeout * 10)
+
+        if not 0 <= vmin <= 255:
+            raise ValueError(
+                f"VMIN must be in range 0-255 (buffer_character_count={self._buffer_character_count})"
+            )
+
+        if not 0 <= vtime <= 255:
+            raise ValueError(
+                f"VTIME must be in range 0-255 (buffer_burst_timeout={self._buffer_burst_timeout})"
+            )
+
+        cc[termios.VMIN] = vmin
+        cc[termios.VTIME] = vtime
 
         termios.tcsetattr(
             self._fileno,
@@ -161,21 +213,25 @@ class Serial(BaseSerial):
             [iflag, oflag, cflag, lflag, ispeed, ospeed, cc],
         )
 
-        self.set_low_latency(True)
+        if TIOCSSERIAL is not None:
+            assert TIOCGSERIAL is not None
+            buffer = array.array("i", [0x00000000] * 19 * 8)
+            fcntl.ioctl(self._fileno, TIOCGSERIAL, buffer)
 
-    @property
-    def name(self) -> str:
-        return self.path
+            LOGGER.debug("Read low latency %r", buffer)
 
-    @property
-    def path(self) -> str:
-        return self._path
+            if self._low_latency:
+                buffer[4] |= ASYNC_LOW_LATENCY
+            else:
+                buffer[4] &= ~ASYNC_LOW_LATENCY
 
-    @property
-    def baudrate(self) -> int:
-        return self._baudrate
+            LOGGER.debug("Writing low latency %r", buffer)
+            fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
 
     def get_modem_bits(self) -> ModemBits:
+        """Get current modem control bits."""
+        assert self._fileno is not None
+
         # A `bytearray` is critical here: `bytes` will not be mutated
         buffer = bytearray((0x00000000).to_bytes(4, "little"))
         fcntl.ioctl(self._fileno, termios.TIOCMGET, buffer)
@@ -185,28 +241,12 @@ class Serial(BaseSerial):
             **{name: bool(n & bit) for name, bit in MODEM_BIT_MAPPING.items()}
         )
 
-    def set_low_latency(self, low_latency: bool) -> None:
-        if not hasattr(termios, "TIOCGSERIAL"):
-            LOGGER.warning("Platform does not support low latency mode")
-            return
+    def set_modem_bits(self, modem_bits: ModemBits) -> None:
+        """Set modem control bits."""
+        assert self._fileno is not None
 
-        buffer = array.array("i", [0x00000000] * 19 * 8)
-        fcntl.ioctl(self._fileno, termios.TIOCGSERIAL, buffer)
-
-        LOGGER.debug("Read low latency %r", buffer)
-
-        if low_latency:
-            buffer[4] |= ASYNC_LOW_LATENCY
-        else:
-            buffer[4] &= ~ASYNC_LOW_LATENCY
-
-        LOGGER.debug("Writing low latency %r", buffer)
-
-        fcntl.ioctl(self._fileno, termios.TIOCSSERIAL, buffer)
-
-    def set_modem_bits(self, modem_bits: ModemBits | None = None, **kwargs) -> None:
         all_bits_set = all(
-            getattr(self, name) is not None for name in MODEM_BIT_MAPPING.keys()
+            getattr(modem_bits, name) is not None for name in MODEM_BIT_MAPPING
         )
 
         if all_bits_set:
@@ -230,30 +270,60 @@ class Serial(BaseSerial):
                 )
 
     def close(self) -> None:
-        if getattr(self, "_should_cleanup", False) and self._fileno is not None:
+        """Close the serial port."""
+        if self._fileno is not None:
             os.close(self._fileno)
             self._fileno = None
 
     def fileno(self) -> int:
+        """Get the file descriptor number."""
+        assert self._fileno is not None
         return self._fileno
 
-    def readinto(self, b: bytearray) -> int:
+    def readinto(self, b: Buffer) -> int:
+        """Read bytes from serial port into buffer."""
         # `io.IOBase` implements `read`, `readline`, using `readinto`
-        chunk = os.read(self._fileno, len(b))
+        size = len(b)  # type: ignore[arg-type]
+        LOGGER.debug("Reading up to %d bytes", size)
+
+        assert self._fileno is not None
+        chunk = os.read(self._fileno, size)
         n = len(chunk)
-        b[:n] = chunk
+        b[:n] = chunk  # type: ignore[index]
+        LOGGER.debug("Read %d bytes: %r", n, chunk)
 
         return n
 
-    def write(self, data: bytes):
-        os.write(self._fileno, data)
+    def write(self, data: Buffer) -> int:
+        """Write bytes to serial port."""
+        LOGGER.debug("Writing %d bytes: %r", len(data), data)  # type: ignore[arg-type]
+        assert self._fileno is not None
+        return os.write(self._fileno, data)  # type: ignore[arg-type]
 
-    def __enter__(self) -> Serial:
-        self.configure_port()
-        return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.close()
+class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
+    """POSIX serial port transport using asyncio."""
 
-    def __del__(self) -> None:
-        self.close()
+    async def _connect(self, *, path: os.PathLike, **kwargs) -> None:  # type: ignore[override]
+        """Connect to serial port."""
+        await super()._open(path)
+
+        self._serial = PosixSerial(
+            **kwargs,
+            path=path,
+            # `DescriptorTransport` opened the port
+            fileno=self._fileno,
+            # Nonblocking mode
+            buffer_character_count=0,
+            buffer_burst_timeout=0,
+        )
+        self._extra["serial"] = self._serial
+
+        await self._loop.run_in_executor(None, self._serial.configure_port)
+        await super()._connect()
+        self._protocol.connection_made(self)
+
+    @property
+    def serial(self):
+        """Get the serial port instance."""
+        return self._serial

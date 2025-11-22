@@ -5,37 +5,21 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "serialpy"
 dynamic = ["version"]
-description = "POSIX serial library with native async support"
+description = "Serial library with native async support for Windows and POSIX"
 urls = {repository = "https://github.com/puddly/serialpy"}
 authors = [
     {name = "puddly", email = "puddly3@gmail.com"}
 ]
 readme = "README.md"
-license = {text = "GPL-3.0"}
-requires-python = ">=3.8"
-dependencies = ["typing-extensions"]
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+dependencies = [
+    "typing-extensions",
+    "pywin32; platform_system == 'Windows'",
+]
 
 [tool.setuptools-git-versioning]
 enabled = true
-
-[tool.black]
-safe = true
-quiet = true
-
-[tool.isort]
-multi_line_output = 3
-length_sort = true
-balanced_wrapping = true
-include_trailing_comma = true
-force_grid_wrap = 0
-use_parentheses = true
-line_length = 120
-indent = "    "
-sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
-default_section = "THIRDPARTY"
-known_first_party = ["serialpy", "tests"]
-forced_separate = "tests"
-combine_as_imports = true
 
 [tool.pytest.ini_options]
 addopts = "--showlocals --verbose"
@@ -44,15 +28,7 @@ timeout = 20
 log_format = "%(asctime)s.%(msecs)03d %(levelname)s %(message)s"
 log_date_format = "%Y-%m-%d %H:%M:%S"
 asyncio_mode = "auto"
-
-[tool.flake8]
-exclude = ".venv,.git,.tox,docs,venv,bin,lib,deps,build"
-# To work with Black
-max-line-length = 120
-# W503: Line break occurred before a binary operator
-# E203: Whitespace before ':'
-# D202 No blank lines allowed after function docstring
-ignore = "W503,E203,D202"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.mypy]
 check_untyped_defs = true
@@ -62,5 +38,147 @@ show_error_context = true
 [tool.coverage.run]
 source = ["serialpy"]
 
-[tool.pyupgrade]
-py37plus = true
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "B002", # Python does not support the unary prefix increment
+    "B007", # Loop control variable {name} not used within loop body
+    "B014", # Exception handler with duplicate exception
+    "B023", # Function definition does not bind loop variable {name}
+    "B026", # Star-arg unpacking after a keyword argument is strongly discouraged
+    "B904", # Use raise from to specify exception cause
+    "C", # complexity
+    "COM818", # Trailing comma on bare tuple prohibited
+    "D", # docstrings
+    "DTZ003", # Use datetime.now(tz=) instead of datetime.utcnow()
+    "DTZ004", # Use datetime.fromtimestamp(ts, tz=) instead of datetime.utcfromtimestamp(ts)
+    "E", # pycodestyle
+    "F", # pyflakes/autoflake
+    "G", # flake8-logging-format
+    "I", # isort
+    "ICN001", # import concentions; {name} should be imported as {asname}
+    "N804", # First argument of a class method should be named cls
+    "N805", # First argument of a method should be named self
+    "N815", # Variable {name} in class scope should not be mixedCase
+    "PERF101", # Do not cast an iterable to list before iterating over it
+    "PERF102", # When using only the {subset} of a dict use the {subset}() method
+    "PERF203", # try-except within a loop incurs performance overhead
+    "PGH004", # Use specific rule codes when using noqa
+    "PLC0414", # Useless import alias. Import alias does not rename original package.
+    "PLC", # pylint
+    "PLE", # pylint
+    "PLR", # pylint
+    "PLW", # pylint
+    "Q000", # Double quotes found but single quotes preferred
+    "RUF006", # Store a reference to the return value of asyncio.create_task
+    "S102", # Use of exec detected
+    "S103", # bad-file-permissions
+    "S108", # hardcoded-temp-file
+    "S306", # suspicious-mktemp-usage
+    "S307", # suspicious-eval-usage
+    "S313", # suspicious-xmlc-element-tree-usage
+    "S314", # suspicious-xml-element-tree-usage
+    "S315", # suspicious-xml-expat-reader-usage
+    "S316", # suspicious-xml-expat-builder-usage
+    "S317", # suspicious-xml-sax-usage
+    "S318", # suspicious-xml-mini-dom-usage
+    "S319", # suspicious-xml-pull-dom-usage
+    "S601", # paramiko-call
+    "S602", # subprocess-popen-with-shell-equals-true
+    "S604", # call-with-shell-equals-true
+    "S608", # hardcoded-sql-expression
+    "S609", # unix-command-wildcard-injection
+    "SIM", # flake8-simplify
+    "T100", # Trace found: {name} used
+    "T20", # flake8-print
+    "TID251", # Banned imports
+    "TRY", # tryceratops
+    "UP", # pyupgrade
+    "W", # pycodestyle
+]
+
+ignore = [
+    "D202", # No blank lines allowed after function docstring
+    "D203", # 1 blank line required before class docstring
+    "D213", # Multi-line docstring summary should start at the second line
+    "D406", # Section name should end with a newline
+    "D407", # Section name underlining
+    "E501", # line too long
+    "E731", # do not assign a lambda expression, use a def
+
+    # Ignore ignored, as the rule is now back in preview/nursery, which cannot
+    # be ignored anymore without warnings.
+    # https://github.com/astral-sh/ruff/issues/7491
+    # "PLC1901", # Lots of false positives
+
+    # False positives https://github.com/astral-sh/ruff/issues/5386
+    "PLC0208", # Use a sequence type instead of a `set` when iterating over values
+    "PLR0911", # Too many return statements ({returns} > {max_returns})
+    "PLR0912", # Too many branches ({branches} > {max_branches})
+    "PLR0913", # Too many arguments to function call ({c_args} > {max_args})
+    "PLR0915", # Too many statements ({statements} > {max_statements})
+    "PLR2004", # Magic value used in comparison, consider replacing {value} with a constant variable
+    "PLW2901", # Outer {outer_kind} variable {name} overwritten by inner {inner_kind} target
+    "UP006", # keep type annotation style as is
+    "UP007", # keep type annotation style as is
+
+    # Ignored due to incompatible with mypy: https://github.com/python/mypy/issues/15238
+    "UP040", # Checks for use of TypeAlias annotation for declaring type aliases.
+
+    # May conflict with the formatter, https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+    "W191",
+    "E111",
+    "E114",
+    "E117",
+    "D206",
+    "D300",
+    "Q000",
+    "Q",
+    "COM812",
+    "COM819",
+    "ISC001",
+    "ISC002",
+
+    # Disabled because ruff does not understand type of __all__ generated by a function
+    "PLE0605",
+    "TRY003",
+    "TRY201",
+    "TRY300",
+
+    "SIM103", # Return the condition {condition} directly
+]
+
+extend-safe-fixes = ["F401"]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[tool.ruff.lint.flake8-tidy-imports]
+# Disallow all relative imports.
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = [
+    "serialpy",
+    "tests",
+]
+combine-as-imports = true
+split-on-trailing-comma = false
+
+[tool.ruff.lint.per-file-ignores]
+
+# Allow for main entry & scripts to write to stdout
+"script/*" = ["T20"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
