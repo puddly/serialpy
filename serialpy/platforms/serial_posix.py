@@ -139,6 +139,9 @@ class PosixSerial(BaseSerial):
         if self._fileno is None:
             raise ValueError("Cannot configure, serial port is not open")
 
+        # Flush input and output buffers to discard stale data
+        termios.tcflush(self._fileno, termios.TCIOFLUSH)
+
         (
             iflag,
             oflag,
