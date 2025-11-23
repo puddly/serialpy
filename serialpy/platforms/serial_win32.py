@@ -308,7 +308,13 @@ class Win32SerialTransport(BaseSerialTransport):
     def serial_close(self):
         """Close the serial port."""
         assert self._serial is not None
-        self._loop.run_in_executor(None, self._serial.close)
+        self._loop.run_in_executor(None, self._close_serial)
+
+    def _close_serial(self) -> None:
+        """Close the serial connection, internal."""
+        assert self._serial is not None
+        self._serial.close()
+        self._loop.call_soon_threadsafe(self._protocol.connection_lost, None)
 
     def serial_shutdown(self, how) -> None:
         """Shutdown the serial connection."""
@@ -325,11 +331,13 @@ class Win32SerialTransport(BaseSerialTransport):
 
     def protocol_connection_made(self, transport: asyncio.Transport) -> None:
         """Forward connection_made to the protocol."""
+
+        # Ignore `transport` and pass self instead
         self._protocol.connection_made(self)
 
     def protocol_connection_lost(self, exc: Exception | None) -> None:
         """Forward connection_lost to the protocol."""
-        self._protocol.connection_lost(exc)
+        pass
 
     async def _open(self, path: os.PathLike) -> None:
         """Open the serial port."""
@@ -392,9 +400,6 @@ class Win32SerialTransport(BaseSerialTransport):
             ),
             extra=self._extra,
         )
-
-        # Call connection_made with THIS wrapper transport, not the internal one
-        self._protocol.connection_made(self)
 
     def write(self, data):
         """Write data to the transport."""
