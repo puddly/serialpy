@@ -11,12 +11,15 @@ authors = [
     {name = "puddly", email = "puddly3@gmail.com"}
 ]
 readme = "README.md"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
     "typing-extensions",
     "pywin32; platform_system == 'Windows'",
 ]
+
+[tool.setuptools.packages.find]
+include = ["serialpy"]
 
 [tool.setuptools-git-versioning]
 enabled = true
