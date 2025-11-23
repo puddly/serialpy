@@ -10,6 +10,11 @@ import sys
 import termios
 from typing import Literal
 
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as asyncio_timeout
+else:
+    from async_timeout import timeout as asyncio_timeout
+
 from typing_extensions import Buffer
 
 from ..common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
@@ -17,10 +22,10 @@ from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
 
-ASYNC_LOW_LATENCY = 1 << 13
-CMSPAR = 0o10000000000
 FLUSH_TIMEOUT = 10.0
 
+ASYNC_LOW_LATENCY = 1 << 13
+CMSPAR = 0o10000000000
 TCGETS2 = 0x802C542A
 TCSETS2 = 0x402C542B
 
@@ -407,6 +412,7 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
             await self._make_empty_waiter()
 
             # Wait for hardware buffer to flush (with timeout)
-            await self._loop.run_in_executor(None, self._serial.flush)
+            async with asyncio_timeout(FLUSH_TIMEOUT):
+                await self._loop.run_in_executor(None, self._serial.flush)
         finally:
             self._reset_empty_waiter()

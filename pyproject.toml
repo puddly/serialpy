@@ -15,6 +15,7 @@ license = "Apache-2.0"
 requires-python = ">=3.10"
 dependencies = [
     "typing-extensions",
+    "async-timeout; python_version < '3.12'",
     "pywin32; platform_system == 'Windows'",
 ]
 
