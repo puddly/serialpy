@@ -116,6 +116,10 @@ jobs:
             1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
             hashFiles('pyproject.toml') }}
+      - name: Install socat
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y socat
       - name: Register Python problem matcher
         run: |
           echo "::add-matcher::.github/workflows/matchers/python.json"

@@ -4,7 +4,14 @@ import asyncio
 from collections.abc import AsyncIterator
 import contextlib
 import os
+import sys
 import tempfile
+
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as asyncio_timeout
+else:
+    from async_timeout import timeout as asyncio_timeout
+
 
 import serialpy
 
@@ -88,13 +95,13 @@ async def test_remove_writer() -> None:
 
         # Write a bunch of data so that we create a buffer and trigger backpressure
         for _ in range(COUNT):
-            async with asyncio.timeout(5):
+            async with asyncio_timeout(5):
                 await output_resume_event.wait()
 
             out_transport.write(TEXT)
 
         # Ensure that the write buffer eventually drains completely
-        async with asyncio.timeout(5):
+        async with asyncio_timeout(5):
             while out_transport.get_write_buffer_size() > 0:
                 await asyncio.sleep(0.1)
 
