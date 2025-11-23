@@ -4,16 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import sys
 import urllib.parse
 
-from .common import PARITY_NONE, STOPBITS_ONE
-
-if sys.platform == "win32":
-    from .serial_win32 import Win32SerialTransport as SerialTransport
-else:
-    from .serial_posix import PosixSerialTransport as SerialTransport
-
+from .common import Parity, StopBits
+from .platforms import SerialTransport
 
 LOGGER = logging.getLogger(__name__)
 
@@ -23,8 +17,8 @@ async def create_serial_connection(
     protocol_factory,
     url,
     baudrate,
-    parity=PARITY_NONE,
-    stopbits=STOPBITS_ONE,
+    parity=Parity.NONE,
+    stopbits=StopBits.ONE,
     xonxoff=False,
     rtscts=False,
     exclusive=True,

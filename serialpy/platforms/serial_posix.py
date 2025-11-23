@@ -6,29 +6,29 @@ import array
 import fcntl
 import logging
 import os
+import sys
 import termios
 from typing import Literal
 
 from typing_extensions import Buffer
 
-from .common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
-from .descriptor_transport import DescriptorTransport
+from ..common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
+from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
 
 ASYNC_LOW_LATENCY = 1 << 13
 CMSPAR = 0o10000000000
+FLUSH_TIMEOUT = 10.0
+
+TCGETS2 = 0x802C542A
+TCSETS2 = 0x402C542B
 
 TIOCGSERIAL = getattr(termios, "TIOCGSERIAL", None)
 TIOCSSERIAL = getattr(termios, "TIOCSSERIAL", None)
-
-if hasattr(termios, "CRTSCTS"):
-    CRTSCTS = termios.CRTSCTS
-elif hasattr(termios, "CNEW_RTSCTS"):
-    CRTSCTS = termios.CNEW_RTSCTS
-else:
-    raise RuntimeError("termios.CRTSCTS missing")
-
+CBAUD = getattr(termios, "CBAUD", 0o00010017)
+CBAUDEX = getattr(termios, "CBAUDEX", 0o00010000)
+CRTSCTS = getattr(termios, "CRTSCTS", getattr(termios, "CNEW_RTSCTS", None))
 
 MODEM_BIT_MAPPING = {
     "le": termios.TIOCM_LE,
@@ -41,6 +41,7 @@ MODEM_BIT_MAPPING = {
     "rng": termios.TIOCM_RNG,
     "dsr": termios.TIOCM_DSR,
 }
+assert MODEM_BIT_MAPPING.keys() == ModemBits.__annotations__.keys()
 
 POSIX_CHARACTER_SIZE_MAPPING = {
     5: termios.CS5,
@@ -79,7 +80,11 @@ class PosixSerial(BaseSerial):
     """POSIX serial port implementation."""
 
     def __init__(
-        self, *args, fileno: int | None = None, low_latency: bool = True, **kwargs
+        self,
+        *args,
+        fileno: int | None = None,
+        low_latency: bool = True,
+        **kwargs,
     ):
         """Initialize POSIX serial port."""
         super().__init__(*args, **kwargs)
@@ -95,6 +100,37 @@ class PosixSerial(BaseSerial):
 
         self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
         self._auto_close = True
+
+        if self._exclusive:
+            self._lock()
+
+    def _lock(self) -> None:
+        """Lock the serial port for exclusive access."""
+        LOGGER.debug("Locking serial port %r", self._path)
+
+        assert self._fileno is not None
+        fcntl.flock(self._fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+    def _unlock(self) -> None:
+        """Unlock the serial port."""
+        LOGGER.debug("Unlocking serial port %r", self._path)
+
+        assert self._fileno is not None
+        fcntl.flock(self._fileno, fcntl.LOCK_UN)
+
+    def _set_non_posix_baudrate(self, baudrate: int) -> None:
+        """Set the baudrate of the serial port."""
+        assert self._fileno is not None
+
+        buffer = array.array("i", [0x00000000] * 64)
+        fcntl.ioctl(self._fileno, TCGETS2, buffer)
+        buffer[2] &= ~CBAUD  # c_cflag
+        buffer[2] |= CBAUDEX
+
+        buffer[9] = self._baudrate  # c_ispeed
+        buffer[10] = self._baudrate  # c_ospeed
+
+        fcntl.ioctl(self._fileno, TCSETS2, buffer)
 
     def configure_port(self) -> None:
         """Configure the serial port settings."""
@@ -168,10 +204,11 @@ class PosixSerial(BaseSerial):
         cflag |= POSIX_CHARACTER_SIZE_MAPPING[self._byte_size]
 
         # Hardware flow control
-        if self._rtscts:
-            cflag |= CRTSCTS
-        else:
-            cflag &= ~CRTSCTS
+        if CRTSCTS is not None:
+            if self._rtscts:
+                cflag |= CRTSCTS
+            else:
+                cflag &= ~CRTSCTS
 
         # Disable canonical mode (newlines)
         lflag &= ~termios.ICANON
@@ -184,10 +221,6 @@ class PosixSerial(BaseSerial):
 
         # Disable implementation-defined input processing
         lflag &= ~termios.IEXTEN
-
-        # Set baudrate
-        ispeed = getattr(termios, f"B{self._baudrate}")
-        ospeed = getattr(termios, f"B{self._baudrate}")
 
         # Only emit reads if VMIN characters have been read, after no more data comes in
         # for VTIME seconds
@@ -207,11 +240,26 @@ class PosixSerial(BaseSerial):
         cc[termios.VMIN] = vmin
         cc[termios.VTIME] = vtime
 
+        try:
+            # Set baudrate
+            ispeed = getattr(termios, f"B{self._baudrate}")
+            ospeed = getattr(termios, f"B{self._baudrate}")
+            non_posix_baudrate = False
+        except AttributeError:
+            # Non-POSIX baudrate, use defaults for `tcsetattr` and then override
+            ispeed = termios.B115200
+            ospeed = termios.B115200
+            non_posix_baudrate = True
+
         termios.tcsetattr(
             self._fileno,
-            termios.TCSANOW,
+            termios.TCSANOW,  # TODO: should we use TCSADRAIN or TCSAFLUSH instead?
             [iflag, oflag, cflag, lflag, ispeed, ospeed, cc],
         )
+
+        if non_posix_baudrate:
+            LOGGER.debug("Setting non-POSIX baudrate %d", self._baudrate)
+            self._set_non_posix_baudrate(self._baudrate)
 
         if TIOCSSERIAL is not None:
             assert TIOCGSERIAL is not None
@@ -269,9 +317,17 @@ class PosixSerial(BaseSerial):
                     self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little")
                 )
 
+    def flush(self) -> None:
+        """Flush write buffers, waiting until all data is written."""
+        assert self._fileno is not None
+        termios.tcdrain(self._fileno)
+
     def close(self) -> None:
         """Close the serial port."""
         if self._fileno is not None:
+            if self._exclusive:
+                self._unlock()
+
             os.close(self._fileno)
             self._fileno = None
 
@@ -280,19 +336,33 @@ class PosixSerial(BaseSerial):
         assert self._fileno is not None
         return self._fileno
 
-    def readinto(self, b: Buffer) -> int:
-        """Read bytes from serial port into buffer."""
-        # `io.IOBase` implements `read`, `readline`, using `readinto`
-        size = len(b)  # type: ignore[arg-type]
-        LOGGER.debug("Reading up to %d bytes", size)
+    # `io.IOBase` implements `read`, `readline`, using `readinto`
+    if sys.version_info >= (3, 14):
 
-        assert self._fileno is not None
-        chunk = os.read(self._fileno, size)
-        n = len(chunk)
-        b[:n] = chunk  # type: ignore[index]
-        LOGGER.debug("Read %d bytes: %r", n, chunk)
+        def readinto(self, b: Buffer) -> int:
+            """Read bytes from serial port into buffer."""
+            n = os.readinto(self._fileno, b)
+            LOGGER.debug("Read %d bytes", n)
 
-        return n
+            return n
+
+    else:
+
+        def readinto(self, b: Buffer) -> int:
+            """Read bytes from serial port into buffer."""
+            assert self._fileno is not None
+
+            m = memoryview(b).cast("B")
+            size = len(m)
+            LOGGER.debug("Reading up to %d bytes", size)
+
+            chunk = os.read(self._fileno, size)
+
+            n = len(chunk)
+            m[:n] = chunk
+            LOGGER.debug("Read %d bytes: %r", n, chunk)
+
+            return n
 
     def write(self, data: Buffer) -> int:
         """Write bytes to serial port."""
@@ -304,11 +374,13 @@ class PosixSerial(BaseSerial):
 class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
     """POSIX serial port transport using asyncio."""
 
+    _serial_cls = PosixSerial
+
     async def _connect(self, *, path: os.PathLike, **kwargs) -> None:  # type: ignore[override]
         """Connect to serial port."""
         await super()._open(path)
 
-        self._serial = PosixSerial(
+        self._serial = self._serial_cls(
             **kwargs,
             path=path,
             # `DescriptorTransport` opened the port
@@ -323,7 +395,15 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
         await super()._connect()
         self._protocol.connection_made(self)
 
-    @property
-    def serial(self):
-        """Get the serial port instance."""
-        return self._serial
+    async def flush(self) -> None:
+        """Flush write buffers, waiting until all data is written."""
+        assert self._serial is not None
+
+        try:
+            # Wait for internal buffer to drain
+            await self._make_empty_waiter()
+
+            # Wait for hardware buffer to flush (with timeout)
+            await self._loop.run_in_executor(None, self._serial.flush)
+        finally:
+            self._reset_empty_waiter()

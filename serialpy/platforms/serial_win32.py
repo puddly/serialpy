@@ -36,6 +36,7 @@ from win32file import (
     CloseHandle,
     CreateFile,
     EscapeCommFunction,
+    FlushFileBuffers,
     GetCommModemStatus,
     GetCommState,
     GetOverlappedResult,
@@ -48,7 +49,7 @@ from win32file import (
 )
 from winerror import ERROR_IO_PENDING
 
-from .common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
+from ..common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
 
 # Constants missing from win32con
 MS_CTS_ON = 0x0010
@@ -99,7 +100,7 @@ class Win32Serial(BaseSerial):
         if self._handle is not None:
             raise ValueError("Serial port is already open")
 
-        path = self._path
+        path = str(self._path)
 
         # COM9+ need to be opened with a \\.\ prefix
         if path.upper().startswith("COM") and int(path[3:]) > 8:
@@ -117,6 +118,8 @@ class Win32Serial(BaseSerial):
             )
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror, path) from e
+
+        self._auto_close = True
 
     def configure_port(self) -> None:
         """Configure the serial port settings."""
@@ -226,6 +229,10 @@ class Win32Serial(BaseSerial):
             func = SETDTR if modem_bits.dtr else CLRDTR
             EscapeCommFunction(self._handle, func)
 
+    def flush(self) -> None:
+        """Flush write buffers."""
+        FlushFileBuffers(self._handle)
+
     def readinto(self, b: Buffer) -> int:
         """Read data into the provided bytearray."""
         ResetEvent(self._overlapped_read.hEvent)
@@ -283,7 +290,9 @@ class _MethodProxy:
 class Win32SerialTransport(BaseSerialTransport):
     """Windows serial transport using ProactorEventLoop."""
 
-    def __init__(self, loop, protocol):
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
+    ) -> None:
         """Initialize the Windows serial transport."""
         if not hasattr(loop, "_make_duplex_pipe_transport"):
             raise RuntimeError(
@@ -299,11 +308,11 @@ class Win32SerialTransport(BaseSerialTransport):
     def serial_close(self):
         """Close the serial port."""
         assert self._serial is not None
-        self._loop.call_soon(self._serial.close)
-        self._loop.call_soon(self._protocol.connection_lost, None)
+        self._loop.run_in_executor(None, self._serial.close)
 
     def serial_shutdown(self, how) -> None:
         """Shutdown the serial connection."""
+        # Intentionally ignored
 
     def serial_fileno(self) -> int:
         """Return the file descriptor."""
@@ -362,6 +371,7 @@ class Win32SerialTransport(BaseSerialTransport):
 
         # Use the internal _make_duplex_pipe_transport to create a true overlapping
         # bidirectional transport on the single handle.
+        assert hasattr(self._loop, "_make_duplex_pipe_transport")
         self._internal_transport = self._loop._make_duplex_pipe_transport(
             # Proxy access to serial and protocol attributes through this instance
             sock=_MethodProxy(
@@ -397,12 +407,8 @@ class Win32SerialTransport(BaseSerialTransport):
         """Close the transport."""
         self._closing = True
         if self._internal_transport:
+            # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
-        # Internal transport closes the serial object (self._serial) via sock.close()
-
-    def is_closing(self) -> bool:
-        """Return whether the transport is closing."""
-        return self._closing
 
     def pause_reading(self):
         """Pause reading from the transport."""
@@ -414,12 +420,25 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             self._internal_transport.resume_reading()
 
-    def set_protocol(self, protocol: asyncio.BaseProtocol) -> None:
+    def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
         """Set the protocol."""
-        self._protocol = protocol  # type: ignore[assignment]
+        self._protocol = protocol
         if self._internal_transport is not None:
             self._internal_transport.set_protocol(protocol)
 
     def get_protocol(self) -> asyncio.Protocol:
         """Return the current protocol."""
         return self._protocol
+
+    async def flush(self) -> None:
+        """Flush write buffers, waiting until all data is written."""
+        assert self._serial is not None
+        assert self._internal_transport is not None
+        try:
+            # Wait for asyncio buffer to drain
+            await self._internal_transport._make_empty_waiter()
+
+            # Wait for hardware buffer to flush
+            await self._loop.run_in_executor(None, self._serial.flush)
+        finally:
+            self._internal_transport._reset_empty_waiter()

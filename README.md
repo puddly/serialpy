@@ -30,7 +30,7 @@ import contextlib
 import serialpy
 
 async def main():
-	reader, writer = await asyncio.open_serial_connection("/dev/serial/by-id/port", baudrate=115200)
+	reader, writer = await serialpy.open_serial_connection("/dev/serial/by-id/port", baudrate=115200)
 
 	with contextlib.closing(writer):
 	    data = await reader.readexactly(5)

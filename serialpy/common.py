@@ -7,6 +7,7 @@ import asyncio
 import dataclasses
 from enum import Enum
 import io
+from pathlib import Path
 from typing import Any, Self
 
 
@@ -26,12 +27,6 @@ class Parity(Enum):
     EVEN = 2
     MARK = 3
     SPACE = 4
-
-
-PARITY_NONE = None
-
-STOPBITS_ONE = 1
-STOPBITS_TWO = 2
 
 
 @dataclasses.dataclass(frozen=True)
@@ -69,20 +64,20 @@ class BaseSerial(io.RawIOBase):
 
     def __init__(
         self,
-        path,
-        baudrate,
+        path: str | Path,
+        baudrate: int,
         parity: Parity | None = Parity.NONE,
         stopbits: StopBits | int | float = StopBits.ONE,
-        xonxoff=False,
-        rtscts=False,
+        xonxoff: bool = False,
+        rtscts: bool = False,
         byte_size: int = 8,
         *,
         buffer_character_count: int = 1,
         buffer_burst_timeout: float = 0.0,
+        exclusive: bool = True,
     ) -> None:
         """Initialize serial port configuration."""
         super().__init__()
-        self._path = path
 
         if not isinstance(stopbits, StopBits):
             stopbits = StopBits(stopbits)
@@ -90,12 +85,14 @@ class BaseSerial(io.RawIOBase):
         if not isinstance(parity, Parity):
             parity = Parity(parity)
 
+        self._path = path
         self._baudrate = baudrate
         self._stopbits = stopbits
         self._xonxoff = xonxoff
         self._rtscts = rtscts
         self._parity = parity
         self._byte_size = byte_size
+        self._exclusive = exclusive
 
         self._buffer_character_count = buffer_character_count
         self._buffer_burst_timeout = buffer_burst_timeout
@@ -121,30 +118,35 @@ class BaseSerial(io.RawIOBase):
         """Set modem control bits."""
         raise NotImplementedError
 
-    @property
-    def name(self) -> str:
-        """Get the serial port name."""
-        return self._path
+    @abstractmethod
+    def flush(self) -> None:
+        """Flush write buffers."""
+        raise NotImplementedError
 
     @property
-    def path(self) -> str:
+    def path(self) -> str | Path:
         """Get the serial port path."""
-        raise self._path
+        return self._path
 
     @property
     def baudrate(self) -> int:
         """Get the baud rate."""
-        raise self._baudrate
+        return self._baudrate
 
     @property
     def parity(self) -> Parity:
-        """Get the parity setting."""
+        """Get the parity."""
         return self._parity
 
     @property
     def stopbits(self) -> StopBits:
-        """Get the stop bits setting."""
+        """Get the number of stop bits."""
         return self._stopbits
+
+    @property
+    def exclusive(self) -> bool:
+        """Get the exclusive setting."""
+        return self._exclusive
 
     # Deprecated alias
     @property
@@ -177,14 +179,27 @@ class BaseSerial(io.RawIOBase):
         remaining = n
 
         while remaining > 0:
-            remaining -= self.readinto(view)
+            read = self.readinto(view)
+            view = view[read:]
+            remaining -= read
+
+            if read == 0:
+                raise EOFError(
+                    f"Read only {n - remaining} bytes, expected {n} bytes: {buffer!r}"
+                )
 
         return bytes(buffer)
 
     def __enter__(self) -> Self:
         """Enter context manager."""
         self.open()
-        self.configure_port()
+
+        try:
+            self.configure_port()
+        except BaseException:
+            self.close()
+            raise
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -202,7 +217,9 @@ class BaseSerialTransport(asyncio.Transport):
 
     transport_name = "serial"
 
-    def __init__(self, loop, protocol) -> None:
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
+    ) -> None:
         """Initialize serial transport."""
         super().__init__()
         self._loop = loop
@@ -210,6 +227,16 @@ class BaseSerialTransport(asyncio.Transport):
         self._extra: dict[str, Any] = {}
 
         self._serial: BaseSerial | None = None
+        self._closing: bool = False
+
+    def is_closing(self) -> bool:
+        """Return whether the transport is closing."""
+        return self._closing
+
+    @property
+    def serial(self):
+        """Get the serial port instance."""
+        return self._serial
 
     @abstractmethod
     async def _connect(self, **kwargs) -> None:
@@ -219,3 +246,17 @@ class BaseSerialTransport(asyncio.Transport):
     async def connect(self, **kwargs) -> None:
         """Connect to serial port."""
         return await self._connect(**kwargs)
+
+    async def get_modem_bits(self) -> ModemBits:
+        """Get modem control bits."""
+        assert self._serial is not None
+        return await self._loop.run_in_executor(None, self._serial.get_modem_bits)
+
+    async def set_modem_bits(self, modem_bits: ModemBits) -> None:
+        """Set modem control bits."""
+        assert self._serial is not None
+        await self._loop.run_in_executor(None, self._serial.set_modem_bits, modem_bits)
+
+    async def flush(self) -> None:
+        """Flush write buffers, waiting until all data is written."""
+        raise NotImplementedError

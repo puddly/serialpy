@@ -14,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
 
 
-class DescriptorTransport(asyncio.transports.Transport):
+class DescriptorTransport(asyncio.Transport):
     """File descriptor transport using asyncio."""
 
     max_size = 256 * 1024  # max bytes we read in one event loop iteration
@@ -22,22 +22,23 @@ class DescriptorTransport(asyncio.transports.Transport):
 
     def __init__(
         self,
-        loop: asyncio.BaseEventLoop,
+        loop: asyncio.AbstractEventLoop,
         protocol: asyncio.Protocol,
         extra: dict[str, typing.Any] | None = None,
     ) -> None:
         """Initialize the descriptor transport."""
         self._fileno: int | None = None
 
-        self._loop: asyncio.BaseEventLoop = loop
+        self._loop: asyncio.AbstractEventLoop = loop
         self._set_write_buffer_limits()
         self._protocol_paused = False
 
-        self._protocol: asyncio.Protocol = protocol
+        self._protocol = protocol
         self._buffer = bytearray()
         self._conn_lost_count = 0
         self._closing = False
         self._paused = False
+        self._empty_waiter: asyncio.Future | None = None
         self._extra: dict[str, Any] = {}
 
     async def _open(self, path: os.PathLike) -> None:
@@ -157,6 +158,19 @@ class DescriptorTransport(asyncio.transports.Transport):
         """Get the number of bytes currently in the write buffer."""
         return len(self._buffer)
 
+    def _make_empty_waiter(self) -> asyncio.Future:
+        """Create a future that resolves when the write buffer is empty."""
+        if self._empty_waiter is not None:
+            raise RuntimeError("Empty waiter is already set")
+        self._empty_waiter = self._loop.create_future()
+        if not self._buffer:
+            self._empty_waiter.set_result(None)
+        return self._empty_waiter
+
+    def _reset_empty_waiter(self) -> None:
+        """Reset the empty waiter."""
+        self._empty_waiter = None
+
     def write(self, data) -> None:
         """Write data to the file descriptor."""
         assert isinstance(data, (bytes, bytearray, memoryview)), repr(data)
@@ -220,6 +234,8 @@ class DescriptorTransport(asyncio.transports.Transport):
             # Remove writer here, _fatal_error() doesn't it
             # because _buffer is empty.
             self._loop.remove_writer(self._fileno)
+            if self._empty_waiter is not None:
+                self._empty_waiter.set_exception(exc)
             self._fatal_error(
                 exc,  # type: ignore[arg-type]
                 f"Fatal write error in {self.transport_name} transport",
@@ -228,6 +244,8 @@ class DescriptorTransport(asyncio.transports.Transport):
             if n == len(self._buffer):
                 self._buffer.clear()
                 self._loop.remove_writer(self._fileno)
+                if self._empty_waiter is not None:
+                    self._empty_waiter.set_result(None)
                 self._maybe_resume_protocol()  # May append to buffer.
                 if self._closing:
                     self._loop.remove_reader(self._fileno)
@@ -250,9 +268,9 @@ class DescriptorTransport(asyncio.transports.Transport):
             self._loop.remove_reader(self._fileno)
             self._loop.call_soon(self._call_connection_lost, None)
 
-    def set_protocol(self, protocol: asyncio.BaseProtocol) -> None:
+    def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
         """Set the protocol to use with this transport."""
-        self._protocol = protocol  # type: ignore[assignment]
+        self._protocol = protocol
 
     def get_protocol(self) -> asyncio.Protocol:
         """Get the protocol used by this transport."""
