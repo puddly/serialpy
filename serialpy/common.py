@@ -8,7 +8,9 @@ import dataclasses
 from enum import Enum
 import io
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
+
+from typing_extensions import Self
 
 
 class StopBits(Enum):

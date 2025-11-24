@@ -18,6 +18,13 @@ dependencies = [
     "async-timeout; python_version < '3.12'",
     "pywin32; platform_system == 'Windows'",
 ]
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-timeout",
+]
 
 [tool.setuptools.packages.find]
 include = ["serialpy"]
