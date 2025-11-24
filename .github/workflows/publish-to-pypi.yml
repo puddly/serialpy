@@ -1,5 +1,8 @@
 name: Publish distributions to PyPI
 
+permissions:
+  id-token: write
+
 on:
   release:
     types:
