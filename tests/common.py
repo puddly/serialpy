@@ -31,7 +31,13 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
         )
 
         # Give socat time to set up the PTYs
-        time.sleep(0.5)
+        for _attempt in range(100):
+            if os.path.exists(in_tty) and os.path.exists(out_tty):
+                break
+
+            time.sleep(0.01)
+        else:
+            raise RuntimeError("socat PTYs were not created in time")
 
         assert proc.returncode is None
 
