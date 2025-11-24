@@ -207,8 +207,10 @@ class DescriptorTransport(asyncio.Transport):
                 )
                 return
 
-            LOGGER.debug("Sent %d of %d bytes", n, len(data))
-            if n == len(data):
+            len_data = len(data)
+            LOGGER.debug("Sent %d of %d bytes", n, len_data)
+
+            if n == len_data:
                 return
             elif n > 0:
                 data = memoryview(data)[n:]

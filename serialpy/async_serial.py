@@ -24,7 +24,7 @@ async def create_serial_connection(
     exclusive=True,
     *,
     transport_factory=SerialTransport,
-    **kwargs,  # Add **kwargs here
+    **kwargs,
 ) -> tuple[SerialTransport, asyncio.Protocol]:
     """Create a serial port connection with asyncio."""
     if not exclusive:
@@ -44,11 +44,11 @@ async def create_serial_connection(
         await transport.connect(
             path=url,
             baudrate=baudrate,
-            parity=parity,  # Add parity
+            parity=parity,
             stopbits=stopbits,
             xonxoff=xonxoff,
             rtscts=rtscts,
-            **kwargs,  # Pass **kwargs here
+            **kwargs,
         )
 
     return transport, protocol

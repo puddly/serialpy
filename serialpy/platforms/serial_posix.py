@@ -116,7 +116,14 @@ class PosixSerial(BaseSerial):
         LOGGER.debug("Locking serial port %r", self._path)
 
         assert self._fileno is not None
-        fcntl.flock(self._fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        try:
+            fcntl.flock(self._fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise OSError(
+                errno.EBUSY,
+                f"Serial port {self._path!r} is already locked by another process",
+            ) from exc
 
     def _unlock(self) -> None:
         """Unlock the serial port."""
@@ -305,7 +312,13 @@ class PosixSerial(BaseSerial):
 
         # A `bytearray` is critical here: `bytes` will not be mutated
         buffer = bytearray((0x00000000).to_bytes(4, "little"))
-        fcntl.ioctl(self._fileno, termios.TIOCMGET, buffer)
+
+        try:
+            fcntl.ioctl(self._fileno, termios.TIOCMGET, buffer)
+        except OSError as exc:
+            if exc.errno == errno.ENOTTY:
+                LOGGER.debug("Device is not a serial port, cannot get modem bits")
+                return ModemBits()
 
         n = int.from_bytes(buffer, "little")
         return ModemBits(
@@ -320,25 +333,29 @@ class PosixSerial(BaseSerial):
             getattr(modem_bits, name) is not None for name in MODEM_BIT_MAPPING
         )
 
-        if all_bits_set:
-            value = modem_bits_as_int(modem_bits)
-            LOGGER.debug("Setting all modem bits: 0x%08X", value)
-            fcntl.ioctl(self._fileno, termios.TIOCMSET, value.to_bytes(4, "little"))
-        else:
-            to_set = modem_bits_mask_of_value(modem_bits, True)
-            to_clear = modem_bits_mask_of_value(modem_bits, False)
+        try:
+            if all_bits_set:
+                value = modem_bits_as_int(modem_bits)
+                LOGGER.debug("Setting all modem bits: 0x%08X", value)
+                fcntl.ioctl(self._fileno, termios.TIOCMSET, value.to_bytes(4, "little"))
+            else:
+                to_set = modem_bits_mask_of_value(modem_bits, True)
+                to_clear = modem_bits_mask_of_value(modem_bits, False)
 
-            if to_set:
-                LOGGER.debug("Setting modem bits: 0x%08X", to_set)
-                fcntl.ioctl(
-                    self._fileno, termios.TIOCMBIS, to_set.to_bytes(4, "little")
-                )
+                if to_set:
+                    LOGGER.debug("Setting modem bits: 0x%08X", to_set)
+                    fcntl.ioctl(
+                        self._fileno, termios.TIOCMBIS, to_set.to_bytes(4, "little")
+                    )
 
-            if to_clear:
-                LOGGER.debug("Clearing modem bits: 0x%08X", to_clear)
-                fcntl.ioctl(
-                    self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little")
-                )
+                if to_clear:
+                    LOGGER.debug("Clearing modem bits: 0x%08X", to_clear)
+                    fcntl.ioctl(
+                        self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little")
+                    )
+        except OSError as exc:
+            if exc.errno == errno.ENOTTY:
+                LOGGER.debug("Device is not a serial port, cannot set modem bits")
 
     def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""

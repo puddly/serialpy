@@ -180,9 +180,10 @@ combine-as-imports = true
 split-on-trailing-comma = false
 
 [tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+    "SIM117",  # Nested `with` statements are often more readable
+]
 
-# Allow for main entry & scripts to write to stdout
-"script/*" = ["T20"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 25

@@ -75,7 +75,7 @@ class BaseSerial(io.RawIOBase):
         byte_size: int = 8,
         *,
         buffer_character_count: int = 1,
-        buffer_burst_timeout: float = 0.0,
+        buffer_burst_timeout: float = 0.01,
         exclusive: bool = True,
     ) -> None:
         """Initialize serial port configuration."""
@@ -236,9 +236,34 @@ class BaseSerialTransport(asyncio.Transport):
         return self._closing
 
     @property
-    def serial(self):
+    def serial(self) -> BaseSerial:
         """Get the serial port instance."""
+        assert self._serial is not None
         return self._serial
+
+    @property
+    def baudrate(self) -> int:
+        """Get the baud rate."""
+        assert self._serial is not None
+        return self._serial.baudrate
+
+    @property
+    def parity(self) -> Parity:
+        """Get the parity."""
+        assert self._serial is not None
+        return self._serial.parity
+
+    @property
+    def stopbits(self) -> StopBits:
+        """Get the number of stop bits."""
+        assert self._serial is not None
+        return self._serial.stopbits
+
+    @property
+    def exclusive(self) -> bool:
+        """Get the exclusive setting."""
+        assert self._serial is not None
+        return self._serial.exclusive
 
     @abstractmethod
     async def _connect(self, **kwargs) -> None:
