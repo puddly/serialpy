@@ -267,10 +267,18 @@ async def test_valid_parity_loopback_async(parity: Parity) -> None:
     ("stopbits", "expected"),
     [
         (StopBits.ONE, StopBits.ONE),
-        (StopBits.ONE_POINT_FIVE, StopBits.ONE_POINT_FIVE),
+        pytest.param(
+            StopBits.ONE_POINT_FIVE,
+            StopBits.ONE_POINT_FIVE,
+            marks=pytest.mark.xfail(reason="Not all drivers support 1.5 stop bits"),
+        ),
         (StopBits.TWO, StopBits.TWO),
         (1, StopBits.ONE),
-        (1.5, StopBits.ONE_POINT_FIVE),
+        pytest.param(
+            1.5,
+            StopBits.ONE_POINT_FIVE,
+            marks=pytest.mark.xfail(reason="Not all drivers support 1.5 stop bits"),
+        ),
         (2, StopBits.TWO),
     ],
 )

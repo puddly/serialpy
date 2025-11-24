@@ -20,9 +20,15 @@ from serialpy import (
     create_serial_connection,
 )
 from tests.common import (
+    SOCAT_BINARY,
     async_create_reader_writer,
     async_create_reader_writer_pair,
     async_create_socat_pair,
+)
+
+pytestmark = pytest.mark.skipif(
+    not SOCAT_BINARY,
+    reason="socat binary is missing",
 )
 
 

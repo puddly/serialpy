@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import AsyncIterator, Iterator
 import contextlib
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -16,6 +17,7 @@ import serialpy
 LOOPBACK_ADAPTER = os.environ.get("SERIALPY_LOOPBACK_PORT")
 DUAL_LOOPBACK_LEFT = os.environ.get("SERIALPY_DUAL_LOOPBACK_LEFT")
 DUAL_LOOPBACK_RIGHT = os.environ.get("SERIALPY_DUAL_LOOPBACK_RIGHT")
+SOCAT_BINARY = shutil.which("socat")
 
 
 @contextlib.contextmanager

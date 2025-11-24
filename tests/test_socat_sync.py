@@ -5,7 +5,12 @@ import os
 import pytest
 
 from serialpy import ModemBits, Parity, Serial, StopBits
-from tests.common import create_socat_pair
+from tests.common import SOCAT_BINARY, create_socat_pair
+
+pytestmark = pytest.mark.skipif(
+    not SOCAT_BINARY,
+    reason="socat binary is missing",
+)
 
 
 def test_all_bytes_socat() -> None:
