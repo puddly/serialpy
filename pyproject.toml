@@ -27,7 +27,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["serialx"]
+exclude = ["tests", "tests.*"]
 
 [tool.setuptools-git-versioning]
 enabled = true
