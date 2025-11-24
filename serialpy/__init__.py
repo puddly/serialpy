@@ -3,15 +3,17 @@
 import sys
 
 from .async_serial import create_serial_connection, open_serial_connection
-from .common import ModemBits
+from .common import ModemBits, Parity, StopBits
 from .platforms import Serial, SerialTransport
 
 __all__ = [
-    "ModemBits",
     "create_serial_connection",
     "open_serial_connection",
+    "ModemBits",
+    "Parity",
     "Serial",
     "SerialTransport",
+    "StopBits",
 ]
 
 _MODULES_TO_PATCH = ["serial", "serial_asyncio", "serial_asyncio_fast"]

@@ -1,43 +1,15 @@
 """Test APIs with socat-created virtual PTY pairs."""
 
 import asyncio
-from collections.abc import AsyncIterator
-import contextlib
-import os
 import sys
-import tempfile
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
 else:
     from async_timeout import timeout as asyncio_timeout
 
-
 import serialpy
-
-
-@contextlib.asynccontextmanager
-async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
-    """Create a pair of virtual PTYs using socat."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        in_tty = os.path.join(tmpdir, "ttyTestIn")
-        out_tty = os.path.join(tmpdir, "ttyTestOut")
-
-        proc = await asyncio.create_subprocess_exec(
-            "socat",
-            f"PTY,link={in_tty},raw,echo=0",
-            f"PTY,link={out_tty},raw,echo=0",
-        )
-
-        # Give socat time to set up the PTYs
-        await asyncio.sleep(0.5)
-
-        assert proc.returncode is None
-
-        yield (in_tty, out_tty)
-
-        proc.terminate()
-        await proc.wait()
+from tests.common import async_create_socat_pair
 
 
 # Source: https://github.com/home-assistant-libs/pyserial-asyncio-fast/pull/36

@@ -116,7 +116,14 @@ class PosixSerial(BaseSerial):
         LOGGER.debug("Locking serial port %r", self._path)
 
         assert self._fileno is not None
-        fcntl.flock(self._fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        try:
+            fcntl.flock(self._fileno, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise OSError(
+                errno.EBUSY,
+                f"Serial port {self._path!r} is already locked by another process",
+            ) from exc
 
     def _unlock(self) -> None:
         """Unlock the serial port."""

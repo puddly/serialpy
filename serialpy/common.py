@@ -75,7 +75,7 @@ class BaseSerial(io.RawIOBase):
         byte_size: int = 8,
         *,
         buffer_character_count: int = 1,
-        buffer_burst_timeout: float = 0.0,
+        buffer_burst_timeout: float = 0.01,
         exclusive: bool = True,
     ) -> None:
         """Initialize serial port configuration."""
