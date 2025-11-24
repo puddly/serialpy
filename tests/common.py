@@ -14,6 +14,8 @@ import pytest
 import serialpy
 
 LOOPBACK_ADAPTER = os.environ.get("SERIALPY_LOOPBACK_PORT")
+DUAL_LOOPBACK_LEFT = os.environ.get("SERIALPY_DUAL_LOOPBACK_LEFT")
+DUAL_LOOPBACK_RIGHT = os.environ.get("SERIALPY_DUAL_LOOPBACK_RIGHT")
 
 
 @contextlib.contextmanager
@@ -112,6 +114,41 @@ async def async_create_reader_writer_pair(
     """
     reader_left, writer_left = await serialpy.open_serial_connection(left, **kwargs)
     reader_right, writer_right = await serialpy.open_serial_connection(right, **kwargs)
+
+    try:
+        yield (reader_left, writer_left, reader_right, writer_right)
+    finally:
+        writer_left.close()
+        writer_right.close()
+        await writer_left.wait_closed()
+        await writer_right.wait_closed()
+
+
+@contextlib.asynccontextmanager
+async def async_create_dual_loopback(
+    **kwargs: Any,
+) -> AsyncIterator[
+    tuple[
+        asyncio.StreamReader,
+        asyncio.StreamWriter,
+        asyncio.StreamReader,
+        asyncio.StreamWriter,
+    ]
+]:
+    """Create reader/writer pairs for dual loopback configuration.
+
+    Uses DUAL_LOOPBACK_LEFT and DUAL_LOOPBACK_RIGHT environment variables.
+    Returns (reader_left, writer_left, reader_right, writer_right).
+    """
+    if DUAL_LOOPBACK_LEFT is None or DUAL_LOOPBACK_RIGHT is None:
+        pytest.skip("Dual loopback ports not configured")
+
+    reader_left, writer_left = await serialpy.open_serial_connection(
+        DUAL_LOOPBACK_LEFT, **kwargs
+    )
+    reader_right, writer_right = await serialpy.open_serial_connection(
+        DUAL_LOOPBACK_RIGHT, **kwargs
+    )
 
     try:
         yield (reader_left, writer_left, reader_right, writer_right)
