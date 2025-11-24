@@ -336,7 +336,7 @@ def test_flush_after_write_loopback() -> None:
         serial.write(data)
         serial.flush()
 
-        result = serial.read(len(data))
+        result = serial.readexactly(len(data))
         assert result == data
 
 
@@ -352,7 +352,7 @@ def test_multiple_flush_calls_loopback() -> None:
             serial.write(chunk)
             serial.flush()
 
-        result = serial.read(512)
+        result = serial.readexactly(len(data))
         assert result == data
 
 

@@ -373,7 +373,7 @@ def test_multiple_flush_calls_dual() -> None:
             serial_left.write(chunk)
             serial_left.flush()
 
-        result = serial_right.read(512)
+        result = serial_right.readexactly(len(data))
         assert result == data
 
 

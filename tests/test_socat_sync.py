@@ -417,7 +417,7 @@ def test_flush_after_write_socat() -> None:
         serial_left.write(data)
         serial_left.flush()
 
-        result = serial_right.read(len(data))
+        result = serial_right.readexactly(len(data))
         assert result == data
 
 
@@ -437,7 +437,7 @@ def test_multiple_flush_calls_socat() -> None:
             serial_left.write(chunk)
             serial_left.flush()
 
-        result = serial_right.read(512)
+        result = serial_right.readexactly(len(data))
         assert result == data
 
 
