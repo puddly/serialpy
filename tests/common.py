@@ -9,6 +9,8 @@ import tempfile
 import time
 from typing import Any
 
+import pytest
+
 import serialpy
 
 LOOPBACK_ADAPTER = os.environ.get("SERIALPY_LOOPBACK_PORT")
@@ -74,13 +76,14 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 
 @contextlib.asynccontextmanager
 async def async_create_reader_writer(
-    port: str,
+    port: str | None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[asyncio.StreamReader, asyncio.StreamWriter]]:
-    """Create a single reader/writer pair.
+    """Create a single reader/writer pair."""
 
-    Returns (reader, writer).
-    """
+    if port is None:
+        pytest.skip("No loopback adapter configured")
+
     reader, writer = await serialpy.open_serial_connection(port, **kwargs)
 
     try:
