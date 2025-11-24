@@ -3,10 +3,10 @@ requires = ["setuptools>=61.0.0", "wheel", "setuptools-git-versioning<2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "serialpy"
+name = "serialx"
 dynamic = ["version"]
 description = "Serial library with native async support for Windows and POSIX"
-urls = {repository = "https://github.com/puddly/serialpy"}
+urls = {repository = "https://github.com/puddly/serialx"}
 authors = [
     {name = "puddly", email = "puddly3@gmail.com"}
 ]
@@ -27,7 +27,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["serialpy"]
+include = ["serialx"]
 
 [tool.setuptools-git-versioning]
 enabled = true
@@ -47,7 +47,7 @@ show_error_codes = true
 show_error_context = true
 
 [tool.coverage.run]
-source = ["serialpy"]
+source = ["serialx"]
 
 [tool.ruff]
 target-version = "py310"
@@ -173,7 +173,7 @@ ban-relative-imports = "all"
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
 known-first-party = [
-    "serialpy",
+    "serialx",
     "tests",
 ]
 combine-as-imports = true

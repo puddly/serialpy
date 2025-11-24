@@ -12,7 +12,7 @@ else:
 
 import pytest
 
-from serialpy import (
+from serialx import (
     ModemBits,
     Parity,
     SerialTransport,

@@ -1,34 +1,35 @@
 # Introduction
-Serialpy is a no-compromise serial communication library for Python targeting common
+Serialx is a no-compromise serial communication library for Python targeting common
 platforms such as Linux (POSIX), macOS, and Windows. It provides both synchronous and
 native asynchronous APIs for all platforms.
 
 # Installation
 
 ```console
-pip install git+https://github.com/puddly/serialpy
+pip install serialx
 ```
 
 # Usage
 
-Serialpy features a pyserial and pyserial-asyncio compatibility layer for easy testing.
-As early as possible, run `serialpy.patch()` and it will provide API-compatible replacements.
+Serialx features a pyserial and pyserial-asyncio compatibility layer for easy testing.
+As early as possible, run `serialx.patch_pyserial()` and it will provide API-compatible
+replacements.
 
 ```python
-import serialpy
-serialpy.patch()
+import serialx
+serialx.patch_pyserial()
 
-# These will now use serialpy
+# These will now use serialx
 import serial
 import serial_asyncio
 ```
 
-Serialpy features a familiar synchronous API:
+Serialx features a familiar synchronous API:
 
 ```Python
-import serialpy
+import serialx
 
-with serialpy.Serial("/dev/serial/by-id/port", baudrate=115200) as serial:
+with serialx.Serial("/dev/serial/by-id/port", baudrate=115200) as serial:
     data = serial.readexactly(5)
     serial.write(b"test")
 
@@ -44,10 +45,10 @@ A high-level asynchronous serial `(reader, writer)` pair:
 import asyncio
 import contextlib
 
-import serialpy
+import serialx
 
 async def main():
-	reader, writer = await serialpy.open_serial_connection("/dev/serial/by-id/port", baudrate=115200)
+	reader, writer = await serialx.open_serial_connection("/dev/serial/by-id/port", baudrate=115200)
 
 	with contextlib.closing(writer):
 	    data = await reader.readexactly(5)
@@ -59,13 +60,13 @@ And a low-level asynchronous serial transport:
 
 ```Python
 import asyncio
-import serialpy
+import serialx
 
 async def main():
 	loop = asyncio.get_running_loop()
 	protocol = YourProtocol()
 
-	transport, protocol = await serialpy.create_serial_connection(
+	transport, protocol = await serialx.create_serial_connection(
 	    loop,
 	    lambda: protocol,
 	    url="/dev/serial/by-id/port",
