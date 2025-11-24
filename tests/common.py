@@ -72,6 +72,53 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
         await proc.wait()
 
 
+@contextlib.asynccontextmanager
+async def async_create_reader_writer(
+    port: str,
+    **kwargs: Any,
+) -> AsyncIterator[tuple[asyncio.StreamReader, asyncio.StreamWriter]]:
+    """Create a single reader/writer pair.
+
+    Returns (reader, writer).
+    """
+    reader, writer = await serialpy.open_serial_connection(port, **kwargs)
+
+    try:
+        yield (reader, writer)
+    finally:
+        writer.close()
+        await writer.wait_closed()
+
+
+@contextlib.asynccontextmanager
+async def async_create_reader_writer_pair(
+    left: str,
+    right: str,
+    **kwargs: Any,
+) -> AsyncIterator[
+    tuple[
+        asyncio.StreamReader,
+        asyncio.StreamWriter,
+        asyncio.StreamReader,
+        asyncio.StreamWriter,
+    ]
+]:
+    """Create reader/writer pairs for both sides of a socat connection.
+
+    Returns (reader_left, writer_left, reader_right, writer_right).
+    """
+    reader_left, writer_left = await serialpy.open_serial_connection(left, **kwargs)
+    reader_right, writer_right = await serialpy.open_serial_connection(right, **kwargs)
+
+    try:
+        yield (reader_left, writer_left, reader_right, writer_right)
+    finally:
+        writer_left.close()
+        writer_right.close()
+        await writer_left.wait_closed()
+        await writer_right.wait_closed()
+
+
 @contextlib.contextmanager
 def create_connected_pair(
     **kwargs: Any,
