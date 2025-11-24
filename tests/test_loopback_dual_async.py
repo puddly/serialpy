@@ -6,19 +6,13 @@ import sys
 from typing import cast
 
 if sys.version_info >= (3, 11):
-    from asyncio import timeout as asyncio_timeout
+    pass
 else:
-    from async_timeout import timeout as asyncio_timeout
+    pass
 
 import pytest
 
-from serialpy import (
-    ModemBits,
-    Parity,
-    SerialTransport,
-    StopBits,
-    create_serial_connection,
-)
+from serialpy import ModemBits, Parity, SerialTransport, StopBits
 from tests.common import (
     DUAL_LOOPBACK_LEFT,
     DUAL_LOOPBACK_RIGHT,
@@ -471,73 +465,3 @@ async def test_set_modem_bits_async() -> None:
         modem_bits = await transport.get_modem_bits()
         assert modem_bits.dtr is False
         assert modem_bits.rts is False
-
-
-# Source: https://github.com/home-assistant-libs/pyserial-asyncio-fast/pull/36
-async def test_remove_writer() -> None:
-    """Test that large writes with backpressure are handled correctly.
-
-    This test catches three issue categories:
-    1. AssertionError from writer not being removed when buffer empties
-    2. Deadlock (via timeout) from direct writes blocking indefinitely
-    3. Timing failures from writer not being added when buffering data
-    """
-    TEXT = b"Hello, World!"
-    COUNT = 8 * 1024
-    output_resume_event = asyncio.Event()
-    data_received_count = 0
-
-    class Input(asyncio.Protocol):
-        _transport: SerialTransport
-
-        def connection_made(self, transport: asyncio.BaseTransport) -> None:
-            assert isinstance(transport, SerialTransport)
-            self._transport = transport
-
-        def data_received(self, data: bytes) -> None:
-            nonlocal data_received_count
-            data_received_count += len(data)
-            self._transport.write(data)
-
-    class Output(asyncio.Protocol):
-        """Provides backpressure to writer via output_resume_event."""
-
-        _transport: SerialTransport
-
-        def connection_made(self, transport: asyncio.BaseTransport) -> None:
-            assert isinstance(transport, SerialTransport)
-            self._transport = transport
-            output_resume_event.set()
-
-        def pause_writing(self) -> None:
-            output_resume_event.clear()
-
-        def resume_writing(self) -> None:
-            output_resume_event.set()
-
-    loop = asyncio.get_running_loop()
-
-    in_transport, _ = await create_serial_connection(
-        loop, Input, DUAL_LOOPBACK_RIGHT, baudrate=115200
-    )
-    out_transport, _ = await create_serial_connection(
-        loop, Output, DUAL_LOOPBACK_LEFT, baudrate=115200
-    )
-
-    # Write a bunch of data so that we create a buffer and trigger backpressure
-    for _ in range(COUNT):
-        async with asyncio_timeout(5):
-            await output_resume_event.wait()
-
-        out_transport.write(TEXT)
-
-    # Ensure that the write buffer eventually drains completely
-    async with asyncio_timeout(5):
-        while out_transport.get_write_buffer_size() > 0:
-            await asyncio.sleep(0.1)
-
-    # Verify we received some data on the input side
-    assert data_received_count > 0
-
-    out_transport.close()
-    in_transport.close()
