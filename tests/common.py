@@ -182,3 +182,22 @@ def create_connected_pair(
             serialpy.Serial(out_tty, **right_kwargs, **shared_kwargs) as right_serial,
         ):
             yield (left_serial, right_serial)
+
+
+@contextlib.contextmanager
+def create_dual_loopback(
+    **kwargs: Any,
+) -> Iterator[tuple[serialpy.Serial, serialpy.Serial]]:
+    """Create a connected pair of serial ports with dual loopback hardware.
+
+    Uses DUAL_LOOPBACK_LEFT and DUAL_LOOPBACK_RIGHT environment variables.
+    Returns (serial_left, serial_right).
+    """
+    if DUAL_LOOPBACK_LEFT is None or DUAL_LOOPBACK_RIGHT is None:
+        pytest.skip("Dual loopback ports not configured")
+
+    with (
+        serialpy.Serial(DUAL_LOOPBACK_LEFT, **kwargs) as serial_left,
+        serialpy.Serial(DUAL_LOOPBACK_RIGHT, **kwargs) as serial_right,
+    ):
+        yield (serial_left, serial_right)
