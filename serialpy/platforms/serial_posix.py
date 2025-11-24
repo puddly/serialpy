@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import array
+import errno
 import fcntl
 import logging
 import os
@@ -26,6 +27,7 @@ FLUSH_TIMEOUT = 10.0
 
 ASYNC_LOW_LATENCY = 1 << 13
 CMSPAR = 0o10000000000
+TCGETS = 0x5401
 TCGETS2 = 0x802C542A
 TCSETS2 = 0x402C542B
 
@@ -270,19 +272,32 @@ class PosixSerial(BaseSerial):
             self._set_non_posix_baudrate(self._baudrate)
 
         if TIOCSSERIAL is not None:
-            assert TIOCGSERIAL is not None
-            buffer = array.array("i", [0x00000000] * 19 * 8)
-            fcntl.ioctl(self._fileno, TIOCGSERIAL, buffer)
+            try:
+                self._set_low_latency(self._low_latency)
+            except OSError as exc:
+                if exc.errno == errno.ENOTTY:
+                    LOGGER.debug("Device is not a serial port, cannot set low latency")
+                else:
+                    raise
 
-            LOGGER.debug("Read low latency %r", buffer)
+    def _set_low_latency(self, value: bool) -> None:
+        """Set low latency mode."""
+        assert self._fileno is not None
+        assert TIOCGSERIAL is not None
+        assert TIOCSSERIAL is not None
 
-            if self._low_latency:
-                buffer[4] |= ASYNC_LOW_LATENCY
-            else:
-                buffer[4] &= ~ASYNC_LOW_LATENCY
+        buffer = array.array("i", [0x00000000] * 19 * 8)
 
-            LOGGER.debug("Writing low latency %r", buffer)
-            fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
+        fcntl.ioctl(self._fileno, TIOCGSERIAL, buffer)
+        LOGGER.debug("Read low latency %r", buffer)
+
+        if self._low_latency:
+            buffer[4] |= ASYNC_LOW_LATENCY
+        else:
+            buffer[4] &= ~ASYNC_LOW_LATENCY
+
+        LOGGER.debug("Writing low latency %r", buffer)
+        fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
 
     def get_modem_bits(self) -> ModemBits:
         """Get current modem control bits."""
