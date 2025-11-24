@@ -136,7 +136,7 @@ jobs:
             -qq \
             --timeout=20 \
             --durations=10 \
-            --cov serialpy \
+            --cov serialx \
             --cov-config pyproject.toml \
             -o console_output_style=count \
             -p no:sugar \

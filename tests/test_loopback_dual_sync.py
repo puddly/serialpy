@@ -4,12 +4,12 @@ import os
 
 import pytest
 
-from serialpy import ModemBits, Parity, Serial, StopBits
+from serialx import ModemBits, Parity, Serial, StopBits
 from tests.common import DUAL_LOOPBACK_LEFT, DUAL_LOOPBACK_RIGHT, create_dual_loopback
 
 pytestmark = pytest.mark.skipif(
     not DUAL_LOOPBACK_LEFT or not DUAL_LOOPBACK_RIGHT,
-    reason="SERIALPY_DUAL_LOOPBACK_LEFT and SERIALPY_DUAL_LOOPBACK_RIGHT not set",
+    reason="SERIALX_DUAL_LOOPBACK_LEFT and SERIALX_DUAL_LOOPBACK_RIGHT not set",
 )
 
 

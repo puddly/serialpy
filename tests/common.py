@@ -12,11 +12,11 @@ from typing import Any
 
 import pytest
 
-import serialpy
+import serialx
 
-LOOPBACK_ADAPTER = os.environ.get("SERIALPY_LOOPBACK_PORT")
-DUAL_LOOPBACK_LEFT = os.environ.get("SERIALPY_DUAL_LOOPBACK_LEFT")
-DUAL_LOOPBACK_RIGHT = os.environ.get("SERIALPY_DUAL_LOOPBACK_RIGHT")
+LOOPBACK_ADAPTER = os.environ.get("SERIALX_LOOPBACK_PORT")
+DUAL_LOOPBACK_LEFT = os.environ.get("SERIALX_DUAL_LOOPBACK_LEFT")
+DUAL_LOOPBACK_RIGHT = os.environ.get("SERIALX_DUAL_LOOPBACK_RIGHT")
 SOCAT_BINARY = shutil.which("socat")
 
 
@@ -88,7 +88,7 @@ async def async_create_reader_writer(
     if port is None:
         pytest.skip("No loopback adapter configured")
 
-    reader, writer = await serialpy.open_serial_connection(port, **kwargs)
+    reader, writer = await serialx.open_serial_connection(port, **kwargs)
 
     try:
         yield (reader, writer)
@@ -114,8 +114,8 @@ async def async_create_reader_writer_pair(
 
     Returns (reader_left, writer_left, reader_right, writer_right).
     """
-    reader_left, writer_left = await serialpy.open_serial_connection(left, **kwargs)
-    reader_right, writer_right = await serialpy.open_serial_connection(right, **kwargs)
+    reader_left, writer_left = await serialx.open_serial_connection(left, **kwargs)
+    reader_right, writer_right = await serialx.open_serial_connection(right, **kwargs)
 
     try:
         yield (reader_left, writer_left, reader_right, writer_right)
@@ -145,10 +145,10 @@ async def async_create_dual_loopback(
     if DUAL_LOOPBACK_LEFT is None or DUAL_LOOPBACK_RIGHT is None:
         pytest.skip("Dual loopback ports not configured")
 
-    reader_left, writer_left = await serialpy.open_serial_connection(
+    reader_left, writer_left = await serialx.open_serial_connection(
         DUAL_LOOPBACK_LEFT, **kwargs
     )
-    reader_right, writer_right = await serialpy.open_serial_connection(
+    reader_right, writer_right = await serialx.open_serial_connection(
         DUAL_LOOPBACK_RIGHT, **kwargs
     )
 
@@ -164,7 +164,7 @@ async def async_create_dual_loopback(
 @contextlib.contextmanager
 def create_connected_pair(
     **kwargs: Any,
-) -> Iterator[tuple[serialpy.Serial, serialpy.Serial]]:
+) -> Iterator[tuple[serialx.Serial, serialx.Serial]]:
     """Create a connected pair of serial ports with socat."""
     left_kwargs = {}
     right_kwargs = {}
@@ -180,8 +180,8 @@ def create_connected_pair(
 
     with create_socat_pair() as (in_tty, out_tty):
         with (
-            serialpy.Serial(in_tty, **left_kwargs, **shared_kwargs) as left_serial,
-            serialpy.Serial(out_tty, **right_kwargs, **shared_kwargs) as right_serial,
+            serialx.Serial(in_tty, **left_kwargs, **shared_kwargs) as left_serial,
+            serialx.Serial(out_tty, **right_kwargs, **shared_kwargs) as right_serial,
         ):
             yield (left_serial, right_serial)
 
@@ -189,7 +189,7 @@ def create_connected_pair(
 @contextlib.contextmanager
 def create_dual_loopback(
     **kwargs: Any,
-) -> Iterator[tuple[serialpy.Serial, serialpy.Serial]]:
+) -> Iterator[tuple[serialx.Serial, serialx.Serial]]:
     """Create a connected pair of serial ports with dual loopback hardware.
 
     Uses DUAL_LOOPBACK_LEFT and DUAL_LOOPBACK_RIGHT environment variables.
@@ -199,7 +199,7 @@ def create_dual_loopback(
         pytest.skip("Dual loopback ports not configured")
 
     with (
-        serialpy.Serial(DUAL_LOOPBACK_LEFT, **kwargs) as serial_left,
-        serialpy.Serial(DUAL_LOOPBACK_RIGHT, **kwargs) as serial_right,
+        serialx.Serial(DUAL_LOOPBACK_LEFT, **kwargs) as serial_left,
+        serialx.Serial(DUAL_LOOPBACK_RIGHT, **kwargs) as serial_right,
     ):
         yield (serial_left, serial_right)

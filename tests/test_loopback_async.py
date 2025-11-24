@@ -6,11 +6,11 @@ from typing import cast
 
 import pytest
 
-from serialpy import ModemBits, Parity, SerialTransport, StopBits
+from serialx import ModemBits, Parity, SerialTransport, StopBits
 from tests.common import LOOPBACK_ADAPTER, async_create_reader_writer
 
 pytestmark = pytest.mark.skipif(
-    not LOOPBACK_ADAPTER, reason="SERIALPY_LOOPBACK_PORT not set"
+    not LOOPBACK_ADAPTER, reason="SERIALX_LOOPBACK_PORT not set"
 )
 
 

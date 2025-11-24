@@ -1,1 +1,1 @@
-"""Unit tests for serialpy."""
+"""Unit tests for serialx."""

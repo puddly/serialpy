@@ -4,13 +4,13 @@ import os
 
 import pytest
 
-from serialpy import ModemBits, Parity, Serial, StopBits
+from serialx import ModemBits, Parity, Serial, StopBits
 from tests.common import LOOPBACK_ADAPTER
 
 # All tests here use a real adapter, skip if not configured
 pytestmark = pytest.mark.skipif(
     LOOPBACK_ADAPTER is None,
-    reason="Loopback adapter port not set via SERIALPY_LOOPBACK_PORT",
+    reason="Loopback adapter port not set via SERIALX_LOOPBACK_PORT",
 )
 
 

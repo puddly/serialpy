@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from serialpy import ModemBits, Parity, Serial, StopBits
+from serialx import ModemBits, Parity, Serial, StopBits
 from tests.common import SOCAT_BINARY, create_socat_pair
 
 pytestmark = pytest.mark.skipif(

@@ -1,4 +1,4 @@
-"""Serialpy serial port implementation."""
+"""serialx serial port implementation."""
 
 import sys
 
@@ -20,7 +20,7 @@ _MODULES_TO_PATCH = ["serial", "serial_asyncio", "serial_asyncio_fast"]
 
 
 def patch():
-    """Patch sys.modules to replace PySerial imports with SerialPy."""
+    """Patch sys.modules to replace PySerial imports with serialx."""
 
     for module in _MODULES_TO_PATCH:
         sys.modules[module] = sys.modules[__name__]
