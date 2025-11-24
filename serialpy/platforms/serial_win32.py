@@ -411,7 +411,7 @@ class Win32SerialTransport(BaseSerialTransport):
     def close(self) -> None:
         """Close the transport."""
         self._closing = True
-        if self._internal_transport:
+        if self._internal_transport is not None:
             # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
 
