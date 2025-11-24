@@ -19,7 +19,7 @@ __all__ = [
 _MODULES_TO_PATCH = ["serial", "serial_asyncio", "serial_asyncio_fast"]
 
 
-def patch():
+def patch_pyserial():
     """Patch sys.modules to replace PySerial imports with serialx."""
 
     for module in _MODULES_TO_PATCH:
