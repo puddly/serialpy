@@ -3,15 +3,34 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Coroutine
 import errno
 import logging
 import os
+import sys
 import typing
 from typing import Any
 import warnings
 
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as asyncio_timeout
+else:
+    from async_timeout import timeout as asyncio_timeout
+
 LOGGER = logging.getLogger(__name__)
 LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
+
+FLUSH_TIMEOUT_S = 10.0
+
+# Prevent tasks from being garbage collected.
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
+
+def _create_background_task(coro: Coroutine) -> None:
+    """Create a background task that will not be garbage collected."""
+    task = asyncio.create_task(coro)
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 class DescriptorTransport(asyncio.Transport):
@@ -71,7 +90,7 @@ class DescriptorTransport(asyncio.Transport):
                 self._closing = True
                 self._loop.remove_reader(self._fileno)
                 self._loop.call_soon(self._protocol.eof_received)
-                self._loop.call_soon(self._call_connection_lost, None)
+                _create_background_task(self._call_connection_lost(None, flush=False))
 
     def pause_reading(self) -> None:
         """Pause reading from the file descriptor."""
@@ -251,7 +270,9 @@ class DescriptorTransport(asyncio.Transport):
                 self._maybe_resume_protocol()  # May append to buffer.
                 if self._closing:
                     self._loop.remove_reader(self._fileno)
-                    self._call_connection_lost(None)
+                    _create_background_task(
+                        self._call_connection_lost(None, flush=True)
+                    )
                 return
             elif n > 0:
                 del self._buffer[:n]
@@ -268,7 +289,7 @@ class DescriptorTransport(asyncio.Transport):
         self._closing = True
         if not self._buffer:
             self._loop.remove_reader(self._fileno)
-            self._loop.call_soon(self._call_connection_lost, None)
+            _create_background_task(self._call_connection_lost(None, flush=True))
 
     def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
         """Set the protocol to use with this transport."""
@@ -284,19 +305,16 @@ class DescriptorTransport(asyncio.Transport):
         if self._fileno is not None and not self._closing:
             self.write_eof()
 
-    def _cleanup(self):
-        assert self._fileno is not None
-        LOGGER.debug("Closing file descriptor %s", self._fileno)
-        self._loop.remove_reader(self._fileno)
-        os.close(self._fileno)
-        LOGGER.debug("Closing file descriptor %s: DONE", self._fileno)
-        self._fileno = None
-
     def __del__(self) -> None:
         """Clean up transport on deletion."""
         if getattr(self, "_fileno", None) is not None:
+            assert self._fileno is not None
+
             warnings.warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
-            self._cleanup()
+            if self._loop is not None:
+                self._loop.remove_reader(self._fileno)
+
+            os.close(self._fileno)
 
     def _fatal_error(
         self,
@@ -322,6 +340,15 @@ class DescriptorTransport(asyncio.Transport):
         """Abort the transport immediately."""
         self._close(None)
 
+    def _abort(self, exc: Exception | None = None) -> None:
+        self._closing = True
+        assert self._fileno is not None
+        if self._buffer:
+            self._loop.remove_writer(self._fileno)
+        self._buffer.clear()
+        self._loop.remove_reader(self._fileno)
+        _create_background_task(self._call_connection_lost(exc, flush=False))
+
     def _close(self, exc: Exception | None = None) -> None:
         self._closing = True
         assert self._fileno is not None
@@ -329,14 +356,40 @@ class DescriptorTransport(asyncio.Transport):
             self._loop.remove_writer(self._fileno)
         self._buffer.clear()
         self._loop.remove_reader(self._fileno)
-        self._loop.call_soon(self._call_connection_lost, exc)
+        _create_background_task(self._call_connection_lost(exc, flush=True))
 
-    def _call_connection_lost(self, exc: Exception | None) -> None:
-        LOGGER.debug("Connection was lost: %r", exc)
+    def _flush(self) -> None:
+        """Flush the write buffer."""
+        # This function is not necessary to implement when working with normal file
+        # descriptors. For serial ports, however, we need to sync out-of-band.
+
+    async def _call_connection_lost(self, exc: Exception | None, flush: bool) -> None:
+        LOGGER.debug("Closing connection: err=%r, flush=%r", exc, flush)
+
         try:
-            self._cleanup()
+            assert self._fileno is not None
+            self._loop.remove_reader(self._fileno)
+
+            if flush:
+                LOGGER.debug("Flushing file descriptor %s", self._fileno)
+
+                # Flushing can potentially deadlock
+                try:
+                    async with asyncio_timeout(FLUSH_TIMEOUT_S):
+                        await self._loop.run_in_executor(None, self._flush)
+                except Exception as flush_exc:
+                    LOGGER.debug(
+                        "Error while flushing data on closing transport: %r", flush_exc
+                    )
+
+            LOGGER.debug("Closing file descriptor %s", self._fileno)
+            await self._loop.run_in_executor(None, os.close, self._fileno)
+
+            self._fileno = None
         finally:
             protocol = self._protocol
             self._loop = None  # type: ignore[assignment]
             self._protocol = None  # type: ignore[assignment]
+
+            LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
             protocol.connection_lost(exc)
