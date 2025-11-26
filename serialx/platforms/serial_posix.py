@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import array
+import asyncio
 import errno
 import fcntl
 import logging
 import os
 import sys
 import termios
+import time
 from typing import Literal
 
 if sys.version_info >= (3, 11):
@@ -24,6 +26,11 @@ from ..descriptor_transport import DescriptorTransport
 LOGGER = logging.getLogger(__name__)
 
 FLUSH_TIMEOUT = 10.0
+
+# Reportedly, some drivers benefit from delaying between the `open` syscall and using
+# `TCIOFLUSH`. Otherwise, the flush operation does not work reliably and stale data may
+# be read.
+AFTER_OPEN_DELAY = 0.01
 
 ASYNC_LOW_LATENCY = 1 << 13
 CMSPAR = 0o10000000000
@@ -110,6 +117,8 @@ class PosixSerial(BaseSerial):
 
         if self._exclusive:
             self._lock()
+
+        time.sleep(AFTER_OPEN_DELAY)
 
     def _lock(self) -> None:
         """Lock the serial port for exclusive access."""
@@ -430,6 +439,8 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
             buffer_burst_timeout=0,
         )
         self._extra["serial"] = self._serial
+
+        await asyncio.sleep(AFTER_OPEN_DELAY)
 
         await self._loop.run_in_executor(None, self._serial.configure_port)
         await super()._connect()
