@@ -76,7 +76,6 @@ class BaseSerial(io.RawIOBase):
         *,
         buffer_character_count: int = 1,
         buffer_burst_timeout: float = 0.01,
-        hang_up_on_close: bool = True,
         exclusive: bool = True,
     ) -> None:
         """Initialize serial port configuration."""
@@ -95,7 +94,6 @@ class BaseSerial(io.RawIOBase):
         self._rtscts = rtscts
         self._parity = parity
         self._byte_size = byte_size
-        self._hang_up_on_close = hang_up_on_close
         self._exclusive = exclusive
 
         self._buffer_character_count = buffer_character_count
@@ -146,11 +144,6 @@ class BaseSerial(io.RawIOBase):
     def byte_size(self) -> int:
         """Get the byte size."""
         return self._byte_size
-
-    @property
-    def hang_up_on_close(self) -> bool:
-        """Get the hang up on close setting."""
-        return self._hang_up_on_close
 
     @property
     def stopbits(self) -> StopBits:
@@ -276,12 +269,6 @@ class BaseSerialTransport(asyncio.Transport):
         """Get the byte size."""
         assert self._serial is not None
         return self._serial.byte_size
-
-    @property
-    def hang_up_on_close(self) -> bool:
-        """Get the hang up on close setting."""
-        assert self._serial is not None
-        return self._serial.hang_up_on_close
 
     @property
     def exclusive(self) -> bool:
