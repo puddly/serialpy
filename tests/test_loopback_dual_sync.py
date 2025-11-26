@@ -428,3 +428,15 @@ def test_deprecated_rts_property_dual() -> None:
         serial.rts = True
         # RTS may be None with socat, just verify no error occurs
         serial.rts = False
+
+
+def test_fast_open_close() -> None:
+    """Test quickly opening and closing a port."""
+
+    message = b"Fast write and close test"
+
+    with Serial(DUAL_LOOPBACK_LEFT, baudrate=300) as serial_left:
+        with Serial(DUAL_LOOPBACK_RIGHT, baudrate=300) as serial_right:
+            serial_right.write(message)
+
+        assert serial_left.readexactly(len(message)) == message
