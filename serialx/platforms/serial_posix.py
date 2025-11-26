@@ -356,6 +356,7 @@ class PosixSerial(BaseSerial):
     def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         assert self._fileno is not None
+        LOGGER.debug("Flushing file descriptor %r", self._fileno)
         termios.tcdrain(self._fileno)
 
     def close(self) -> None:

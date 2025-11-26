@@ -12,11 +12,18 @@ else:
 
 import pytest
 
-from serialx import ModemBits, Parity, SerialTransport, StopBits
+from serialx import (
+    ModemBits,
+    Parity,
+    SerialTransport,
+    StopBits,
+    create_serial_connection,
+)
 from tests.common import (
     DUAL_LOOPBACK_LEFT,
     DUAL_LOOPBACK_RIGHT,
     async_create_dual_loopback,
+    async_create_reader_writer,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -465,3 +472,36 @@ async def test_set_modem_bits_async() -> None:
         modem_bits = await transport.get_modem_bits()
         assert modem_bits.dtr is False
         assert modem_bits.rts is False
+
+
+async def test_fast_open_close() -> None:
+    """Test quickly opening and closing a port."""
+    message = b"Fast write and close test" * 10
+    connection_lost_event = asyncio.Event()
+
+    class FastCloseProtocol(asyncio.Protocol):
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            transport = cast(SerialTransport, transport)
+            transport.write(message)
+            # transport.close()  # Immediately closing after write will not cause data loss
+            transport.abort()
+
+        def connection_lost(self, exc: Exception | None) -> None:
+            connection_lost_event.set()
+
+    async with async_create_reader_writer(DUAL_LOOPBACK_RIGHT, baudrate=300) as (
+        reader,
+        writer,
+    ):
+        read_task = asyncio.create_task(reader.readexactly(len(message)))
+        await asyncio.sleep(0)
+
+        transport, _ = await create_serial_connection(
+            asyncio.get_running_loop(),
+            FastCloseProtocol,
+            DUAL_LOOPBACK_LEFT,
+            baudrate=300,
+        )
+
+        await connection_lost_event.wait()
+        assert await read_task == message
