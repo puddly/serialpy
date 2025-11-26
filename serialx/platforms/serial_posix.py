@@ -447,8 +447,3 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
                 await self._loop.run_in_executor(None, self._serial.flush)
         finally:
             self._reset_empty_waiter()
-
-    def _flush(self) -> None:
-        """Flush write buffers, waiting until all data is written."""
-        assert self._serial is not None
-        self._serial.flush()
