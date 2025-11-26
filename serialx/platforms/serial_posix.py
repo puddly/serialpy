@@ -155,7 +155,7 @@ class PosixSerial(BaseSerial):
 
         fcntl.ioctl(self._fileno, TCSETS2, buffer)
 
-    def configure_port(self) -> None:
+    def configure_port(self) -> None:  # noqa: C901
         """Configure the serial port settings."""
         LOGGER.debug("Configuring serial port %r", self._path)
 
@@ -288,6 +288,9 @@ class PosixSerial(BaseSerial):
                     LOGGER.debug("Device is not a serial port, cannot set low latency")
                 else:
                     raise
+
+        if self._deassert_on_open:
+            self.set_modem_bits(ModemBits(dtr=False, rts=False))
 
         # Flush input and output buffers to discard stale data
         termios.tcflush(self._fileno, termios.TCIOFLUSH)
