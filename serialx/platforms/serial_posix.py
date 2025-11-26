@@ -161,6 +161,10 @@ class PosixSerial(BaseSerial):
         # Ignore modem control lines
         cflag |= termios.CLOCAL
 
+        # Lower modem control lines after last process closes the device (hang up)
+        if self._hang_up_on_close:
+            cflag |= termios.HUPCL
+
         # Character size
         if self._byte_size == 5:
             cflag |= termios.CS5
