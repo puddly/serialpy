@@ -162,91 +162,63 @@ class PosixSerial(BaseSerial):
         if self._fileno is None:
             raise ValueError("Cannot configure, serial port is not open")
 
-        # Flush input and output buffers to discard stale data
-        termios.tcflush(self._fileno, termios.TCIOFLUSH)
+        cflag = 0x00000000
 
-        (
-            iflag,
-            oflag,
-            cflag,
-            lflag,
-            ispeed,
-            ospeed,
-            cc,
-        ) = termios.tcgetattr(self._fileno)
-
-        # Software flow control
-        if self._xonxoff:
-            iflag |= termios.IXON | termios.IXOFF | termios.IXANY
-        else:
-            iflag &= ~(termios.IXON | termios.IXOFF | termios.IXANY)
-
-        # Disable interpretation of special characters
-        iflag &= ~(
-            termios.IGNBRK
-            | termios.BRKINT
-            | termios.PARMRK
-            | termios.INPCK
-            | termios.ISTRIP
-            | termios.INLCR
-            | termios.IGNCR
-            | termios.ICRNL
-            | termios.IXON
-        )
-
-        # Disable output character processing and mapping
-        oflag &= ~(termios.OPOST | termios.ONLCR | termios.OCRNL)
-
-        # Allow reads
+        # Enable receiver
         cflag |= termios.CREAD
 
-        # Disable modem-specific signal lines
+        # Ignore modem control lines
         cflag |= termios.CLOCAL
 
+        # Character size
+        if self._byte_size == 5:
+            cflag |= termios.CS5
+        elif self._byte_size == 6:
+            cflag |= termios.CS6
+        elif self._byte_size == 7:
+            cflag |= termios.CS7
+        elif self._byte_size == 8:
+            cflag |= termios.CS8
+        else:
+            raise ValueError(
+                f"Unsupported byte size {self._byte_size}, must be 5, 6, 7, or 8"
+            )
+
+        # Parity
         if self._parity == Parity.NONE:
-            cflag &= ~(termios.PARENB | termios.PARODD | CMSPAR)
+            pass
         elif self._parity == Parity.EVEN:
             cflag |= termios.PARENB
-            cflag &= ~(termios.PARODD | CMSPAR)
         elif self._parity == Parity.ODD:
             cflag |= termios.PARENB | termios.PARODD
-            cflag &= ~CMSPAR
         elif self._parity == Parity.MARK:
             cflag |= termios.PARENB | termios.PARODD | CMSPAR
         elif self._parity == Parity.SPACE:
-            cflag |= termios.PARENB
-            cflag &= ~(termios.PARODD | CMSPAR)
+            cflag |= termios.PARENB | CMSPAR
 
         # Stop bits
         if self._stopbits == StopBits.TWO:
             cflag |= termios.CSTOPB
         elif self._stopbits == StopBits.ONE_POINT_FIVE:
             LOGGER.warning("1.5 stop bits not supported on POSIX, using 1 stop bit")
-            cflag &= ~termios.CSTOPB
         elif self._stopbits == StopBits.ONE:
-            cflag &= ~termios.CSTOPB
-
-        cflag &= ~termios.CSIZE
-        cflag |= POSIX_CHARACTER_SIZE_MAPPING[self._byte_size]
+            pass
 
         # Hardware flow control
-        if CRTSCTS is not None:
-            if self._rtscts:
-                cflag |= CRTSCTS
+        if self._rtscts:
+            if CRTSCTS is None:
+                LOGGER.warning("RTS/CTS flow control not supported on this platform")
             else:
-                cflag &= ~CRTSCTS
+                cflag |= CRTSCTS
 
-        # Disable canonical mode (newlines)
-        lflag &= ~termios.ICANON
+        iflag = 0x00000000
 
-        # Disable echo
-        lflag &= ~(termios.ECHO | termios.ECHOE | termios.ECHONL)
+        # Software flow control
+        if self._xonxoff:
+            iflag |= termios.IXON | termios.IXOFF | termios.IXANY
 
-        # Disable interpretation of special characters
-        lflag &= ~termios.ISIG
-
-        # Disable implementation-defined input processing
-        lflag &= ~termios.IEXTEN
+        oflag = 0x00000000
+        lflag = 0x00000000
 
         # Only emit reads if VMIN characters have been read, after no more data comes in
         # for VTIME seconds
@@ -263,9 +235,6 @@ class PosixSerial(BaseSerial):
                 f"VTIME must be in range 0-255 (buffer_burst_timeout={self._buffer_burst_timeout})"
             )
 
-        cc[termios.VMIN] = vmin
-        cc[termios.VTIME] = vtime
-
         try:
             # Set baudrate
             ispeed = getattr(termios, f"B{self._baudrate}")
@@ -277,6 +246,21 @@ class PosixSerial(BaseSerial):
             ospeed = termios.B115200
             non_posix_baudrate = True
 
+        # We use `tcgetattr` only to obtain `cc`, since this array is variably sized
+        (
+            _iflag,
+            _oflag,
+            _cflag,
+            _lflag,
+            _ispeed,
+            _ospeed,
+            cc,
+        ) = termios.tcgetattr(self._fileno)
+
+        cc[termios.VMIN] = vmin
+        cc[termios.VTIME] = vtime
+
+        # Finally, set up the serial port
         termios.tcsetattr(
             self._fileno,
             termios.TCSANOW,  # TODO: should we use TCSADRAIN or TCSAFLUSH instead?
@@ -295,6 +279,9 @@ class PosixSerial(BaseSerial):
                     LOGGER.debug("Device is not a serial port, cannot set low latency")
                 else:
                     raise
+
+        # Flush input and output buffers to discard stale data
+        termios.tcflush(self._fileno, termios.TCIOFLUSH)
 
     def _set_low_latency(self, value: bool) -> None:
         """Set low latency mode."""

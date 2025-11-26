@@ -141,6 +141,11 @@ class BaseSerial(io.RawIOBase):
         return self._parity
 
     @property
+    def byte_size(self) -> int:
+        """Get the byte size."""
+        return self._byte_size
+
+    @property
     def stopbits(self) -> StopBits:
         """Get the number of stop bits."""
         return self._stopbits
@@ -258,6 +263,12 @@ class BaseSerialTransport(asyncio.Transport):
         """Get the number of stop bits."""
         assert self._serial is not None
         return self._serial.stopbits
+
+    @property
+    def byte_size(self) -> int:
+        """Get the byte size."""
+        assert self._serial is not None
+        return self._serial.byte_size
 
     @property
     def exclusive(self) -> bool:
