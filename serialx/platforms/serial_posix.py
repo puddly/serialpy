@@ -260,6 +260,11 @@ class PosixSerial(BaseSerial):
         cc[termios.VMIN] = vmin
         cc[termios.VTIME] = vtime
 
+        LOGGER.debug(
+            "Configuring serial port: %r",
+            [iflag, oflag, cflag, lflag, ispeed, ospeed, cc],
+        )
+
         # Finally, set up the serial port
         termios.tcsetattr(
             self._fileno,
@@ -289,17 +294,17 @@ class PosixSerial(BaseSerial):
         assert TIOCGSERIAL is not None
         assert TIOCSSERIAL is not None
 
+        LOGGER.debug("Setting low latency mode: %r", value)
+
         buffer = array.array("i", [0x00000000] * 19 * 8)
 
         fcntl.ioctl(self._fileno, TIOCGSERIAL, buffer)
-        LOGGER.debug("Read low latency %r", buffer)
 
         if self._low_latency:
             buffer[4] |= ASYNC_LOW_LATENCY
         else:
             buffer[4] &= ~ASYNC_LOW_LATENCY
 
-        LOGGER.debug("Writing low latency %r", buffer)
         fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
 
     def get_modem_bits(self) -> ModemBits:
@@ -324,6 +329,8 @@ class PosixSerial(BaseSerial):
     def set_modem_bits(self, modem_bits: ModemBits) -> None:
         """Set modem control bits."""
         assert self._fileno is not None
+
+        LOGGER.debug("Setting modem bits: %r", modem_bits)
 
         all_bits_set = all(
             getattr(modem_bits, name) is not None for name in MODEM_BIT_MAPPING
