@@ -18,11 +18,13 @@ LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
 _BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 
-def _create_background_task(coro: Coroutine) -> None:
+def _create_background_task(coro: Coroutine) -> asyncio.Task[None]:
     """Create a background task that will not be garbage collected."""
     task = asyncio.create_task(coro)
     _BACKGROUND_TASKS.add(task)
     task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+    return task
 
 
 class DescriptorTransport(asyncio.Transport):
@@ -51,6 +53,8 @@ class DescriptorTransport(asyncio.Transport):
         self._paused = False
         self._empty_waiter: asyncio.Future | None = None
         self._extra: dict[str, Any] = {}
+
+        self._close_task: asyncio.Task[None] | None = None
 
     async def _open(self, path: os.PathLike) -> None:
         self._fileno = await self._loop.run_in_executor(
@@ -82,7 +86,7 @@ class DescriptorTransport(asyncio.Transport):
                 self._closing = True
                 self._loop.remove_reader(self._fileno)
                 self._loop.call_soon(self._protocol.eof_received)
-                _create_background_task(self._call_connection_lost(None))
+                self._maybe_background_close(None)
 
     def pause_reading(self) -> None:
         """Pause reading from the file descriptor."""
@@ -262,7 +266,7 @@ class DescriptorTransport(asyncio.Transport):
                 self._maybe_resume_protocol()  # May append to buffer.
                 if self._closing:
                     self._loop.remove_reader(self._fileno)
-                    _create_background_task(self._call_connection_lost(None))
+                    self._maybe_background_close(None)
                 return
             elif n > 0:
                 del self._buffer[:n]
@@ -279,7 +283,7 @@ class DescriptorTransport(asyncio.Transport):
         self._closing = True
         if not self._buffer:
             self._loop.remove_reader(self._fileno)
-            _create_background_task(self._call_connection_lost(None))
+            self._maybe_background_close(None)
 
     def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
         """Set the protocol to use with this transport."""
@@ -337,7 +341,15 @@ class DescriptorTransport(asyncio.Transport):
             self._loop.remove_writer(self._fileno)
         self._buffer.clear()
         self._loop.remove_reader(self._fileno)
-        _create_background_task(self._call_connection_lost(exc))
+        self._maybe_background_close(exc)
+
+    def _maybe_background_close(self, exc: Exception | None) -> None:
+        """Start background task to close the transport if not already started."""
+        if self._close_task is not None:
+            LOGGER.debug("Close task already exists, not closing again")
+            return
+
+        self._close_task = _create_background_task(self._call_connection_lost(exc))
 
     async def _call_connection_lost(self, exc: Exception | None) -> None:
         LOGGER.debug("Closing connection: %r", exc)
@@ -357,6 +369,7 @@ class DescriptorTransport(asyncio.Transport):
             protocol = self._protocol
             self._loop = None  # type: ignore[assignment]
             self._protocol = None  # type: ignore[assignment]
+            self._close_task = None
 
             LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
             protocol.connection_lost(exc)
