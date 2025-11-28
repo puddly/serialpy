@@ -377,59 +377,6 @@ def test_multiple_flush_calls_dual() -> None:
         assert result == data
 
 
-def test_get_modem_bits_dual() -> None:
-    """Test reading modem control bits with loopback adapter."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        modem_bits = serial.get_modem_bits()
-
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
-
-        # All modem bits should be either True, False, or None
-        for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
-            assert value in (True, False, None)
-
-
-def test_set_modem_bits_dual() -> None:
-    """Test setting modem control bits with socat pair."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        # Note: socat pairs don't support modem control signals properly
-        # These calls should not raise errors, but values may be None
-        serial.set_modem_bits(ModemBits(dtr=True, rts=True))
-        modem_bits = serial.get_modem_bits()
-        # Verify we get a ModemBits object, values may be None with socat
-        assert isinstance(modem_bits, ModemBits)
-
-        serial.set_modem_bits(ModemBits(dtr=False))
-        modem_bits = serial.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
-
-        serial.set_modem_bits(ModemBits(dtr=False, rts=False))
-        modem_bits = serial.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
-
-
-def test_deprecated_dtr_property_dual() -> None:
-    """Test DTR property (deprecated alias) with socat pair."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        # Note: socat pairs don't support modem control signals properly
-        # These calls should not raise errors, but values may be None with socat
-        serial.dtr = True
-        # DTR may be None with socat, just verify no error occurs
-        serial.dtr = False
-
-
-def test_deprecated_rts_property_dual() -> None:
-    """Test RTS property (deprecated alias) with socat pair."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        # Note: socat pairs don't support modem control signals properly
-        # These calls should not raise errors, but values may be None with socat
-        serial.rts = True
-        # RTS may be None with socat, just verify no error occurs
-        serial.rts = False
-
-
 def test_fast_open_close() -> None:
     """Test quickly opening and closing a port."""
 
@@ -440,3 +387,35 @@ def test_fast_open_close() -> None:
             serial_right.write(message)
 
         assert serial_left.readexactly(len(message)) == message
+
+
+def test_deprecated_dtr_cts_dual() -> None:
+    """Test DTR and CTS properties (deprecated alias)."""
+    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+        serial_left.dtr = True
+        assert serial_right.get_modem_bits().cts is True
+
+        serial_right.dtr = True
+        assert serial_left.get_modem_bits().cts is True
+
+        serial_left.dtr = False
+        assert serial_right.get_modem_bits().cts is False
+
+        serial_right.dtr = False
+        assert serial_left.get_modem_bits().cts is False
+
+
+def test_dtr_cts_dual() -> None:
+    """Test DTR and CTS."""
+    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+        serial_left.set_modem_bits(ModemBits(dtr=True))
+        assert serial_right.get_modem_bits().cts is True
+
+        serial_right.set_modem_bits(ModemBits(dtr=True))
+        assert serial_left.get_modem_bits().cts is True
+
+        serial_left.set_modem_bits(ModemBits(dtr=False))
+        assert serial_right.get_modem_bits().cts is False
+
+        serial_right.set_modem_bits(ModemBits(dtr=False))
+        assert serial_left.get_modem_bits().cts is False

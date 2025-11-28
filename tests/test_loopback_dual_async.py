@@ -12,13 +12,7 @@ else:
 
 import pytest
 
-from serialx import (
-    ModemBits,
-    Parity,
-    SerialTransport,
-    StopBits,
-    create_serial_connection,
-)
+from serialx import Parity, SerialTransport, StopBits, create_serial_connection
 from tests.common import (
     DUAL_LOOPBACK_LEFT,
     DUAL_LOOPBACK_RIGHT,
@@ -424,54 +418,6 @@ async def test_read_with_timeout_async() -> None:
         # Reading without data should timeout
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(reader_right.readexactly(1), timeout=0.1)
-
-
-async def test_get_modem_bits_async() -> None:
-    """Test reading modem control bits."""
-    async with async_create_dual_loopback(baudrate=115200) as (
-        reader,
-        writer,
-        _,
-        _writer_right,
-    ):
-        transport = cast(SerialTransport, writer.transport)
-        modem_bits = await transport.get_modem_bits()
-
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
-
-        # All modem bits should be either True, False, or None
-        for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
-            assert value in (True, False, None)
-
-
-async def test_set_modem_bits_async() -> None:
-    """Test setting modem control bits with dual loopback hardware."""
-    async with async_create_dual_loopback(baudrate=115200) as (
-        reader,
-        writer,
-        _,
-        _writer_right,
-    ):
-        transport = cast(SerialTransport, writer.transport)
-        # With real hardware, modem control signals should work
-        await transport.set_modem_bits(ModemBits(dtr=True, rts=True))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is True
-        assert modem_bits.rts is True
-
-        # Set DTR low, leave RTS unchanged
-        await transport.set_modem_bits(ModemBits(dtr=False))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is True
-
-        # Set both low
-        await transport.set_modem_bits(ModemBits(dtr=False, rts=False))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is False
 
 
 async def test_fast_open_close() -> None:
