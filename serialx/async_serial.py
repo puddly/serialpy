@@ -12,7 +12,7 @@ from .platforms import SerialTransport
 
 LOGGER = logging.getLogger(__name__)
 
-_T = TypeVar("_T", bound=asyncio.WriteTransport, default=asyncio.WriteTransport)
+_T = TypeVar("_T", bound=asyncio.WriteTransport)
 
 
 class SerialStreamWriter(asyncio.StreamWriter, Generic[_T]):
