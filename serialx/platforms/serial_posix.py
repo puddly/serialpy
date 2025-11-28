@@ -290,7 +290,7 @@ class PosixSerial(BaseSerial):
                     raise
 
         if self._deassert_on_open:
-            self.set_modem_bits(ModemBits(dtr=False, rts=False))
+            self.set_modem_bits(dtr=False, rts=False)
 
         # Flush input and output buffers to discard stale data
         termios.tcflush(self._fileno, termios.TCIOFLUSH)
@@ -314,7 +314,7 @@ class PosixSerial(BaseSerial):
 
         fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
 
-    def get_modem_bits(self) -> ModemBits:
+    def _get_modem_bits(self) -> ModemBits:
         """Get current modem control bits."""
         assert self._fileno is not None
 
@@ -333,7 +333,7 @@ class PosixSerial(BaseSerial):
             **{name: bool(n & bit) for name, bit in MODEM_BIT_MAPPING.items()}
         )
 
-    def set_modem_bits(self, modem_bits: ModemBits) -> None:
+    def _set_modem_bits(self, modem_bits: ModemBits) -> None:
         """Set modem control bits."""
         assert self._fileno is not None
 

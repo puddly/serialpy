@@ -6,13 +6,7 @@ from typing import cast
 
 import pytest
 
-from serialx import (
-    ModemBits,
-    Parity,
-    SerialTransport,
-    StopBits,
-    create_serial_connection,
-)
+from serialx import Parity, SerialTransport, StopBits, create_serial_connection
 from tests.common import (
     DUAL_LOOPBACK_LEFT,
     DUAL_LOOPBACK_RIGHT,
@@ -466,7 +460,7 @@ async def test_deassert_on_open_async() -> None:
             reader_right,
             writer_right,
         ):
-            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            await writer_right.transport.set_modem_bits(dtr=True)
             assert (await writer_left.transport.get_modem_bits()).cts is True
 
         # It persists
@@ -480,7 +474,7 @@ async def test_deassert_on_open_async() -> None:
             writer_right,
         ):
             assert (await writer_left.transport.get_modem_bits()).cts is False
-            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            await writer_right.transport.set_modem_bits(dtr=True)
 
         # Nothing changes on close
         assert (await writer_left.transport.get_modem_bits()).cts is True
@@ -502,7 +496,7 @@ async def test_hang_up_on_close_async() -> None:
             reader_right,
             writer_right,
         ):
-            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            await writer_right.transport.set_modem_bits(dtr=True)
             assert (await writer_left.transport.get_modem_bits()).cts is True
 
         # It persists
@@ -566,7 +560,7 @@ async def test_deassert_on_open_with_rtscts_async(
             reader_right,
             writer_right,
         ):
-            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            await writer_right.transport.set_modem_bits(dtr=True)
             assert (await writer_left.transport.get_modem_bits()).cts is True
 
         # DTR persists after close

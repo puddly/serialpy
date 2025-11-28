@@ -466,16 +466,16 @@ def test_set_modem_bits_socat() -> None:
     ):
         # Note: socat pairs don't support modem control signals properly
         # These calls should not raise errors, but values may be None
-        serial.set_modem_bits(ModemBits(dtr=True, rts=True))
+        serial.set_modem_bits(dtr=True, rts=True)
         modem_bits = serial.get_modem_bits()
         # Verify we get a ModemBits object, values may be None with socat
         assert isinstance(modem_bits, ModemBits)
 
-        serial.set_modem_bits(ModemBits(dtr=False))
+        serial.set_modem_bits(dtr=False)
         modem_bits = serial.get_modem_bits()
         assert isinstance(modem_bits, ModemBits)
 
-        serial.set_modem_bits(ModemBits(dtr=False, rts=False))
+        serial.set_modem_bits(dtr=False, rts=False)
         modem_bits = serial.get_modem_bits()
         assert isinstance(modem_bits, ModemBits)
 

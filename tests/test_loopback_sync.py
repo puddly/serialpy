@@ -373,21 +373,21 @@ def test_get_modem_bits_loopback() -> None:
 def test_set_modem_bits_loopback() -> None:
     """Test setting modem control bits with loopback adapter."""
     with Serial(LOOPBACK_ADAPTER, baudrate=115200) as serial:
-        serial.set_modem_bits(ModemBits(dtr=True, rts=True))
+        serial.set_modem_bits(dtr=True, rts=True)
 
         modem_bits = serial.get_modem_bits()
         assert modem_bits.dtr is True
         assert modem_bits.rts is True
 
         # Set DTR low, leave RTS unchanged
-        serial.set_modem_bits(ModemBits(dtr=False))
+        serial.set_modem_bits(dtr=False)
 
         modem_bits = serial.get_modem_bits()
         assert modem_bits.dtr is False
         assert modem_bits.rts is True
 
         # Set both low
-        serial.set_modem_bits(ModemBits(dtr=False, rts=False))
+        serial.set_modem_bits(dtr=False, rts=False)
 
         modem_bits = serial.get_modem_bits()
         assert modem_bits.dtr is False

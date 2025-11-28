@@ -381,19 +381,19 @@ async def test_set_modem_bits_loopback_async() -> None:
     ):
         transport = cast(SerialTransport, writer.transport)
         # With a real loopback adapter, modem control signals should work
-        await transport.set_modem_bits(ModemBits(dtr=True, rts=True))
+        await transport.set_modem_bits(dtr=True, rts=True)
         modem_bits = await transport.get_modem_bits()
         assert modem_bits.dtr is True
         assert modem_bits.rts is True
 
         # Set DTR low, leave RTS unchanged
-        await transport.set_modem_bits(ModemBits(dtr=False))
+        await transport.set_modem_bits(dtr=False)
         modem_bits = await transport.get_modem_bits()
         assert modem_bits.dtr is False
         assert modem_bits.rts is True
 
         # Set both low
-        await transport.set_modem_bits(ModemBits(dtr=False, rts=False))
+        await transport.set_modem_bits(dtr=False, rts=False)
         modem_bits = await transport.get_modem_bits()
         assert modem_bits.dtr is False
         assert modem_bits.rts is False

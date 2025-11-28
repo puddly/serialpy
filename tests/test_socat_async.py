@@ -486,16 +486,16 @@ async def test_set_modem_bits_async() -> None:
         transport = cast(SerialTransport, writer.transport)
         # Note: socat pairs don't support modem control signals properly
         # These calls should not raise errors, but values may be None
-        await transport.set_modem_bits(ModemBits(dtr=True, rts=True))
+        await transport.set_modem_bits(dtr=True, rts=True)
         modem_bits = await transport.get_modem_bits()
         # Verify we get a ModemBits object, values may be None with socat
         assert isinstance(modem_bits, ModemBits)
 
-        await transport.set_modem_bits(ModemBits(dtr=False))
+        await transport.set_modem_bits(dtr=False)
         modem_bits = await transport.get_modem_bits()
         assert isinstance(modem_bits, ModemBits)
 
-        await transport.set_modem_bits(ModemBits(dtr=False, rts=False))
+        await transport.set_modem_bits(dtr=False, rts=False)
         modem_bits = await transport.get_modem_bits()
         assert isinstance(modem_bits, ModemBits)
 

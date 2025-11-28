@@ -209,7 +209,7 @@ class Win32Serial(BaseSerial):
             CloseHandle(self._overlapped_write.hEvent)
             self._overlapped_write.hEvent = None
 
-    def get_modem_bits(self) -> ModemBits:
+    def _get_modem_bits(self) -> ModemBits:
         """Get the current modem control bits."""
         stat = GetCommModemStatus(self._handle)
         return ModemBits(
@@ -219,7 +219,7 @@ class Win32Serial(BaseSerial):
             car=bool(stat & MS_RLSD_ON),
         )
 
-    def set_modem_bits(self, modem_bits: ModemBits) -> None:
+    def _set_modem_bits(self, modem_bits: ModemBits) -> None:
         """Set the modem control bits."""
         if modem_bits.rts is not None:
             func = SETRTS if modem_bits.rts else CLRRTS

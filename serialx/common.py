@@ -141,14 +141,48 @@ class BaseSerial(io.RawIOBase):
         """Configure the serial port settings."""
         raise NotImplementedError
 
-    @abstractmethod
     def get_modem_bits(self) -> ModemBits:
-        """Get modem control bits."""
+        """Get modem control bits, internal."""
+        return self._get_modem_bits()
+
+    def set_modem_bits(
+        self,
+        modem_bits: ModemBits | None = None,
+        *,
+        le: bool | None = None,
+        dtr: bool | None = None,
+        rts: bool | None = None,
+        st: bool | None = None,
+        sr: bool | None = None,
+        cts: bool | None = None,
+        car: bool | None = None,
+        rng: bool | None = None,
+        dsr: bool | None = None,
+    ) -> None:
+        """Set modem control bits, internal."""
+        if modem_bits is None:
+            modem_bits = ModemBits(
+                le=le,
+                dtr=dtr,
+                rts=rts,
+                st=st,
+                sr=sr,
+                cts=cts,
+                car=car,
+                rng=rng,
+                dsr=dsr,
+            )
+
+        return self._set_modem_bits(modem_bits)
+
+    @abstractmethod
+    def _get_modem_bits(self) -> ModemBits:
+        """Get modem control bits, internal."""
         raise NotImplementedError
 
     @abstractmethod
-    def set_modem_bits(self, modem_bits: ModemBits) -> None:
-        """Set modem control bits."""
+    def _set_modem_bits(self, modem_bits: ModemBits) -> None:
+        """Set modem control bits, internal."""
         raise NotImplementedError
 
     @abstractmethod
@@ -201,7 +235,7 @@ class BaseSerial(io.RawIOBase):
     @dtr.setter
     def dtr(self, value) -> None:
         """Set DTR modem bit."""
-        self.set_modem_bits(ModemBits(dtr=bool(value)))
+        self.set_modem_bits(dtr=bool(value))
 
     # Deprecated alias
     @property
@@ -213,7 +247,7 @@ class BaseSerial(io.RawIOBase):
     @rts.setter
     def rts(self, value) -> None:
         """Set RTS modem bit."""
-        self.set_modem_bits(ModemBits(rts=bool(value)))
+        self.set_modem_bits(rts=bool(value))
 
     def readexactly(self, n: int) -> bytes:
         """Read exactly n bytes."""
@@ -332,10 +366,40 @@ class BaseSerialTransport(asyncio.Transport):
         assert self._serial is not None
         return await self._loop.run_in_executor(None, self._serial.get_modem_bits)
 
-    async def set_modem_bits(self, modem_bits: ModemBits) -> None:
+    async def set_modem_bits(
+        self,
+        modem_bits: ModemBits | None = None,
+        *,
+        le: bool | None = None,
+        dtr: bool | None = None,
+        rts: bool | None = None,
+        st: bool | None = None,
+        sr: bool | None = None,
+        cts: bool | None = None,
+        car: bool | None = None,
+        rng: bool | None = None,
+        dsr: bool | None = None,
+    ) -> None:
         """Set modem control bits."""
-        assert self._serial is not None
-        await self._loop.run_in_executor(None, self._serial.set_modem_bits, modem_bits)
+        await self._loop.run_in_executor(
+            None,
+            lambda: (
+                None
+                if self._serial is None
+                else self._serial.set_modem_bits(
+                    modem_bits,
+                    le=le,
+                    dtr=dtr,
+                    rts=rts,
+                    st=st,
+                    sr=sr,
+                    cts=cts,
+                    car=car,
+                    rng=rng,
+                    dsr=dsr,
+                )
+            ),
+        )
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""

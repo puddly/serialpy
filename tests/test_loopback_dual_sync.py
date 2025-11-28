@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from serialx import ModemBits, Parity, Serial, StopBits
+from serialx import Parity, Serial, StopBits
 from tests.common import DUAL_LOOPBACK_LEFT, DUAL_LOOPBACK_RIGHT, create_dual_loopback
 
 pytestmark = pytest.mark.skipif(
@@ -408,16 +408,16 @@ def test_deprecated_dtr_cts_dual() -> None:
 def test_dtr_cts_dual() -> None:
     """Test DTR and CTS."""
     with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
-        serial_left.set_modem_bits(ModemBits(dtr=True))
+        serial_left.set_modem_bits(dtr=True)
         assert serial_right.get_modem_bits().cts is True
 
-        serial_right.set_modem_bits(ModemBits(dtr=True))
+        serial_right.set_modem_bits(dtr=True)
         assert serial_left.get_modem_bits().cts is True
 
-        serial_left.set_modem_bits(ModemBits(dtr=False))
+        serial_left.set_modem_bits(dtr=False)
         assert serial_right.get_modem_bits().cts is False
 
-        serial_right.set_modem_bits(ModemBits(dtr=False))
+        serial_right.set_modem_bits(dtr=False)
         assert serial_left.get_modem_bits().cts is False
 
 
@@ -428,7 +428,7 @@ def test_deassert_on_open() -> None:
         with Serial(
             DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=False
         ) as serial_right:
-            serial_right.set_modem_bits(ModemBits(dtr=True))
+            serial_right.set_modem_bits(dtr=True)
             assert serial_left.get_modem_bits().cts is True
 
         # It persists
@@ -439,7 +439,7 @@ def test_deassert_on_open() -> None:
             DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=True
         ) as serial_right:
             assert serial_left.get_modem_bits().cts is False
-            serial_right.set_modem_bits(ModemBits(dtr=True))
+            serial_right.set_modem_bits(dtr=True)
 
         # Nothing changes on close
         assert serial_left.get_modem_bits().cts is True
@@ -455,7 +455,7 @@ def test_hang_up_on_close() -> None:
             hang_up_on_close=False,
             deassert_on_open=False,
         ) as serial_right:
-            serial_right.set_modem_bits(ModemBits(dtr=True))
+            serial_right.set_modem_bits(dtr=True)
             assert serial_left.get_modem_bits().cts is True
 
         # It persists
@@ -507,7 +507,7 @@ def test_deassert_on_open_with_rtscts(
             rtscts=False,
             deassert_on_open=False,
         ) as serial_right:
-            serial_right.set_modem_bits(ModemBits(dtr=True))
+            serial_right.set_modem_bits(dtr=True)
             assert serial_left.get_modem_bits().cts is True
 
         # DTR persists after close
