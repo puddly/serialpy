@@ -49,7 +49,14 @@ from win32file import (
 )
 from winerror import ERROR_IO_PENDING
 
-from ..common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
+from ..common import (
+    BaseSerial,
+    BaseSerialTransport,
+    ModemPins,
+    Parity,
+    PinState,
+    StopBits,
+)
 
 # Constants missing from win32con
 MS_CTS_ON = 0x0010
@@ -186,6 +193,8 @@ class Win32Serial(BaseSerial):
 
             SetCommState(self._handle, dcb)
 
+            self.set_modem_pins(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
+
             # Clear any errors
             ClearCommError(self._handle)
         except pywintypes.error as e:
@@ -197,6 +206,10 @@ class Win32Serial(BaseSerial):
 
     def close(self):
         """Close the serial port and release all handles."""
+        if self._handle is not None:
+            # Windows has no way to automatically do this on close, we do it manually
+            self.set_modem_pins(dtr=self._rtsdtr_on_close, rts=self._rtsdtr_on_close)
+
         if self._handle is not None:
             CloseHandle(self._handle)
             self._handle = None
@@ -213,10 +226,10 @@ class Win32Serial(BaseSerial):
         """Get the current modem control bits."""
         stat = GetCommModemStatus(self._handle)
         return ModemPins(
-            cts=bool(stat & MS_CTS_ON),
-            dsr=bool(stat & MS_DSR_ON),
-            rng=bool(stat & MS_RING_ON),
-            car=bool(stat & MS_RLSD_ON),
+            cts=PinState.HIGH if stat & MS_CTS_ON else PinState.LOW,
+            dsr=PinState.HIGH if stat & MS_DSR_ON else PinState.LOW,
+            rng=PinState.HIGH if stat & MS_RING_ON else PinState.LOW,
+            car=PinState.HIGH if stat & MS_RLSD_ON else PinState.LOW,
         )
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
