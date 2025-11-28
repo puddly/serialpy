@@ -494,7 +494,10 @@ async def test_hang_up_on_close_async() -> None:
     ):
         # Open and set DTR/CTS
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=False
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=False,
+            deassert_on_open=False,
         ) as (
             reader_right,
             writer_right,
@@ -507,7 +510,10 @@ async def test_hang_up_on_close_async() -> None:
 
         # Without hang up on close, it still persists
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=False
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=False,
+            deassert_on_open=False,
         ) as (
             reader_right,
             writer_right,
@@ -518,7 +524,10 @@ async def test_hang_up_on_close_async() -> None:
 
         # When we hang up on close, it should clear
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=True
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=True,
+            deassert_on_open=False,
         ) as (
             reader_right,
             writer_right,
