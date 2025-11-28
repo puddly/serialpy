@@ -482,7 +482,7 @@ async def test_deassert_on_open_async() -> None:
             assert (await writer_left.transport.get_modem_bits()).cts is False
             await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
 
-        # And stay cleared
+        # Nothing changes on close
         assert (await writer_left.transport.get_modem_bits()).cts is True
 
 

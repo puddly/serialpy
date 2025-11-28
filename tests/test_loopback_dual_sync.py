@@ -441,7 +441,7 @@ def test_deassert_on_open() -> None:
             assert serial_left.get_modem_bits().cts is False
             serial_right.set_modem_bits(ModemBits(dtr=True))
 
-        # And stay cleared
+        # Nothing changes on close
         assert serial_left.get_modem_bits().cts is True
 
 
