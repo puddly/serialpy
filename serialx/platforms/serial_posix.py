@@ -11,7 +11,6 @@ import os
 import sys
 import termios
 import time
-from typing import Literal
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
@@ -72,16 +71,14 @@ POSIX_CHARACTER_SIZE_MAPPING = {
 }
 
 
-def modem_pins_mask_of_value(
-    modem_pins: ModemPins, mask: Literal[True, False, None]
-) -> int:
+def modem_pins_mask_of_value(modem_pins: ModemPins, mask: PinState) -> int:
     """Get modem bit mask for bits matching the specified value."""
     result = 0x00000000
 
     for name, bit in MODEM_BIT_MAPPING.items():
         value = getattr(modem_pins, name)
 
-        if value == mask:
+        if value is mask:
             result |= bit
 
     return result
@@ -353,26 +350,27 @@ class PosixSerial(BaseSerial):
         LOGGER.debug("Setting modem pins: %r", modem_pins)
 
         all_pins_set = all(
-            getattr(modem_pins, name) is not None for name in MODEM_BIT_MAPPING
+            getattr(modem_pins, name) is not PinState.UNDEFINED
+            for name in MODEM_BIT_MAPPING
         )
 
         try:
             if all_pins_set:
                 value = modem_pins_as_int(modem_pins)
-                LOGGER.debug("Setting all modem pins: 0x%08X", value)
+                LOGGER.debug("Setting all with TIOCMSET: 0x%08X", value)
                 fcntl.ioctl(self._fileno, termios.TIOCMSET, value.to_bytes(4, "little"))
             else:
-                to_set = modem_pins_mask_of_value(modem_pins, True)
-                to_clear = modem_pins_mask_of_value(modem_pins, False)
+                to_set = modem_pins_mask_of_value(modem_pins, PinState.HIGH)
+                to_clear = modem_pins_mask_of_value(modem_pins, PinState.LOW)
 
                 if to_set:
-                    LOGGER.debug("Setting modem pins: 0x%08X", to_set)
+                    LOGGER.debug("Setting TIOCMBIS: 0x%08X", to_set)
                     fcntl.ioctl(
                         self._fileno, termios.TIOCMBIS, to_set.to_bytes(4, "little")
                     )
 
                 if to_clear:
-                    LOGGER.debug("Clearing modem pins: 0x%08X", to_clear)
+                    LOGGER.debug("TIOCMBIC: 0x%08X", to_clear)
                     fcntl.ioctl(
                         self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little")
                     )

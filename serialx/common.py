@@ -245,12 +245,12 @@ class BaseSerial(io.RawIOBase):
 
     @property
     def rtsdtr_on_open(self) -> PinState:
-        """Get the hang up on open setting."""
+        """Get the RTS/DTR pin state (on open) setting."""
         return self._rtsdtr_on_open
 
     @property
     def rtsdtr_on_close(self) -> PinState:
-        """Get the hang up on close setting."""
+        """Get the RTS/DTR pin state (on close) setting."""
         return self._rtsdtr_on_close
 
     @property
