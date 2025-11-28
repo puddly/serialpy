@@ -67,6 +67,27 @@ class ModemBits:
             dsr=False,
         )
 
+    def __repr__(self) -> str:
+        """Return string representation of modem bits."""
+
+        bits = [
+            bit
+            for bit in (
+                "le",
+                "dtr",
+                "rts",
+                "st",
+                "sr",
+                "cts",
+                "car",
+                "rng",
+                "dsr",
+            )
+            if getattr(self, bit)
+        ]
+
+        return f"{self.__class__.__name__}[{' '.join(bits)}]"
+
 
 class BaseSerial(io.RawIOBase):
     """Base class for serial port communication."""
