@@ -49,7 +49,7 @@ from win32file import (
 )
 from winerror import ERROR_IO_PENDING
 
-from ..common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
+from ..common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
 
 # Constants missing from win32con
 MS_CTS_ON = 0x0010
@@ -209,24 +209,24 @@ class Win32Serial(BaseSerial):
             CloseHandle(self._overlapped_write.hEvent)
             self._overlapped_write.hEvent = None
 
-    def _get_modem_bits(self) -> ModemBits:
+    def _get_modem_pins(self) -> ModemPins:
         """Get the current modem control bits."""
         stat = GetCommModemStatus(self._handle)
-        return ModemBits(
+        return ModemPins(
             cts=bool(stat & MS_CTS_ON),
             dsr=bool(stat & MS_DSR_ON),
             rng=bool(stat & MS_RING_ON),
             car=bool(stat & MS_RLSD_ON),
         )
 
-    def _set_modem_bits(self, modem_bits: ModemBits) -> None:
+    def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set the modem control bits."""
-        if modem_bits.rts is not None:
-            func = SETRTS if modem_bits.rts else CLRRTS
+        if modem_pins.rts is not None:
+            func = SETRTS if modem_pins.rts else CLRRTS
             EscapeCommFunction(self._handle, func)
 
-        if modem_bits.dtr is not None:
-            func = SETDTR if modem_bits.dtr else CLRDTR
+        if modem_pins.dtr is not None:
+            func = SETDTR if modem_pins.dtr else CLRDTR
             EscapeCommFunction(self._handle, func)
 
     def flush(self) -> None:

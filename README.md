@@ -33,10 +33,10 @@ with serialx.Serial("/dev/serial/by-id/port", baudrate=115200) as serial:
     data = serial.readexactly(5)
     serial.write(b"test")
 
-    serial.set_modem_bits(rts=True, dtr=True)
-    bits = serial.get_modem_bits()
-    assert bits.rts is True
-    assert bits.dtr is True
+    serial.set_modem_pins(rts=True, dtr=True)
+    pins = serial.get_modem_pins()
+    assert pins.rts is True
+    assert pins.dtr is True
 ```
 
 A high-level asynchronous serial `(reader, writer)` pair:
@@ -73,5 +73,5 @@ async def main():
 	    baudrate=115200
 	)
 
-	await transport.set_modem_bits(rts=True, dtr=True)
+	await transport.set_modem_pins(rts=True, dtr=True)
 ```

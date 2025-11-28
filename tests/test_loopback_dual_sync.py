@@ -393,32 +393,32 @@ def test_deprecated_dtr_cts_dual() -> None:
     """Test DTR and CTS properties (deprecated alias)."""
     with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
         serial_left.dtr = True
-        assert serial_right.get_modem_bits().cts is True
+        assert serial_right.get_modem_pins().cts is True
 
         serial_right.dtr = True
-        assert serial_left.get_modem_bits().cts is True
+        assert serial_left.get_modem_pins().cts is True
 
         serial_left.dtr = False
-        assert serial_right.get_modem_bits().cts is False
+        assert serial_right.get_modem_pins().cts is False
 
         serial_right.dtr = False
-        assert serial_left.get_modem_bits().cts is False
+        assert serial_left.get_modem_pins().cts is False
 
 
 def test_dtr_cts_dual() -> None:
     """Test DTR and CTS."""
     with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
-        serial_left.set_modem_bits(dtr=True)
-        assert serial_right.get_modem_bits().cts is True
+        serial_left.set_modem_pins(dtr=True)
+        assert serial_right.get_modem_pins().cts is True
 
-        serial_right.set_modem_bits(dtr=True)
-        assert serial_left.get_modem_bits().cts is True
+        serial_right.set_modem_pins(dtr=True)
+        assert serial_left.get_modem_pins().cts is True
 
-        serial_left.set_modem_bits(dtr=False)
-        assert serial_right.get_modem_bits().cts is False
+        serial_left.set_modem_pins(dtr=False)
+        assert serial_right.get_modem_pins().cts is False
 
-        serial_right.set_modem_bits(dtr=False)
-        assert serial_left.get_modem_bits().cts is False
+        serial_right.set_modem_pins(dtr=False)
+        assert serial_left.get_modem_pins().cts is False
 
 
 def test_deassert_on_open() -> None:
@@ -428,21 +428,21 @@ def test_deassert_on_open() -> None:
         with Serial(
             DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=False
         ) as serial_right:
-            serial_right.set_modem_bits(dtr=True)
-            assert serial_left.get_modem_bits().cts is True
+            serial_right.set_modem_pins(dtr=True)
+            assert serial_left.get_modem_pins().cts is True
 
         # It persists
-        assert serial_left.get_modem_bits().cts is True
+        assert serial_left.get_modem_pins().cts is True
 
         # When we deassert on open, it should clear
         with Serial(
             DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=True
         ) as serial_right:
-            assert serial_left.get_modem_bits().cts is False
-            serial_right.set_modem_bits(dtr=True)
+            assert serial_left.get_modem_pins().cts is False
+            serial_right.set_modem_pins(dtr=True)
 
         # Nothing changes on close
-        assert serial_left.get_modem_bits().cts is True
+        assert serial_left.get_modem_pins().cts is True
 
 
 def test_hang_up_on_close() -> None:
@@ -455,11 +455,11 @@ def test_hang_up_on_close() -> None:
             hang_up_on_close=False,
             deassert_on_open=False,
         ) as serial_right:
-            serial_right.set_modem_bits(dtr=True)
-            assert serial_left.get_modem_bits().cts is True
+            serial_right.set_modem_pins(dtr=True)
+            assert serial_left.get_modem_pins().cts is True
 
         # It persists
-        assert serial_left.get_modem_bits().cts is True
+        assert serial_left.get_modem_pins().cts is True
 
         # Without hang up on close, it still persists
         with Serial(
@@ -468,9 +468,9 @@ def test_hang_up_on_close() -> None:
             hang_up_on_close=False,
             deassert_on_open=False,
         ) as serial_right:
-            assert serial_left.get_modem_bits().cts is True
+            assert serial_left.get_modem_pins().cts is True
 
-        assert serial_left.get_modem_bits().cts is True
+        assert serial_left.get_modem_pins().cts is True
 
         # When we hang up on close, it should clear
         with Serial(
@@ -479,9 +479,9 @@ def test_hang_up_on_close() -> None:
             hang_up_on_close=True,
             deassert_on_open=False,
         ) as serial_right:
-            assert serial_left.get_modem_bits().cts is True
+            assert serial_left.get_modem_pins().cts is True
 
-        assert serial_left.get_modem_bits().cts is False
+        assert serial_left.get_modem_pins().cts is False
 
 
 @pytest.mark.parametrize(
@@ -507,11 +507,11 @@ def test_deassert_on_open_with_rtscts(
             rtscts=False,
             deassert_on_open=False,
         ) as serial_right:
-            serial_right.set_modem_bits(dtr=True)
-            assert serial_left.get_modem_bits().cts is True
+            serial_right.set_modem_pins(dtr=True)
+            assert serial_left.get_modem_pins().cts is True
 
         # DTR persists after close
-        assert serial_left.get_modem_bits().cts is True
+        assert serial_left.get_modem_pins().cts is True
 
         # Open with test parameters
         with Serial(
@@ -520,4 +520,4 @@ def test_deassert_on_open_with_rtscts(
             rtscts=rtscts,
             deassert_on_open=deassert_on_open,
         ) as serial_right:
-            assert serial_left.get_modem_bits().cts is expected_state
+            assert serial_left.get_modem_pins().cts is expected_state

@@ -13,7 +13,7 @@ else:
 import pytest
 
 from serialx import (
-    ModemBits,
+    ModemPins,
     Parity,
     SerialTransport,
     StopBits,
@@ -459,25 +459,25 @@ async def test_read_with_timeout_async() -> None:
             await asyncio.wait_for(reader_right.readexactly(1), timeout=0.1)
 
 
-async def test_get_modem_bits_async() -> None:
+async def test_get_modem_pins_async() -> None:
     """Test reading modem control bits."""
     async with (
         async_create_socat_pair() as (left, right),
         async_create_reader_writer(left, baudrate=115200) as (reader, writer),
     ):
         transport = cast(SerialTransport, writer.transport)
-        modem_bits = await transport.get_modem_bits()
+        modem_pins = await transport.get_modem_pins()
 
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
+        # Verify we get a ModemPins object
+        assert isinstance(modem_pins, ModemPins)
 
-        # All modem bits should be either True, False, or None
+        # All modem pins should be either True, False, or None
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
+            value = getattr(modem_pins, field)
             assert value in (True, False, None)
 
 
-async def test_set_modem_bits_async() -> None:
+async def test_set_modem_pins_async() -> None:
     """Test setting modem control bits with socat pair."""
     async with (
         async_create_socat_pair() as (left, right),
@@ -486,18 +486,18 @@ async def test_set_modem_bits_async() -> None:
         transport = cast(SerialTransport, writer.transport)
         # Note: socat pairs don't support modem control signals properly
         # These calls should not raise errors, but values may be None
-        await transport.set_modem_bits(dtr=True, rts=True)
-        modem_bits = await transport.get_modem_bits()
-        # Verify we get a ModemBits object, values may be None with socat
-        assert isinstance(modem_bits, ModemBits)
+        await transport.set_modem_pins(dtr=True, rts=True)
+        modem_pins = await transport.get_modem_pins()
+        # Verify we get a ModemPins object, values may be None with socat
+        assert isinstance(modem_pins, ModemPins)
 
-        await transport.set_modem_bits(dtr=False)
-        modem_bits = await transport.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
+        await transport.set_modem_pins(dtr=False)
+        modem_pins = await transport.get_modem_pins()
+        assert isinstance(modem_pins, ModemPins)
 
-        await transport.set_modem_bits(dtr=False, rts=False)
-        modem_bits = await transport.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
+        await transport.set_modem_pins(dtr=False, rts=False)
+        modem_pins = await transport.get_modem_pins()
+        assert isinstance(modem_pins, ModemPins)
 
 
 # Source: https://github.com/home-assistant-libs/pyserial-asyncio-fast/pull/36

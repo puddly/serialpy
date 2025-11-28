@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from serialx import ModemBits, Parity, Serial, StopBits
+from serialx import ModemPins, Parity, Serial, StopBits
 from tests.common import LOOPBACK_ADAPTER
 
 # All tests here use a real adapter, skip if not configured
@@ -356,42 +356,42 @@ def test_multiple_flush_calls_loopback() -> None:
         assert result == data
 
 
-def test_get_modem_bits_loopback() -> None:
+def test_get_modem_pins_loopback() -> None:
     """Test reading modem control bits with loopback adapter."""
     with Serial(LOOPBACK_ADAPTER, baudrate=115200) as serial:
-        modem_bits = serial.get_modem_bits()
+        modem_pins = serial.get_modem_pins()
 
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
+        # Verify we get a ModemPins object
+        assert isinstance(modem_pins, ModemPins)
 
-        # All modem bits should be either True, False, or None
+        # All modem pins should be either True, False, or None
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
+            value = getattr(modem_pins, field)
             assert value in (True, False, None)
 
 
-def test_set_modem_bits_loopback() -> None:
+def test_set_modem_pins_loopback() -> None:
     """Test setting modem control bits with loopback adapter."""
     with Serial(LOOPBACK_ADAPTER, baudrate=115200) as serial:
-        serial.set_modem_bits(dtr=True, rts=True)
+        serial.set_modem_pins(dtr=True, rts=True)
 
-        modem_bits = serial.get_modem_bits()
-        assert modem_bits.dtr is True
-        assert modem_bits.rts is True
+        modem_pins = serial.get_modem_pins()
+        assert modem_pins.dtr is True
+        assert modem_pins.rts is True
 
         # Set DTR low, leave RTS unchanged
-        serial.set_modem_bits(dtr=False)
+        serial.set_modem_pins(dtr=False)
 
-        modem_bits = serial.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is True
+        modem_pins = serial.get_modem_pins()
+        assert modem_pins.dtr is False
+        assert modem_pins.rts is True
 
         # Set both low
-        serial.set_modem_bits(dtr=False, rts=False)
+        serial.set_modem_pins(dtr=False, rts=False)
 
-        modem_bits = serial.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is False
+        modem_pins = serial.get_modem_pins()
+        assert modem_pins.dtr is False
+        assert modem_pins.rts is False
 
 
 def test_deprecated_dtr_property_loopback() -> None:

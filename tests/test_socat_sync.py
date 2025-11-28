@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from serialx import ModemBits, Parity, Serial, StopBits
+from serialx import ModemPins, Parity, Serial, StopBits
 from tests.common import SOCAT_BINARY, create_socat_pair
 
 pytestmark = pytest.mark.skipif(
@@ -441,24 +441,24 @@ def test_multiple_flush_calls_socat() -> None:
         assert result == data
 
 
-def test_get_modem_bits_socat() -> None:
+def test_get_modem_pins_socat() -> None:
     """Test reading modem control bits with loopback adapter."""
     with (
         create_socat_pair() as (left, right),
         Serial(left, baudrate=115200) as serial,
     ):
-        modem_bits = serial.get_modem_bits()
+        modem_pins = serial.get_modem_pins()
 
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
+        # Verify we get a ModemPins object
+        assert isinstance(modem_pins, ModemPins)
 
-        # All modem bits should be either True, False, or None
+        # All modem pins should be either True, False, or None
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
+            value = getattr(modem_pins, field)
             assert value in (True, False, None)
 
 
-def test_set_modem_bits_socat() -> None:
+def test_set_modem_pins_socat() -> None:
     """Test setting modem control bits with socat pair."""
     with (
         create_socat_pair() as (left, right),
@@ -466,18 +466,18 @@ def test_set_modem_bits_socat() -> None:
     ):
         # Note: socat pairs don't support modem control signals properly
         # These calls should not raise errors, but values may be None
-        serial.set_modem_bits(dtr=True, rts=True)
-        modem_bits = serial.get_modem_bits()
-        # Verify we get a ModemBits object, values may be None with socat
-        assert isinstance(modem_bits, ModemBits)
+        serial.set_modem_pins(dtr=True, rts=True)
+        modem_pins = serial.get_modem_pins()
+        # Verify we get a ModemPins object, values may be None with socat
+        assert isinstance(modem_pins, ModemPins)
 
-        serial.set_modem_bits(dtr=False)
-        modem_bits = serial.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
+        serial.set_modem_pins(dtr=False)
+        modem_pins = serial.get_modem_pins()
+        assert isinstance(modem_pins, ModemPins)
 
-        serial.set_modem_bits(dtr=False, rts=False)
-        modem_bits = serial.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
+        serial.set_modem_pins(dtr=False, rts=False)
+        modem_pins = serial.get_modem_pins()
+        assert isinstance(modem_pins, ModemPins)
 
 
 def test_deprecated_dtr_property_socat() -> None:

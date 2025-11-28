@@ -32,7 +32,7 @@ class Parity(Enum):
 
 
 @dataclasses.dataclass(frozen=True)
-class ModemBits:
+class ModemPins:
     """Modem control bits."""
 
     le: bool | None = None
@@ -61,7 +61,7 @@ class ModemBits:
         )
 
     def __repr__(self) -> str:
-        """Return string representation of modem bits."""
+        """Return string representation of modem pins."""
 
         bits = []
 
@@ -142,13 +142,13 @@ class BaseSerial(io.RawIOBase):
         """Configure the serial port settings."""
         raise NotImplementedError
 
-    def get_modem_bits(self) -> ModemBits:
+    def get_modem_pins(self) -> ModemPins:
         """Get modem control bits, internal."""
-        return self._get_modem_bits()
+        return self._get_modem_pins()
 
-    def set_modem_bits(
+    def set_modem_pins(
         self,
-        modem_bits: ModemBits | None = None,
+        modem_pins: ModemPins | None = None,
         *,
         le: bool | None = None,
         dtr: bool | None = None,
@@ -161,8 +161,8 @@ class BaseSerial(io.RawIOBase):
         dsr: bool | None = None,
     ) -> None:
         """Set modem control bits, internal."""
-        if modem_bits is None:
-            modem_bits = ModemBits(
+        if modem_pins is None:
+            modem_pins = ModemPins(
                 le=le,
                 dtr=dtr,
                 rts=rts,
@@ -174,15 +174,15 @@ class BaseSerial(io.RawIOBase):
                 dsr=dsr,
             )
 
-        return self._set_modem_bits(modem_bits)
+        return self._set_modem_pins(modem_pins)
 
     @abstractmethod
-    def _get_modem_bits(self) -> ModemBits:
+    def _get_modem_pins(self) -> ModemPins:
         """Get modem control bits, internal."""
         raise NotImplementedError
 
     @abstractmethod
-    def _set_modem_bits(self, modem_bits: ModemBits) -> None:
+    def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits, internal."""
         raise NotImplementedError
 
@@ -230,25 +230,25 @@ class BaseSerial(io.RawIOBase):
     @property
     def dtr(self) -> bool | None:
         """Get DTR modem bit."""
-        return self.get_modem_bits().dtr
+        return self.get_modem_pins().dtr
 
     # Deprecated alias
     @dtr.setter
     def dtr(self, value) -> None:
         """Set DTR modem bit."""
-        self.set_modem_bits(dtr=bool(value))
+        self.set_modem_pins(dtr=bool(value))
 
     # Deprecated alias
     @property
     def rts(self) -> bool | None:
         """Get RTS modem bit."""
-        return self.get_modem_bits().rts
+        return self.get_modem_pins().rts
 
     # Deprecated alias
     @rts.setter
     def rts(self, value) -> None:
         """Set RTS modem bit."""
-        self.set_modem_bits(rts=bool(value))
+        self.set_modem_pins(rts=bool(value))
 
     def readexactly(self, n: int) -> bytes:
         """Read exactly n bytes."""
@@ -362,14 +362,14 @@ class BaseSerialTransport(asyncio.Transport):
         """Connect to serial port."""
         return await self._connect(**kwargs)
 
-    async def get_modem_bits(self) -> ModemBits:
+    async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
         assert self._serial is not None
-        return await self._loop.run_in_executor(None, self._serial.get_modem_bits)
+        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
 
-    async def set_modem_bits(
+    async def set_modem_pins(
         self,
-        modem_bits: ModemBits | None = None,
+        modem_pins: ModemPins | None = None,
         *,
         le: bool | None = None,
         dtr: bool | None = None,
@@ -387,8 +387,8 @@ class BaseSerialTransport(asyncio.Transport):
             lambda: (
                 None
                 if self._serial is None
-                else self._serial.set_modem_bits(
-                    modem_bits,
+                else self._serial.set_modem_pins(
+                    modem_pins,
                     le=le,
                     dtr=dtr,
                     rts=rts,
