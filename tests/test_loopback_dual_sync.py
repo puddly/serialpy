@@ -377,59 +377,6 @@ def test_multiple_flush_calls_dual() -> None:
         assert result == data
 
 
-def test_get_modem_bits_dual() -> None:
-    """Test reading modem control bits with loopback adapter."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        modem_bits = serial.get_modem_bits()
-
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
-
-        # All modem bits should be either True, False, or None
-        for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
-            assert value in (True, False, None)
-
-
-def test_set_modem_bits_dual() -> None:
-    """Test setting modem control bits with socat pair."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        # Note: socat pairs don't support modem control signals properly
-        # These calls should not raise errors, but values may be None
-        serial.set_modem_bits(ModemBits(dtr=True, rts=True))
-        modem_bits = serial.get_modem_bits()
-        # Verify we get a ModemBits object, values may be None with socat
-        assert isinstance(modem_bits, ModemBits)
-
-        serial.set_modem_bits(ModemBits(dtr=False))
-        modem_bits = serial.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
-
-        serial.set_modem_bits(ModemBits(dtr=False, rts=False))
-        modem_bits = serial.get_modem_bits()
-        assert isinstance(modem_bits, ModemBits)
-
-
-def test_deprecated_dtr_property_dual() -> None:
-    """Test DTR property (deprecated alias) with socat pair."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        # Note: socat pairs don't support modem control signals properly
-        # These calls should not raise errors, but values may be None with socat
-        serial.dtr = True
-        # DTR may be None with socat, just verify no error occurs
-        serial.dtr = False
-
-
-def test_deprecated_rts_property_dual() -> None:
-    """Test RTS property (deprecated alias) with socat pair."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial:
-        # Note: socat pairs don't support modem control signals properly
-        # These calls should not raise errors, but values may be None with socat
-        serial.rts = True
-        # RTS may be None with socat, just verify no error occurs
-        serial.rts = False
-
-
 def test_fast_open_close() -> None:
     """Test quickly opening and closing a port."""
 
@@ -440,3 +387,137 @@ def test_fast_open_close() -> None:
             serial_right.write(message)
 
         assert serial_left.readexactly(len(message)) == message
+
+
+def test_deprecated_dtr_cts_dual() -> None:
+    """Test DTR and CTS properties (deprecated alias)."""
+    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+        serial_left.dtr = True
+        assert serial_right.get_modem_bits().cts is True
+
+        serial_right.dtr = True
+        assert serial_left.get_modem_bits().cts is True
+
+        serial_left.dtr = False
+        assert serial_right.get_modem_bits().cts is False
+
+        serial_right.dtr = False
+        assert serial_left.get_modem_bits().cts is False
+
+
+def test_dtr_cts_dual() -> None:
+    """Test DTR and CTS."""
+    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+        serial_left.set_modem_bits(ModemBits(dtr=True))
+        assert serial_right.get_modem_bits().cts is True
+
+        serial_right.set_modem_bits(ModemBits(dtr=True))
+        assert serial_left.get_modem_bits().cts is True
+
+        serial_left.set_modem_bits(ModemBits(dtr=False))
+        assert serial_right.get_modem_bits().cts is False
+
+        serial_right.set_modem_bits(ModemBits(dtr=False))
+        assert serial_left.get_modem_bits().cts is False
+
+
+def test_deassert_on_open() -> None:
+    """Test DTR/CTS deassertion on open."""
+    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+        # Open and set DTR/CTS
+        with Serial(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=False
+        ) as serial_right:
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+            assert serial_left.get_modem_bits().cts is True
+
+        # It persists
+        assert serial_left.get_modem_bits().cts is True
+
+        # When we deassert on open, it should clear
+        with Serial(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=True
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is False
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+
+        # Nothing changes on close
+        assert serial_left.get_modem_bits().cts is True
+
+
+def test_hang_up_on_close() -> None:
+    """Test DTR/CTS hang up on close."""
+    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+        # Open and set DTR/CTS
+        with Serial(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=False,
+            deassert_on_open=False,
+        ) as serial_right:
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+            assert serial_left.get_modem_bits().cts is True
+
+        # It persists
+        assert serial_left.get_modem_bits().cts is True
+
+        # Without hang up on close, it still persists
+        with Serial(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=False,
+            deassert_on_open=False,
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is True
+
+        assert serial_left.get_modem_bits().cts is True
+
+        # When we hang up on close, it should clear
+        with Serial(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=True,
+            deassert_on_open=False,
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is True
+
+        assert serial_left.get_modem_bits().cts is False
+
+
+@pytest.mark.parametrize(
+    ("rtscts", "deassert_on_open", "expected_state"),
+    [
+        (False, None, False),  # No flow control, auto-detect -> clear pins
+        (False, False, True),  # No flow control, preserve pins (explicit override)
+        (False, True, False),  # No flow control, clear pins (explicit, matches auto)
+        (True, None, True),  # Flow control, auto-detect -> preserve pins
+        (True, False, True),  # Flow control, preserve pins (explicit, matches auto)
+        (True, True, False),  # Flow control, clear pins (explicit override)
+    ],
+)
+def test_deassert_on_open_with_rtscts(
+    rtscts: bool, deassert_on_open: bool | None, expected_state: bool
+) -> None:
+    """Test interaction of deassert_on_open with rtscts."""
+    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+        # Set DTR on right side, verify CTS appears on left
+        with Serial(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=False,
+            deassert_on_open=False,
+        ) as serial_right:
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+            assert serial_left.get_modem_bits().cts is True
+
+        # DTR persists after close
+        assert serial_left.get_modem_bits().cts is True
+
+        # Open with test parameters
+        with Serial(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=rtscts,
+            deassert_on_open=deassert_on_open,
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is expected_state

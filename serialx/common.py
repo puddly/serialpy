@@ -13,13 +13,6 @@ from typing import Any
 from typing_extensions import Self
 
 
-class UndefinedType:
-    """Sentinel type for undefined values."""
-
-
-UNDEFINED = UndefinedType()
-
-
 class StopBits(Enum):
     """Stop bits configuration."""
 
@@ -67,6 +60,27 @@ class ModemBits:
             dsr=False,
         )
 
+    def __repr__(self) -> str:
+        """Return string representation of modem bits."""
+
+        bits = [
+            bit
+            for bit in (
+                "le",
+                "dtr",
+                "rts",
+                "st",
+                "sr",
+                "cts",
+                "car",
+                "rng",
+                "dsr",
+            )
+            if getattr(self, bit)
+        ]
+
+        return f"{self.__class__.__name__}[{' '.join(bits)}]"
+
 
 class BaseSerial(io.RawIOBase):
     """Base class for serial port communication."""
@@ -83,7 +97,7 @@ class BaseSerial(io.RawIOBase):
         *,
         buffer_character_count: int = 1,
         buffer_burst_timeout: float = 0.01,
-        deassert_on_open: bool | UndefinedType = UNDEFINED,
+        deassert_on_open: bool | None = None,
         hang_up_on_close: bool = False,
         exclusive: bool = True,
     ) -> None:
@@ -106,8 +120,10 @@ class BaseSerial(io.RawIOBase):
         self._exclusive = exclusive
 
         # Deassert on open when not using hardware flow control
-        if deassert_on_open is UNDEFINED:
+        if deassert_on_open is None:
             self._deassert_on_open = not rtscts
+        else:
+            self._deassert_on_open = deassert_on_open
 
         self._hang_up_on_close = hang_up_on_close
 

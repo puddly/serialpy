@@ -2,13 +2,7 @@
 
 import asyncio
 import os
-import sys
 from typing import cast
-
-if sys.version_info >= (3, 11):
-    pass
-else:
-    pass
 
 import pytest
 
@@ -426,54 +420,6 @@ async def test_read_with_timeout_async() -> None:
             await asyncio.wait_for(reader_right.readexactly(1), timeout=0.1)
 
 
-async def test_get_modem_bits_async() -> None:
-    """Test reading modem control bits."""
-    async with async_create_dual_loopback(baudrate=115200) as (
-        reader,
-        writer,
-        _,
-        _writer_right,
-    ):
-        transport = cast(SerialTransport, writer.transport)
-        modem_bits = await transport.get_modem_bits()
-
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
-
-        # All modem bits should be either True, False, or None
-        for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
-            assert value in (True, False, None)
-
-
-async def test_set_modem_bits_async() -> None:
-    """Test setting modem control bits with dual loopback hardware."""
-    async with async_create_dual_loopback(baudrate=115200) as (
-        reader,
-        writer,
-        _,
-        _writer_right,
-    ):
-        transport = cast(SerialTransport, writer.transport)
-        # With real hardware, modem control signals should work
-        await transport.set_modem_bits(ModemBits(dtr=True, rts=True))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is True
-        assert modem_bits.rts is True
-
-        # Set DTR low, leave RTS unchanged
-        await transport.set_modem_bits(ModemBits(dtr=False))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is True
-
-        # Set both low
-        await transport.set_modem_bits(ModemBits(dtr=False, rts=False))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is False
-
-
 async def test_fast_open_close() -> None:
     """Test quickly opening and closing a port."""
     message = b"Fast write and close test" * 10
@@ -505,3 +451,135 @@ async def test_fast_open_close() -> None:
 
         await connection_lost_event.wait()
         assert await read_task == message
+
+
+async def test_deassert_on_open_async() -> None:
+    """Test DTR/CTS deassertion on open."""
+    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+        reader_left,
+        writer_left,
+    ):
+        # Open and set DTR/CTS
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=False
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # It persists
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # When we deassert on open, it should clear
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=True
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is False
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+
+        # Nothing changes on close
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+
+async def test_hang_up_on_close_async() -> None:
+    """Test DTR/CTS hang up on close."""
+    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+        reader_left,
+        writer_left,
+    ):
+        # Open and set DTR/CTS
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=False,
+            deassert_on_open=False,
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # It persists
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # Without hang up on close, it still persists
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=False,
+            deassert_on_open=False,
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # When we hang up on close, it should clear
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            hang_up_on_close=True,
+            deassert_on_open=False,
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        assert (await writer_left.transport.get_modem_bits()).cts is False
+
+
+@pytest.mark.parametrize(
+    ("rtscts", "deassert_on_open", "expected_state"),
+    [
+        (False, None, False),  # No flow control, auto-detect -> clear pins
+        (False, False, True),  # No flow control, preserve pins (explicit override)
+        (False, True, False),  # No flow control, clear pins (explicit, matches auto)
+        (True, None, True),  # Flow control, auto-detect -> preserve pins
+        (True, False, True),  # Flow control, preserve pins (explicit, matches auto)
+        (True, True, False),  # Flow control, clear pins (explicit override)
+    ],
+)
+async def test_deassert_on_open_with_rtscts_async(
+    rtscts: bool, deassert_on_open: bool | None, expected_state: bool
+) -> None:
+    """Test interaction of deassert_on_open with rtscts."""
+    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+        reader_left,
+        writer_left,
+    ):
+        # Set DTR on right side, verify CTS appears on left
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=False,
+            deassert_on_open=False,
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # DTR persists after close
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # Open with test parameters
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=rtscts,
+            deassert_on_open=deassert_on_open,
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is expected_state
