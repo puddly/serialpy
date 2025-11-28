@@ -419,3 +419,57 @@ def test_dtr_cts_dual() -> None:
 
         serial_right.set_modem_bits(ModemBits(dtr=False))
         assert serial_left.get_modem_bits().cts is False
+
+
+def test_deassert_on_open() -> None:
+    """Test DTR/CTS deassertion on open."""
+    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+        # Open and set DTR/CTS
+        with Serial(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=False
+        ) as serial_right:
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+            assert serial_left.get_modem_bits().cts is True
+
+        # It persists
+        assert serial_left.get_modem_bits().cts is True
+
+        # When we deassert on open, it should clear
+        with Serial(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=True
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is False
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+
+        # And stay cleared
+        assert serial_left.get_modem_bits().cts is True
+
+
+def test_hang_up_on_close() -> None:
+    """Test DTR/CTS hang up on close."""
+    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+        # Open and set DTR/CTS
+        with Serial(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=False
+        ) as serial_right:
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+            assert serial_left.get_modem_bits().cts is True
+
+        # It persists
+        assert serial_left.get_modem_bits().cts is True
+
+        # Without hang up on close, it still persists
+        with Serial(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=False
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is True
+
+        assert serial_left.get_modem_bits().cts is True
+
+        # When we hang up on close, it should clear
+        with Serial(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=True
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is True
+
+        assert serial_left.get_modem_bits().cts is False

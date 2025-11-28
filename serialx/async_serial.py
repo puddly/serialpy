@@ -4,12 +4,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Generic, TypeVar
 import urllib.parse
 
 from .common import Parity, StopBits
 from .platforms import SerialTransport
 
 LOGGER = logging.getLogger(__name__)
+
+_T = TypeVar("_T", bound=asyncio.WriteTransport, default=asyncio.WriteTransport)
+
+
+class SerialStreamWriter(asyncio.StreamWriter, Generic[_T]):
+    """StreamWriter with properly typed transport."""
+
+    @property
+    def transport(self) -> _T:  # type: ignore[override]
+        """Return the underlying transport."""
+        return super().transport  # type: ignore[return-value]
 
 
 async def create_serial_connection(
@@ -56,7 +68,7 @@ async def create_serial_connection(
 
 async def open_serial_connection(
     *args, **kwargs
-) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+) -> tuple[asyncio.StreamReader, SerialStreamWriter[SerialTransport]]:
     """Open a serial port connection using StreamReader and StreamWriter."""
     loop = asyncio.get_running_loop()
 
@@ -65,6 +77,8 @@ async def open_serial_connection(
     transport, _ = await create_serial_connection(
         loop, lambda: protocol, *args, **kwargs
     )
-    writer = asyncio.StreamWriter(transport, protocol, reader, loop)
+    writer: SerialStreamWriter[SerialTransport] = SerialStreamWriter(
+        transport, protocol, reader, loop
+    )
 
     return reader, writer

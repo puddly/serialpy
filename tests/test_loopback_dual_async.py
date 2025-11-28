@@ -2,17 +2,17 @@
 
 import asyncio
 import os
-import sys
 from typing import cast
-
-if sys.version_info >= (3, 11):
-    pass
-else:
-    pass
 
 import pytest
 
-from serialx import Parity, SerialTransport, StopBits, create_serial_connection
+from serialx import (
+    ModemBits,
+    Parity,
+    SerialTransport,
+    StopBits,
+    create_serial_connection,
+)
 from tests.common import (
     DUAL_LOOPBACK_LEFT,
     DUAL_LOOPBACK_RIGHT,
@@ -451,3 +451,78 @@ async def test_fast_open_close() -> None:
 
         await connection_lost_event.wait()
         assert await read_task == message
+
+
+async def test_deassert_on_open_async() -> None:
+    """Test DTR/CTS deassertion on open."""
+    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+        reader_left,
+        writer_left,
+    ):
+        # Open and set DTR/CTS
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=False
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # It persists
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # When we deassert on open, it should clear
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=True
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is False
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+
+        # And stay cleared
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+
+async def test_hang_up_on_close_async() -> None:
+    """Test DTR/CTS hang up on close."""
+    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+        reader_left,
+        writer_left,
+    ):
+        # Open and set DTR/CTS
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=False
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # It persists
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # Without hang up on close, it still persists
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=False
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # When we hang up on close, it should clear
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT, baudrate=115200, hang_up_on_close=True
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        assert (await writer_left.transport.get_modem_bits()).cts is False

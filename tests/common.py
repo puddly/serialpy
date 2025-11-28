@@ -82,7 +82,9 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 async def async_create_reader_writer(
     port: str | None,
     **kwargs: Any,
-) -> AsyncIterator[tuple[asyncio.StreamReader, asyncio.StreamWriter]]:
+) -> AsyncIterator[
+    tuple[asyncio.StreamReader, serialx.SerialStreamWriter[serialx.SerialTransport]]
+]:
     """Create a single reader/writer pair."""
 
     if port is None:

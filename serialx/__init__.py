@@ -2,7 +2,11 @@
 
 import sys
 
-from .async_serial import create_serial_connection, open_serial_connection
+from .async_serial import (
+    SerialStreamWriter,
+    create_serial_connection,
+    open_serial_connection,
+)
 from .common import ModemBits, Parity, StopBits
 from .platforms import Serial, SerialTransport
 
@@ -12,6 +16,7 @@ __all__ = [
     "ModemBits",
     "Parity",
     "Serial",
+    "SerialStreamWriter",
     "SerialTransport",
     "StopBits",
 ]
