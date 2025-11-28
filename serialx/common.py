@@ -63,21 +63,27 @@ class ModemBits:
     def __repr__(self) -> str:
         """Return string representation of modem bits."""
 
-        bits = [
-            bit
-            for bit in (
-                "le",
-                "dtr",
-                "rts",
-                "st",
-                "sr",
-                "cts",
-                "car",
-                "rng",
-                "dsr",
-            )
-            if getattr(self, bit)
-        ]
+        bits = []
+
+        for bit in (
+            "le",
+            "dtr",
+            "rts",
+            "st",
+            "sr",
+            "cts",
+            "car",
+            "rng",
+            "dsr",
+        ):
+            value = getattr(self, bit)
+
+            if value is None:
+                continue
+            elif value:
+                bits.append(bit)
+            else:
+                bits.append(f"!{bit}")
 
         return f"{self.__class__.__name__}[{' '.join(bits)}]"
 
