@@ -108,6 +108,9 @@ class BaseSerial(io.RawIOBase):
         # Deassert on open when not using hardware flow control
         if deassert_on_open is UNDEFINED:
             self._deassert_on_open = not rtscts
+        else:
+            assert isinstance(deassert_on_open, bool)
+            self._deassert_on_open = deassert_on_open
 
         self._hang_up_on_close = hang_up_on_close
 
