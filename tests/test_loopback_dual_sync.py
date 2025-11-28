@@ -473,3 +473,42 @@ def test_hang_up_on_close() -> None:
             assert serial_left.get_modem_bits().cts is True
 
         assert serial_left.get_modem_bits().cts is False
+
+
+@pytest.mark.parametrize(
+    ("rtscts", "deassert_on_open", "expected_state"),
+    [
+        (False, None, False),  # No flow control, auto-detect -> clear pins
+        (False, False, True),  # No flow control, preserve pins (explicit override)
+        (False, True, False),  # No flow control, clear pins (explicit, matches auto)
+        (True, None, True),  # Flow control, auto-detect -> preserve pins
+        (True, False, True),  # Flow control, preserve pins (explicit, matches auto)
+        (True, True, False),  # Flow control, clear pins (explicit override)
+    ],
+)
+def test_deassert_on_open_with_rtscts(
+    rtscts: bool, deassert_on_open: bool | None, expected_state: bool
+) -> None:
+    """Test interaction of deassert_on_open with rtscts."""
+    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+        # Set DTR on right side, verify CTS appears on left
+        with Serial(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=False,
+            deassert_on_open=False,
+        ) as serial_right:
+            serial_right.set_modem_bits(ModemBits(dtr=True))
+            assert serial_left.get_modem_bits().cts is True
+
+        # DTR persists after close
+        assert serial_left.get_modem_bits().cts is True
+
+        # Open with test parameters
+        with Serial(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=rtscts,
+            deassert_on_open=deassert_on_open,
+        ) as serial_right:
+            assert serial_left.get_modem_bits().cts is expected_state

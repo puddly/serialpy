@@ -526,3 +526,51 @@ async def test_hang_up_on_close_async() -> None:
             assert (await writer_left.transport.get_modem_bits()).cts is True
 
         assert (await writer_left.transport.get_modem_bits()).cts is False
+
+
+@pytest.mark.parametrize(
+    ("rtscts", "deassert_on_open", "expected_state"),
+    [
+        (False, None, False),  # No flow control, auto-detect -> clear pins
+        (False, False, True),  # No flow control, preserve pins (explicit override)
+        (False, True, False),  # No flow control, clear pins (explicit, matches auto)
+        (True, None, True),  # Flow control, auto-detect -> preserve pins
+        (True, False, True),  # Flow control, preserve pins (explicit, matches auto)
+        (True, True, False),  # Flow control, clear pins (explicit override)
+    ],
+)
+async def test_deassert_on_open_with_rtscts_async(
+    rtscts: bool, deassert_on_open: bool | None, expected_state: bool
+) -> None:
+    """Test interaction of deassert_on_open with rtscts."""
+    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+        reader_left,
+        writer_left,
+    ):
+        # Set DTR on right side, verify CTS appears on left
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=False,
+            deassert_on_open=False,
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            await writer_right.transport.set_modem_bits(ModemBits(dtr=True))
+            assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # DTR persists after close
+        assert (await writer_left.transport.get_modem_bits()).cts is True
+
+        # Open with test parameters
+        async with async_create_reader_writer(
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtscts=rtscts,
+            deassert_on_open=deassert_on_open,
+        ) as (
+            reader_right,
+            writer_right,
+        ):
+            assert (await writer_left.transport.get_modem_bits()).cts is expected_state
