@@ -289,8 +289,7 @@ class PosixSerial(BaseSerial):
                 else:
                     raise
 
-        if self._deassert_on_open:
-            self.set_modem_bits(dtr=False, rts=False)
+        self.set_modem_bits(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
 
         # Flush input and output buffers to discard stale data
         termios.tcflush(self._fileno, termios.TCIOFLUSH)
