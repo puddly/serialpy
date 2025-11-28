@@ -31,33 +31,60 @@ class Parity(Enum):
     SPACE = 4
 
 
+class PinState(Enum):
+    """Pin state."""
+
+    UNDEFINED = None
+    LOW = 0
+    HIGH = 1
+
+    @classmethod
+    def convert(cls, value: PinState | bool | None) -> PinState:
+        """Create PinState from boolean."""
+        if isinstance(value, cls):
+            return value
+
+        if value is None:
+            return cls.UNDEFINED
+
+        return cls.HIGH if value else cls.LOW
+
+    def to_bool(self) -> bool | None:
+        """Convert PinState to boolean."""
+        return self.value
+        if self is PinState.UNDEFINED:
+            return None
+
+        return self is PinState.HIGH
+
+
 @dataclasses.dataclass(frozen=True)
 class ModemPins:
     """Modem control bits."""
 
-    le: bool | None = None
-    dtr: bool | None = None
-    rts: bool | None = None
-    st: bool | None = None
-    sr: bool | None = None
-    cts: bool | None = None
-    car: bool | None = None
-    rng: bool | None = None
-    dsr: bool | None = None
+    le: PinState = PinState.UNDEFINED
+    dtr: PinState = PinState.UNDEFINED
+    rts: PinState = PinState.UNDEFINED
+    st: PinState = PinState.UNDEFINED
+    sr: PinState = PinState.UNDEFINED
+    cts: PinState = PinState.UNDEFINED
+    car: PinState = PinState.UNDEFINED
+    rng: PinState = PinState.UNDEFINED
+    dsr: PinState = PinState.UNDEFINED
 
     @classmethod
     def all_off(cls) -> Self:
         """Create instance with all bits set to off."""
         return cls(
-            le=False,
-            dtr=False,
-            rts=False,
-            st=False,
-            sr=False,
-            cts=False,
-            car=False,
-            rng=False,
-            dsr=False,
+            le=PinState.LOW,
+            dtr=PinState.LOW,
+            rts=PinState.LOW,
+            st=PinState.LOW,
+            sr=PinState.LOW,
+            cts=PinState.LOW,
+            car=PinState.LOW,
+            rng=PinState.LOW,
+            dsr=PinState.LOW,
         )
 
     def __repr__(self) -> str:
@@ -78,9 +105,9 @@ class ModemPins:
         ):
             value = getattr(self, bit)
 
-            if value is None:
+            if value is PinState.UNDEFINED:
                 continue
-            elif value:
+            elif value is PinState.HIGH:
                 bits.append(bit)
             else:
                 bits.append(f"!{bit}")
@@ -103,8 +130,8 @@ class BaseSerial(io.RawIOBase):
         *,
         buffer_character_count: int = 1,
         buffer_burst_timeout: float = 0.01,
-        rtsdtr_on_open: bool | None = True,
-        hang_up_on_close: bool = False,
+        rtsdtr_on_open: PinState = PinState.HIGH,
+        rtsdtr_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
     ) -> None:
         """Initialize serial port configuration."""
@@ -126,7 +153,7 @@ class BaseSerial(io.RawIOBase):
         self._exclusive = exclusive
 
         self._rtsdtr_on_open = rtsdtr_on_open
-        self._hang_up_on_close = hang_up_on_close
+        self._rtsdtr_on_close = rtsdtr_on_close
 
         self._buffer_character_count = buffer_character_count
         self._buffer_burst_timeout = buffer_burst_timeout
@@ -150,28 +177,28 @@ class BaseSerial(io.RawIOBase):
         self,
         modem_pins: ModemPins | None = None,
         *,
-        le: bool | None = None,
-        dtr: bool | None = None,
-        rts: bool | None = None,
-        st: bool | None = None,
-        sr: bool | None = None,
-        cts: bool | None = None,
-        car: bool | None = None,
-        rng: bool | None = None,
-        dsr: bool | None = None,
+        le: PinState | bool | None = PinState.UNDEFINED,
+        dtr: PinState | bool | None = PinState.UNDEFINED,
+        rts: PinState | bool | None = PinState.UNDEFINED,
+        st: PinState | bool | None = PinState.UNDEFINED,
+        sr: PinState | bool | None = PinState.UNDEFINED,
+        cts: PinState | bool | None = PinState.UNDEFINED,
+        car: PinState | bool | None = PinState.UNDEFINED,
+        rng: PinState | bool | None = PinState.UNDEFINED,
+        dsr: PinState | bool | None = PinState.UNDEFINED,
     ) -> None:
         """Set modem control bits, internal."""
         if modem_pins is None:
             modem_pins = ModemPins(
-                le=le,
-                dtr=dtr,
-                rts=rts,
-                st=st,
-                sr=sr,
-                cts=cts,
-                car=car,
-                rng=rng,
-                dsr=dsr,
+                le=PinState.convert(le),
+                dtr=PinState.convert(dtr),
+                rts=PinState.convert(rts),
+                st=PinState.convert(st),
+                sr=PinState.convert(sr),
+                cts=PinState.convert(cts),
+                car=PinState.convert(car),
+                rng=PinState.convert(rng),
+                dsr=PinState.convert(dsr),
             )
 
         return self._set_modem_pins(modem_pins)
@@ -217,9 +244,14 @@ class BaseSerial(io.RawIOBase):
         return self._stopbits
 
     @property
-    def hang_up_on_close(self) -> bool:
+    def rtsdtr_on_open(self) -> PinState:
+        """Get the hang up on open setting."""
+        return self._rtsdtr_on_open
+
+    @property
+    def rtsdtr_on_close(self) -> PinState:
         """Get the hang up on close setting."""
-        return self._hang_up_on_close
+        return self._rtsdtr_on_close
 
     @property
     def exclusive(self) -> bool:
@@ -230,11 +262,11 @@ class BaseSerial(io.RawIOBase):
     @property
     def dtr(self) -> bool | None:
         """Get DTR modem bit."""
-        return self.get_modem_pins().dtr
+        return self.get_modem_pins().dtr.to_bool()
 
     # Deprecated alias
     @dtr.setter
-    def dtr(self, value) -> None:
+    def dtr(self, value: bool) -> None:
         """Set DTR modem bit."""
         self.set_modem_pins(dtr=bool(value))
 
@@ -242,11 +274,11 @@ class BaseSerial(io.RawIOBase):
     @property
     def rts(self) -> bool | None:
         """Get RTS modem bit."""
-        return self.get_modem_pins().rts
+        return self.get_modem_pins().rts.to_bool()
 
     # Deprecated alias
     @rts.setter
-    def rts(self, value) -> None:
+    def rts(self, value: bool) -> None:
         """Set RTS modem bit."""
         self.set_modem_pins(rts=bool(value))
 
@@ -340,12 +372,6 @@ class BaseSerialTransport(asyncio.Transport):
         """Get the byte size."""
         assert self._serial is not None
         return self._serial.byte_size
-
-    @property
-    def hang_up_on_close(self) -> bool:
-        """Get the hang up on close setting."""
-        assert self._serial is not None
-        return self._serial.hang_up_on_close
 
     @property
     def exclusive(self) -> bool:

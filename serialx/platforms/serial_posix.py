@@ -20,7 +20,14 @@ else:
 
 from typing_extensions import Buffer
 
-from ..common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
+from ..common import (
+    BaseSerial,
+    BaseSerialTransport,
+    ModemPins,
+    Parity,
+    PinState,
+    StopBits,
+)
 from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -171,7 +178,11 @@ class PosixSerial(BaseSerial):
         cflag |= termios.CLOCAL
 
         # Lower modem control lines after last process closes the device (hang up)
-        if self._hang_up_on_close:
+        if self._rtsdtr_on_close is PinState.UNDEFINED:
+            pass
+        elif self._rtsdtr_on_close is PinState.HIGH:
+            LOGGER.warning("POSIX only supports setting RTS/DTR to LOW on close")
+        else:
             cflag |= termios.HUPCL
 
         # Character size
@@ -329,7 +340,10 @@ class PosixSerial(BaseSerial):
 
         n = int.from_bytes(buffer, "little")
         return ModemPins(
-            **{name: bool(n & bit) for name, bit in MODEM_BIT_MAPPING.items()}
+            **{
+                name: PinState.HIGH if n & bit else PinState.LOW
+                for name, bit in MODEM_BIT_MAPPING.items()
+            }
         )
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
