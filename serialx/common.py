@@ -51,7 +51,6 @@ class PinState(Enum):
 
     def to_bool(self) -> bool | None:
         """Convert PinState to boolean."""
-        return self.value
         if self is PinState.UNDEFINED:
             return None
 

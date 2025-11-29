@@ -15,6 +15,7 @@ import pytest
 from serialx import (
     ModemPins,
     Parity,
+    PinState,
     SerialTransport,
     StopBits,
     create_serial_connection,
@@ -471,10 +472,10 @@ async def test_get_modem_pins_async() -> None:
         # Verify we get a ModemPins object
         assert isinstance(modem_pins, ModemPins)
 
-        # All modem pins should be either True, False, or None
+        # All modem pins should be PinState enum values
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
             value = getattr(modem_pins, field)
-            assert value in (True, False, None)
+            assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
 
 
 async def test_set_modem_pins_async() -> None:

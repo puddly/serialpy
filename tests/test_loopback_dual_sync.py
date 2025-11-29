@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from serialx import Parity, Serial, StopBits
+from serialx import Parity, PinState, Serial, StopBits
 from tests.common import DUAL_LOOPBACK_LEFT, DUAL_LOOPBACK_RIGHT, create_dual_loopback
 
 pytestmark = pytest.mark.skipif(
@@ -393,32 +393,32 @@ def test_deprecated_dtr_cts_dual() -> None:
     """Test DTR and CTS properties (deprecated alias)."""
     with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
         serial_left.dtr = True
-        assert serial_right.get_modem_pins().cts is True
+        assert serial_right.get_modem_pins().cts is PinState.HIGH
 
         serial_right.dtr = True
-        assert serial_left.get_modem_pins().cts is True
+        assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         serial_left.dtr = False
-        assert serial_right.get_modem_pins().cts is False
+        assert serial_right.get_modem_pins().cts is PinState.LOW
 
         serial_right.dtr = False
-        assert serial_left.get_modem_pins().cts is False
+        assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
 def test_dtr_cts_dual() -> None:
     """Test DTR and CTS."""
     with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
         serial_left.set_modem_pins(dtr=True)
-        assert serial_right.get_modem_pins().cts is True
+        assert serial_right.get_modem_pins().cts is PinState.HIGH
 
         serial_right.set_modem_pins(dtr=True)
-        assert serial_left.get_modem_pins().cts is True
+        assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         serial_left.set_modem_pins(dtr=False)
-        assert serial_right.get_modem_pins().cts is False
+        assert serial_right.get_modem_pins().cts is PinState.LOW
 
         serial_right.set_modem_pins(dtr=False)
-        assert serial_left.get_modem_pins().cts is False
+        assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
 def test_deassert_on_open() -> None:
@@ -426,23 +426,29 @@ def test_deassert_on_open() -> None:
     with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
         # Open and set DTR/CTS
         with Serial(
-            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=False
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtsdtr_on_open=PinState.HIGH,
+            rtsdtr_on_close=PinState.HIGH,
         ) as serial_right:
             serial_right.set_modem_pins(dtr=True)
-            assert serial_left.get_modem_pins().cts is True
+            assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         # It persists
-        assert serial_left.get_modem_pins().cts is True
+        assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         # When we deassert on open, it should clear
         with Serial(
-            DUAL_LOOPBACK_RIGHT, baudrate=115200, deassert_on_open=True
+            DUAL_LOOPBACK_RIGHT,
+            baudrate=115200,
+            rtsdtr_on_open=PinState.LOW,
+            rtsdtr_on_close=PinState.HIGH,
         ) as serial_right:
-            assert serial_left.get_modem_pins().cts is False
+            assert serial_left.get_modem_pins().cts is PinState.LOW
             serial_right.set_modem_pins(dtr=True)
 
         # Nothing changes on close
-        assert serial_left.get_modem_pins().cts is True
+        assert serial_left.get_modem_pins().cts is PinState.HIGH
 
 
 def test_hang_up_on_close() -> None:
@@ -452,72 +458,70 @@ def test_hang_up_on_close() -> None:
         with Serial(
             DUAL_LOOPBACK_RIGHT,
             baudrate=115200,
-            hang_up_on_close=False,
-            deassert_on_open=False,
+            rtsdtr_on_close=PinState.HIGH,
+            rtsdtr_on_open=PinState.HIGH,
         ) as serial_right:
             serial_right.set_modem_pins(dtr=True)
-            assert serial_left.get_modem_pins().cts is True
+            assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         # It persists
-        assert serial_left.get_modem_pins().cts is True
+        assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         # Without hang up on close, it still persists
         with Serial(
             DUAL_LOOPBACK_RIGHT,
             baudrate=115200,
-            hang_up_on_close=False,
-            deassert_on_open=False,
+            rtsdtr_on_close=PinState.HIGH,
+            rtsdtr_on_open=PinState.HIGH,
         ) as serial_right:
-            assert serial_left.get_modem_pins().cts is True
+            assert serial_left.get_modem_pins().cts is PinState.HIGH
 
-        assert serial_left.get_modem_pins().cts is True
+        assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         # When we hang up on close, it should clear
         with Serial(
             DUAL_LOOPBACK_RIGHT,
             baudrate=115200,
-            hang_up_on_close=True,
-            deassert_on_open=False,
+            rtsdtr_on_close=PinState.LOW,
+            rtsdtr_on_open=PinState.HIGH,
         ) as serial_right:
-            assert serial_left.get_modem_pins().cts is True
+            assert serial_left.get_modem_pins().cts is PinState.HIGH
 
-        assert serial_left.get_modem_pins().cts is False
+        assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
 @pytest.mark.parametrize(
-    ("rtscts", "deassert_on_open", "expected_state"),
+    ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
-        (False, None, False),  # No flow control, auto-detect -> clear pins
-        (False, False, True),  # No flow control, preserve pins (explicit override)
-        (False, True, False),  # No flow control, clear pins (explicit, matches auto)
-        (True, None, True),  # Flow control, auto-detect -> preserve pins
-        (True, False, True),  # Flow control, preserve pins (explicit, matches auto)
-        (True, True, False),  # Flow control, clear pins (explicit override)
+        (False, PinState.HIGH, PinState.HIGH),  # No flow control, preserve pins
+        (False, PinState.LOW, PinState.LOW),  # No flow control, clear pins
+        (True, PinState.HIGH, PinState.HIGH),  # Flow control, preserve pins
+        (True, PinState.LOW, PinState.LOW),  # Flow control, clear pins
     ],
 )
 def test_deassert_on_open_with_rtscts(
-    rtscts: bool, deassert_on_open: bool | None, expected_state: bool
+    rtscts: bool, rtsdtr_on_open: PinState, expected_state: PinState
 ) -> None:
-    """Test interaction of deassert_on_open with rtscts."""
+    """Test interaction of rtsdtr_on_open with rtscts."""
     with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
         # Set DTR on right side, verify CTS appears on left
         with Serial(
             DUAL_LOOPBACK_RIGHT,
             baudrate=115200,
             rtscts=False,
-            deassert_on_open=False,
+            rtsdtr_on_open=PinState.HIGH,
         ) as serial_right:
             serial_right.set_modem_pins(dtr=True)
-            assert serial_left.get_modem_pins().cts is True
+            assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         # DTR persists after close
-        assert serial_left.get_modem_pins().cts is True
+        assert serial_left.get_modem_pins().cts is PinState.HIGH
 
         # Open with test parameters
         with Serial(
             DUAL_LOOPBACK_RIGHT,
             baudrate=115200,
             rtscts=rtscts,
-            deassert_on_open=deassert_on_open,
+            rtsdtr_on_open=rtsdtr_on_open,
         ) as serial_right:
             assert serial_left.get_modem_pins().cts is expected_state
