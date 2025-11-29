@@ -2,17 +2,10 @@
 
 import asyncio
 import os
-from typing import cast
 
 import pytest
 
-from serialx import (
-    Parity,
-    PinState,
-    SerialTransport,
-    StopBits,
-    create_serial_connection,
-)
+from serialx import Parity, PinState, StopBits, create_serial_connection
 from tests.common import (
     DUAL_LOOPBACK_LEFT,
     DUAL_LOOPBACK_RIGHT,
@@ -284,8 +277,7 @@ async def test_valid_baudrates_async(baudrate: int) -> None:
         _writer_right,
     ):
         # Verify baudrate was set (check transport)
-        transport = cast(SerialTransport, writer.transport)
-        assert transport.baudrate == baudrate
+        assert writer.transport.baudrate == baudrate
         writer.write(b"test")
 
 
@@ -301,8 +293,7 @@ async def test_valid_parity_async(parity: Parity) -> None:
         _,
         _writer_right,
     ):
-        transport = cast(SerialTransport, writer.transport)
-        assert transport.parity == parity
+        assert writer.transport.parity == parity
         writer.write(b"test")
 
 
@@ -328,8 +319,7 @@ async def test_valid_stopbits_async(
         _,
         _writer_right,
     ):
-        transport = cast(SerialTransport, writer.transport)
-        assert transport.stopbits == expected
+        assert writer.transport.stopbits == expected
         writer.write(b"test")
 
 
@@ -427,10 +417,9 @@ async def test_fast_open_close() -> None:
 
     class FastCloseProtocol(asyncio.Protocol):
         def connection_made(self, transport: asyncio.BaseTransport) -> None:
-            transport = cast(SerialTransport, transport)
-            transport.write(message)
-            # transport.close()  # Immediately closing after write will not cause data loss
-            transport.abort()
+            writer.transport.write(message)
+            # writer.transport.close()  # Immediately closing after write will not cause data loss
+            writer.transport.abort()
 
         def connection_lost(self, exc: Exception | None) -> None:
             connection_lost_event.set()

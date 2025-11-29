@@ -107,9 +107,9 @@ async def async_create_reader_writer_pair(
 ) -> AsyncIterator[
     tuple[
         asyncio.StreamReader,
-        asyncio.StreamWriter,
+        serialx.SerialStreamWriter[serialx.SerialTransport],
         asyncio.StreamReader,
-        asyncio.StreamWriter,
+        serialx.SerialStreamWriter[serialx.SerialTransport],
     ]
 ]:
     """Create reader/writer pairs for both sides of a socat connection.
@@ -134,9 +134,9 @@ async def async_create_dual_loopback(
 ) -> AsyncIterator[
     tuple[
         asyncio.StreamReader,
-        asyncio.StreamWriter,
+        serialx.SerialStreamWriter[serialx.SerialTransport],
         asyncio.StreamReader,
-        asyncio.StreamWriter,
+        serialx.SerialStreamWriter[serialx.SerialTransport],
     ]
 ]:
     """Create reader/writer pairs for dual loopback configuration.

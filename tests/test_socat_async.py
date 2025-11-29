@@ -3,7 +3,6 @@
 import asyncio
 import os
 import sys
-from typing import cast
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
@@ -313,8 +312,7 @@ async def test_valid_baudrates_async(baudrate: int) -> None:
         async_create_reader_writer(left, baudrate=baudrate) as (reader, writer),
     ):
         # Verify baudrate was set (check transport)
-        transport = cast(SerialTransport, writer.transport)
-        assert transport.baudrate == baudrate
+        assert writer.transport.baudrate == baudrate
         writer.write(b"test")
 
 
@@ -331,8 +329,7 @@ async def test_valid_parity_async(parity: Parity) -> None:
             writer,
         ),
     ):
-        transport = cast(SerialTransport, writer.transport)
-        assert transport.parity == parity
+        assert writer.transport.parity == parity
         writer.write(b"test")
 
 
@@ -359,8 +356,7 @@ async def test_valid_stopbits_async(
             writer,
         ),
     ):
-        transport = cast(SerialTransport, writer.transport)
-        assert transport.stopbits == expected
+        assert writer.transport.stopbits == expected
         writer.write(b"test")
 
 
@@ -466,8 +462,7 @@ async def test_get_modem_pins_async() -> None:
         async_create_socat_pair() as (left, right),
         async_create_reader_writer(left, baudrate=115200) as (reader, writer),
     ):
-        transport = cast(SerialTransport, writer.transport)
-        modem_pins = await transport.get_modem_pins()
+        modem_pins = await writer.transport.get_modem_pins()
 
         # Verify we get a ModemPins object
         assert isinstance(modem_pins, ModemPins)
@@ -484,20 +479,19 @@ async def test_set_modem_pins_async() -> None:
         async_create_socat_pair() as (left, right),
         async_create_reader_writer(left, baudrate=115200) as (reader, writer),
     ):
-        transport = cast(SerialTransport, writer.transport)
         # Note: socat pairs don't support modem control signals properly
         # These calls should not raise errors, but values may be None
-        await transport.set_modem_pins(dtr=True, rts=True)
-        modem_pins = await transport.get_modem_pins()
+        await writer.transport.set_modem_pins(dtr=True, rts=True)
+        modem_pins = await writer.transport.get_modem_pins()
         # Verify we get a ModemPins object, values may be None with socat
         assert isinstance(modem_pins, ModemPins)
 
-        await transport.set_modem_pins(dtr=False)
-        modem_pins = await transport.get_modem_pins()
+        await writer.transport.set_modem_pins(dtr=False)
+        modem_pins = await writer.transport.get_modem_pins()
         assert isinstance(modem_pins, ModemPins)
 
-        await transport.set_modem_pins(dtr=False, rts=False)
-        modem_pins = await transport.get_modem_pins()
+        await writer.transport.set_modem_pins(dtr=False, rts=False)
+        modem_pins = await writer.transport.get_modem_pins()
         assert isinstance(modem_pins, ModemPins)
 
 
