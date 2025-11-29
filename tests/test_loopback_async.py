@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from serialx import ModemBits, Parity, SerialTransport, StopBits
+from serialx import Parity, PinState, SerialTransport, StopBits
 from tests.common import LOOPBACK_ADAPTER, async_create_reader_writer
 
 pytestmark = pytest.mark.skipif(
@@ -355,25 +355,7 @@ async def test_read_with_timeout_loopback_async() -> None:
             await asyncio.wait_for(reader.readexactly(1), timeout=0.1)
 
 
-async def test_get_modem_bits_loopback_async() -> None:
-    """Test reading modem control bits."""
-    async with async_create_reader_writer(LOOPBACK_ADAPTER, baudrate=115200) as (
-        reader,
-        writer,
-    ):
-        transport = cast(SerialTransport, writer.transport)
-        modem_bits = await transport.get_modem_bits()
-
-        # Verify we get a ModemBits object
-        assert isinstance(modem_bits, ModemBits)
-
-        # All modem bits should be either True, False, or None
-        for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
-            value = getattr(modem_bits, field)
-            assert value in (True, False, None)
-
-
-async def test_set_modem_bits_loopback_async() -> None:
+async def test_set_modem_pins_loopback_async() -> None:
     """Test setting modem control bits with loopback adapter."""
     async with async_create_reader_writer(LOOPBACK_ADAPTER, baudrate=115200) as (
         reader,
@@ -381,19 +363,19 @@ async def test_set_modem_bits_loopback_async() -> None:
     ):
         transport = cast(SerialTransport, writer.transport)
         # With a real loopback adapter, modem control signals should work
-        await transport.set_modem_bits(ModemBits(dtr=True, rts=True))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is True
-        assert modem_bits.rts is True
+        await transport.set_modem_pins(dtr=True, rts=True)
+        modem_pins = await transport.get_modem_pins()
+        assert modem_pins.dtr is PinState.HIGH
+        assert modem_pins.rts is PinState.HIGH
 
         # Set DTR low, leave RTS unchanged
-        await transport.set_modem_bits(ModemBits(dtr=False))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is True
+        await transport.set_modem_pins(dtr=False)
+        modem_pins = await transport.get_modem_pins()
+        assert modem_pins.dtr is PinState.LOW
+        assert modem_pins.rts is PinState.HIGH
 
         # Set both low
-        await transport.set_modem_bits(ModemBits(dtr=False, rts=False))
-        modem_bits = await transport.get_modem_bits()
-        assert modem_bits.dtr is False
-        assert modem_bits.rts is False
+        await transport.set_modem_pins(dtr=False, rts=False)
+        modem_pins = await transport.get_modem_pins()
+        assert modem_pins.dtr is PinState.LOW
+        assert modem_pins.rts is PinState.LOW

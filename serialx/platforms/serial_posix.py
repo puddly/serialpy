@@ -11,7 +11,6 @@ import os
 import sys
 import termios
 import time
-from typing import Literal
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
@@ -20,7 +19,14 @@ else:
 
 from typing_extensions import Buffer
 
-from ..common import BaseSerial, BaseSerialTransport, ModemBits, Parity, StopBits
+from ..common import (
+    BaseSerial,
+    BaseSerialTransport,
+    ModemPins,
+    Parity,
+    PinState,
+    StopBits,
+)
 from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -55,7 +61,7 @@ MODEM_BIT_MAPPING = {
     "rng": termios.TIOCM_RNG,
     "dsr": termios.TIOCM_DSR,
 }
-assert MODEM_BIT_MAPPING.keys() == ModemBits.__annotations__.keys()
+assert MODEM_BIT_MAPPING.keys() == ModemPins.__annotations__.keys()
 
 POSIX_CHARACTER_SIZE_MAPPING = {
     5: termios.CS5,
@@ -65,27 +71,25 @@ POSIX_CHARACTER_SIZE_MAPPING = {
 }
 
 
-def modem_bits_mask_of_value(
-    modem_bits: ModemBits, mask: Literal[True, False, None]
-) -> int:
+def modem_pins_mask_of_value(modem_pins: ModemPins, mask: PinState) -> int:
     """Get modem bit mask for bits matching the specified value."""
     result = 0x00000000
 
     for name, bit in MODEM_BIT_MAPPING.items():
-        value = getattr(modem_bits, name)
+        value = getattr(modem_pins, name)
 
-        if value == mask:
+        if value is mask:
             result |= bit
 
     return result
 
 
-def modem_bits_as_int(modem_bits: ModemBits) -> int:
-    """Convert modem bits to integer."""
+def modem_pins_as_int(modem_pins: ModemPins) -> int:
+    """Convert modem pins to integer."""
     result = 0x00000000
 
     for name, bit in MODEM_BIT_MAPPING.items():
-        result |= bit if getattr(modem_bits, name) else 0x00000000
+        result |= bit if getattr(modem_pins, name) else 0x00000000
 
     return result
 
@@ -171,7 +175,11 @@ class PosixSerial(BaseSerial):
         cflag |= termios.CLOCAL
 
         # Lower modem control lines after last process closes the device (hang up)
-        if self._hang_up_on_close:
+        if self._rtsdtr_on_close is PinState.UNDEFINED:
+            pass
+        elif self._rtsdtr_on_close is PinState.HIGH:
+            LOGGER.warning("POSIX only supports setting RTS/DTR to LOW on close")
+        else:
             cflag |= termios.HUPCL
 
         # Character size
@@ -289,8 +297,7 @@ class PosixSerial(BaseSerial):
                 else:
                     raise
 
-        if self._deassert_on_open:
-            self.set_modem_bits(ModemBits(dtr=False, rts=False))
+        self.set_modem_pins(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
 
         # Flush input and output buffers to discard stale data
         termios.tcflush(self._fileno, termios.TCIOFLUSH)
@@ -314,7 +321,7 @@ class PosixSerial(BaseSerial):
 
         fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
 
-    def get_modem_bits(self) -> ModemBits:
+    def _get_modem_pins(self) -> ModemPins:
         """Get current modem control bits."""
         assert self._fileno is not None
 
@@ -325,47 +332,51 @@ class PosixSerial(BaseSerial):
             fcntl.ioctl(self._fileno, termios.TIOCMGET, buffer)
         except OSError as exc:
             if exc.errno == errno.ENOTTY:
-                LOGGER.debug("Device is not a serial port, cannot get modem bits")
-                return ModemBits()
+                LOGGER.debug("Device is not a serial port, cannot get modem pins")
+                return ModemPins()
 
         n = int.from_bytes(buffer, "little")
-        return ModemBits(
-            **{name: bool(n & bit) for name, bit in MODEM_BIT_MAPPING.items()}
+        return ModemPins(
+            **{
+                name: PinState.HIGH if n & bit else PinState.LOW
+                for name, bit in MODEM_BIT_MAPPING.items()
+            }
         )
 
-    def set_modem_bits(self, modem_bits: ModemBits) -> None:
+    def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits."""
         assert self._fileno is not None
 
-        LOGGER.debug("Setting modem bits: %r", modem_bits)
+        LOGGER.debug("Setting modem pins: %r", modem_pins)
 
-        all_bits_set = all(
-            getattr(modem_bits, name) is not None for name in MODEM_BIT_MAPPING
+        all_pins_set = all(
+            getattr(modem_pins, name) is not PinState.UNDEFINED
+            for name in MODEM_BIT_MAPPING
         )
 
         try:
-            if all_bits_set:
-                value = modem_bits_as_int(modem_bits)
-                LOGGER.debug("Setting all modem bits: 0x%08X", value)
+            if all_pins_set:
+                value = modem_pins_as_int(modem_pins)
+                LOGGER.debug("Setting all with TIOCMSET: 0x%08X", value)
                 fcntl.ioctl(self._fileno, termios.TIOCMSET, value.to_bytes(4, "little"))
             else:
-                to_set = modem_bits_mask_of_value(modem_bits, True)
-                to_clear = modem_bits_mask_of_value(modem_bits, False)
+                to_set = modem_pins_mask_of_value(modem_pins, PinState.HIGH)
+                to_clear = modem_pins_mask_of_value(modem_pins, PinState.LOW)
 
                 if to_set:
-                    LOGGER.debug("Setting modem bits: 0x%08X", to_set)
+                    LOGGER.debug("Setting TIOCMBIS: 0x%08X", to_set)
                     fcntl.ioctl(
                         self._fileno, termios.TIOCMBIS, to_set.to_bytes(4, "little")
                     )
 
                 if to_clear:
-                    LOGGER.debug("Clearing modem bits: 0x%08X", to_clear)
+                    LOGGER.debug("TIOCMBIC: 0x%08X", to_clear)
                     fcntl.ioctl(
                         self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little")
                     )
         except OSError as exc:
             if exc.errno == errno.ENOTTY:
-                LOGGER.debug("Device is not a serial port, cannot set modem bits")
+                LOGGER.debug("Device is not a serial port, cannot set modem pins")
 
     def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""

@@ -31,53 +31,85 @@ class Parity(Enum):
     SPACE = 4
 
 
+class PinState(Enum):
+    """Pin state."""
+
+    UNDEFINED = None
+    LOW = 0
+    HIGH = 1
+
+    @classmethod
+    def convert(cls, value: PinState | bool | None) -> PinState:
+        """Create PinState from boolean."""
+        if isinstance(value, cls):
+            return value
+
+        if value is None:
+            return cls.UNDEFINED
+
+        return cls.HIGH if value else cls.LOW
+
+    def to_bool(self) -> bool | None:
+        """Convert PinState to boolean."""
+        if self is PinState.UNDEFINED:
+            return None
+
+        return self is PinState.HIGH
+
+
 @dataclasses.dataclass(frozen=True)
-class ModemBits:
+class ModemPins:
     """Modem control bits."""
 
-    le: bool | None = None
-    dtr: bool | None = None
-    rts: bool | None = None
-    st: bool | None = None
-    sr: bool | None = None
-    cts: bool | None = None
-    car: bool | None = None
-    rng: bool | None = None
-    dsr: bool | None = None
+    le: PinState = PinState.UNDEFINED
+    dtr: PinState = PinState.UNDEFINED
+    rts: PinState = PinState.UNDEFINED
+    st: PinState = PinState.UNDEFINED
+    sr: PinState = PinState.UNDEFINED
+    cts: PinState = PinState.UNDEFINED
+    car: PinState = PinState.UNDEFINED
+    rng: PinState = PinState.UNDEFINED
+    dsr: PinState = PinState.UNDEFINED
 
     @classmethod
     def all_off(cls) -> Self:
         """Create instance with all bits set to off."""
         return cls(
-            le=False,
-            dtr=False,
-            rts=False,
-            st=False,
-            sr=False,
-            cts=False,
-            car=False,
-            rng=False,
-            dsr=False,
+            le=PinState.LOW,
+            dtr=PinState.LOW,
+            rts=PinState.LOW,
+            st=PinState.LOW,
+            sr=PinState.LOW,
+            cts=PinState.LOW,
+            car=PinState.LOW,
+            rng=PinState.LOW,
+            dsr=PinState.LOW,
         )
 
     def __repr__(self) -> str:
-        """Return string representation of modem bits."""
+        """Return string representation of modem pins."""
 
-        bits = [
-            bit
-            for bit in (
-                "le",
-                "dtr",
-                "rts",
-                "st",
-                "sr",
-                "cts",
-                "car",
-                "rng",
-                "dsr",
-            )
-            if getattr(self, bit)
-        ]
+        bits = []
+
+        for bit in (
+            "le",
+            "dtr",
+            "rts",
+            "st",
+            "sr",
+            "cts",
+            "car",
+            "rng",
+            "dsr",
+        ):
+            value = getattr(self, bit)
+
+            if value is PinState.UNDEFINED:
+                continue
+            elif value is PinState.HIGH:
+                bits.append(bit)
+            else:
+                bits.append(f"!{bit}")
 
         return f"{self.__class__.__name__}[{' '.join(bits)}]"
 
@@ -97,8 +129,8 @@ class BaseSerial(io.RawIOBase):
         *,
         buffer_character_count: int = 1,
         buffer_burst_timeout: float = 0.01,
-        deassert_on_open: bool | None = None,
-        hang_up_on_close: bool = False,
+        rtsdtr_on_open: PinState = PinState.HIGH,
+        rtsdtr_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
     ) -> None:
         """Initialize serial port configuration."""
@@ -119,13 +151,8 @@ class BaseSerial(io.RawIOBase):
         self._byte_size = byte_size
         self._exclusive = exclusive
 
-        # Deassert on open when not using hardware flow control
-        if deassert_on_open is None:
-            self._deassert_on_open = not rtscts
-        else:
-            self._deassert_on_open = deassert_on_open
-
-        self._hang_up_on_close = hang_up_on_close
+        self._rtsdtr_on_open = rtsdtr_on_open
+        self._rtsdtr_on_close = rtsdtr_on_close
 
         self._buffer_character_count = buffer_character_count
         self._buffer_burst_timeout = buffer_burst_timeout
@@ -141,14 +168,48 @@ class BaseSerial(io.RawIOBase):
         """Configure the serial port settings."""
         raise NotImplementedError
 
+    def get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        return self._get_modem_pins()
+
+    def set_modem_pins(
+        self,
+        modem_pins: ModemPins | None = None,
+        *,
+        le: PinState | bool | None = PinState.UNDEFINED,
+        dtr: PinState | bool | None = PinState.UNDEFINED,
+        rts: PinState | bool | None = PinState.UNDEFINED,
+        st: PinState | bool | None = PinState.UNDEFINED,
+        sr: PinState | bool | None = PinState.UNDEFINED,
+        cts: PinState | bool | None = PinState.UNDEFINED,
+        car: PinState | bool | None = PinState.UNDEFINED,
+        rng: PinState | bool | None = PinState.UNDEFINED,
+        dsr: PinState | bool | None = PinState.UNDEFINED,
+    ) -> None:
+        """Set modem control bits, internal."""
+        if modem_pins is None:
+            modem_pins = ModemPins(
+                le=PinState.convert(le),
+                dtr=PinState.convert(dtr),
+                rts=PinState.convert(rts),
+                st=PinState.convert(st),
+                sr=PinState.convert(sr),
+                cts=PinState.convert(cts),
+                car=PinState.convert(car),
+                rng=PinState.convert(rng),
+                dsr=PinState.convert(dsr),
+            )
+
+        return self._set_modem_pins(modem_pins)
+
     @abstractmethod
-    def get_modem_bits(self) -> ModemBits:
-        """Get modem control bits."""
+    def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
         raise NotImplementedError
 
     @abstractmethod
-    def set_modem_bits(self, modem_bits: ModemBits) -> None:
-        """Set modem control bits."""
+    def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
         raise NotImplementedError
 
     @abstractmethod
@@ -182,9 +243,14 @@ class BaseSerial(io.RawIOBase):
         return self._stopbits
 
     @property
-    def hang_up_on_close(self) -> bool:
-        """Get the hang up on close setting."""
-        return self._hang_up_on_close
+    def rtsdtr_on_open(self) -> PinState:
+        """Get the RTS/DTR pin state (on open) setting."""
+        return self._rtsdtr_on_open
+
+    @property
+    def rtsdtr_on_close(self) -> PinState:
+        """Get the RTS/DTR pin state (on close) setting."""
+        return self._rtsdtr_on_close
 
     @property
     def exclusive(self) -> bool:
@@ -195,25 +261,25 @@ class BaseSerial(io.RawIOBase):
     @property
     def dtr(self) -> bool | None:
         """Get DTR modem bit."""
-        return self.get_modem_bits().dtr
+        return self.get_modem_pins().dtr.to_bool()
 
     # Deprecated alias
     @dtr.setter
-    def dtr(self, value) -> None:
+    def dtr(self, value: bool) -> None:
         """Set DTR modem bit."""
-        self.set_modem_bits(ModemBits(dtr=bool(value)))
+        self.set_modem_pins(dtr=bool(value))
 
     # Deprecated alias
     @property
     def rts(self) -> bool | None:
         """Get RTS modem bit."""
-        return self.get_modem_bits().rts
+        return self.get_modem_pins().rts.to_bool()
 
     # Deprecated alias
     @rts.setter
-    def rts(self, value) -> None:
+    def rts(self, value: bool) -> None:
         """Set RTS modem bit."""
-        self.set_modem_bits(ModemBits(rts=bool(value)))
+        self.set_modem_pins(rts=bool(value))
 
     def readexactly(self, n: int) -> bytes:
         """Read exactly n bytes."""
@@ -251,7 +317,7 @@ class BaseSerial(io.RawIOBase):
 
     def __del__(self) -> None:
         """Cleanup on deletion."""
-        if self._auto_close:
+        if getattr(self, "_auto_close", False):
             self.close()
 
 
@@ -307,12 +373,6 @@ class BaseSerialTransport(asyncio.Transport):
         return self._serial.byte_size
 
     @property
-    def hang_up_on_close(self) -> bool:
-        """Get the hang up on close setting."""
-        assert self._serial is not None
-        return self._serial.hang_up_on_close
-
-    @property
     def exclusive(self) -> bool:
         """Get the exclusive setting."""
         assert self._serial is not None
@@ -327,15 +387,45 @@ class BaseSerialTransport(asyncio.Transport):
         """Connect to serial port."""
         return await self._connect(**kwargs)
 
-    async def get_modem_bits(self) -> ModemBits:
+    async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
         assert self._serial is not None
-        return await self._loop.run_in_executor(None, self._serial.get_modem_bits)
+        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
 
-    async def set_modem_bits(self, modem_bits: ModemBits) -> None:
+    async def set_modem_pins(
+        self,
+        modem_pins: ModemPins | None = None,
+        *,
+        le: bool | None = None,
+        dtr: bool | None = None,
+        rts: bool | None = None,
+        st: bool | None = None,
+        sr: bool | None = None,
+        cts: bool | None = None,
+        car: bool | None = None,
+        rng: bool | None = None,
+        dsr: bool | None = None,
+    ) -> None:
         """Set modem control bits."""
-        assert self._serial is not None
-        await self._loop.run_in_executor(None, self._serial.set_modem_bits, modem_bits)
+        await self._loop.run_in_executor(
+            None,
+            lambda: (
+                None
+                if self._serial is None
+                else self._serial.set_modem_pins(
+                    modem_pins,
+                    le=le,
+                    dtr=dtr,
+                    rts=rts,
+                    st=st,
+                    sr=sr,
+                    cts=cts,
+                    car=car,
+                    rng=rng,
+                    dsr=dsr,
+                )
+            ),
+        )
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
