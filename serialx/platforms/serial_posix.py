@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import array
 import asyncio
+import ctypes
 import errno
 import fcntl
 import logging
@@ -50,6 +51,11 @@ CBAUD = getattr(termios, "CBAUD", 0o00010017)
 CBAUDEX = getattr(termios, "CBAUDEX", 0o00010000)
 CRTSCTS = getattr(termios, "CRTSCTS", getattr(termios, "CNEW_RTSCTS", None))
 
+# When we need to set a non-POSIX baudrate, we set the baudrates to a known default and
+# then override
+NON_POSIX_FALLBACK_BAUDRATE = 115200
+NON_POSIX_FALLBACK_BAUDRATE_CONST = termios.B115200
+
 MODEM_BIT_MAPPING = {
     "le": termios.TIOCM_LE,
     "dtr": termios.TIOCM_DTR,
@@ -69,6 +75,28 @@ POSIX_CHARACTER_SIZE_MAPPING = {
     7: termios.CS7,
     8: termios.CS8,
 }
+
+
+class TermiosStruct(ctypes.Structure):
+    """The `termios` struct."""
+
+    _fields_ = [
+        ("c_iflag", ctypes.c_uint32),
+        ("c_oflag", ctypes.c_uint32),
+        ("c_cflag", ctypes.c_uint32),
+        ("c_lflag", ctypes.c_uint32),
+        ("c_line", ctypes.c_uint8),
+        ("c_cc", ctypes.c_uint8 * 64),  # NCCS is usually 19 bytes, let's be safe
+    ]
+
+
+class Termios2SpeedStruct(ctypes.Structure):
+    """The extra `c_ispeed` and `c_ospeed` members at the end of `struct termios2`."""
+
+    _fields_ = [
+        ("c_ispeed", ctypes.c_uint32),
+        ("c_ospeed", ctypes.c_uint32),
+    ]
 
 
 def modem_pins_mask_of_value(modem_pins: ModemPins, mask: PinState) -> int:
@@ -107,7 +135,7 @@ class PosixSerial(BaseSerial):
         """Initialize POSIX serial port."""
         super().__init__(*args, **kwargs)
         self._fileno: int | None = fileno
-        self._low_latency = low_latency
+        self._low_latency: bool = low_latency
 
     def open(self) -> None:
         """Open the serial port."""
@@ -146,17 +174,46 @@ class PosixSerial(BaseSerial):
         fcntl.flock(self._fileno, fcntl.LOCK_UN)
 
     def _set_non_posix_baudrate(self, baudrate: int) -> None:
-        """Set the baudrate of the serial port."""
+        """Set the baudrate of the serial port, must be called after `tcsetattr`."""
         assert self._fileno is not None
 
-        buffer = array.array("i", [0x00000000] * 64)
+        # The termios2 struct is going to be smaller than the sum of these two objects
+        buffer = bytearray(
+            ctypes.sizeof(TermiosStruct) + ctypes.sizeof(Termios2SpeedStruct)
+        )
         fcntl.ioctl(self._fileno, TCGETS2, buffer)
-        buffer[2] &= ~CBAUD  # c_cflag
-        buffer[2] |= CBAUDEX
 
-        buffer[9] = self._baudrate  # c_ispeed
-        buffer[10] = self._baudrate  # c_ospeed
+        # The POSIX baudrates are stored in the lower bits of `c_cflag`. We clear them.
+        termios_struct = TermiosStruct.from_buffer(buffer)
+        termios_struct.c_cflag &= ~CBAUD
+        termios_struct.c_cflag |= CBAUDEX
 
+        # `termios2` extends `termios` with two extra fields. The problem is that these
+        # fields appear *after* the `c_cc` array, which has a length defined by `NCCS`,
+        # a constant that we do not have access to. We overcome this by searching for
+        # the speed fields directly, since we set them to a known value earlier.
+        try:
+            temp_speed_buffer = bytearray(ctypes.sizeof(Termios2SpeedStruct))
+            temp_speed_struct = Termios2SpeedStruct.from_buffer(temp_speed_buffer)
+            temp_speed_struct.c_ispeed = NON_POSIX_FALLBACK_BAUDRATE
+            temp_speed_struct.c_ospeed = NON_POSIX_FALLBACK_BAUDRATE
+
+            offset = buffer.index(temp_speed_buffer)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Could not determine offset of termios2 speed fields: {buffer.hex()}"
+            ) from exc
+
+        termios2_speed_struct = Termios2SpeedStruct.from_buffer(buffer, offset)
+        termios2_speed_struct.c_ispeed = self._baudrate
+        termios2_speed_struct.c_ospeed = self._baudrate
+
+        # The ctypes structures mutate the buffer in place
+        LOGGER.debug(
+            "Writing termios2 struct (c_ispeed offset %d bytes): %r",
+            offset,
+            buffer.hex(),
+        )
         fcntl.ioctl(self._fileno, TCSETS2, buffer)
 
     def configure_port(self) -> None:  # noqa: C901
@@ -254,11 +311,10 @@ class PosixSerial(BaseSerial):
             non_posix_baudrate = False
         except AttributeError:
             # Non-POSIX baudrate, use defaults for `tcsetattr` and then override
-            ispeed = termios.B115200
-            ospeed = termios.B115200
+            ispeed = NON_POSIX_FALLBACK_BAUDRATE_CONST
+            ospeed = NON_POSIX_FALLBACK_BAUDRATE_CONST
             non_posix_baudrate = True
 
-        # We use `tcgetattr` only to obtain `cc`, since this array is variably sized
         (
             _iflag,
             _oflag,
