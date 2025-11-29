@@ -318,7 +318,7 @@ class BaseSerial(io.RawIOBase):
 
     def __del__(self) -> None:
         """Cleanup on deletion."""
-        if self._auto_close:
+        if getattr(self, "_auto_close", False):
             self.close()
 
 
