@@ -16,7 +16,9 @@ pytestmark = pytest.mark.skipif(
 
 def test_all_bytes_loopback() -> None:
     """Test that all bytes 0-255 can be transmitted."""
-    with Serial(LOOPBACK_ADAPTER, baudrate=115200) as serial:
+
+    # We intentionally use a non-POSIX baudrate
+    with Serial(LOOPBACK_ADAPTER, baudrate=12345) as serial:
         # Create a byte array with all possible byte values
         data = bytes(range(256))
 
