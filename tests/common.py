@@ -142,9 +142,7 @@ async def async_create_dual_loopback(
 
     Returns (reader_left, writer_left, reader_right, writer_right).
     """
-    reader_left, writer_left = await serialx.open_serial_connection(
-        left_port, **kwargs
-    )
+    reader_left, writer_left = await serialx.open_serial_connection(left_port, **kwargs)
     reader_right, writer_right = await serialx.open_serial_connection(
         right_port, **kwargs
     )

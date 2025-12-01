@@ -94,7 +94,9 @@ def test_overlapping_read_write_loopback(loopback_adapter: str) -> None:
         (921600, 1024),
     ],
 )
-def test_random_large_loopback(loopback_adapter: str, baudrate: int, chunk_size: int) -> None:
+def test_random_large_loopback(
+    loopback_adapter: str, baudrate: int, chunk_size: int
+) -> None:
     """Test loopback adapter random read/write."""
     with Serial(loopback_adapter, baudrate=baudrate) as serial:
         data = os.urandom(chunk_size)
@@ -108,7 +110,9 @@ def test_random_large_loopback(loopback_adapter: str, baudrate: int, chunk_size:
     "iterations",
     [16, 32, 64],
 )
-def test_repeated_write_read_cycles_loopback(loopback_adapter: str, iterations: int) -> None:
+def test_repeated_write_read_cycles_loopback(
+    loopback_adapter: str, iterations: int
+) -> None:
     """Test repeated write/read cycles."""
     with Serial(loopback_adapter, baudrate=115200) as serial:
         data = bytes(range(256))
@@ -179,7 +183,9 @@ def test_rapid_small_writes_loopback(loopback_adapter: str) -> None:
         (921600, 512),
     ],
 )
-def test_sustained_throughput_loopback(loopback_adapter: str, baudrate: int, iterations: int) -> None:
+def test_sustained_throughput_loopback(
+    loopback_adapter: str, baudrate: int, iterations: int
+) -> None:
     """Test sustained data throughput at various baudrates."""
     with Serial(loopback_adapter, baudrate=baudrate) as serial:
         chunk = os.urandom(1024)
@@ -223,8 +229,8 @@ def test_valid_parity_loopback(loopback_adapter: str, parity: Parity) -> None:
         (2, StopBits.TWO),
     ],
 )
-def test_valid_stopbits_loopback(loopback_adapter: str, 
-    stopbits: StopBits | int | float, expected: StopBits
+def test_valid_stopbits_loopback(
+    loopback_adapter: str, stopbits: StopBits | int | float, expected: StopBits
 ) -> None:
     """Test that valid stopbits settings are accepted."""
     with Serial(loopback_adapter, baudrate=115200, stopbits=stopbits) as serial:
