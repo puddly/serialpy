@@ -54,15 +54,14 @@ def pytest_generate_tests(metafunc):
     if "loopback_adapter" in metafunc.fixturenames:
         adapters = _get_loopback_adapters(metafunc.config)
         if adapters:
-            # For pytest-xdist: group tests by adapter so same adapter doesn't run in parallel
-            # Use adapter path as the group ID to ensure tests using the same adapter are sequential
-            ids = []
+            #  Create marks for each adapter value
+            argvalues = []
             for adapter in adapters:
-                # Create a short, filesystem-safe ID for the group
-                # Use the adapter path itself as the group ID
-                ids.append(adapter)
+                # Create a parametrize mark with xdist_group for this specific adapter
+                mark = pytest.mark.xdist_group(name=f"adapter:{adapter}")
+                argvalues.append(pytest.param(adapter, marks=[mark], id=adapter))
 
-            metafunc.parametrize("loopback_adapter", adapters, ids=ids)
+            metafunc.parametrize("loopback_adapter", argvalues)
         else:
             # No adapters configured, skip all tests requiring loopback_adapter
             pytest.skip("No loopback adapters configured via --loopback-adapter")
@@ -71,30 +70,15 @@ def pytest_generate_tests(metafunc):
     if "adapter_pair" in metafunc.fixturenames:
         pairs = _get_adapter_pairs(metafunc.config)
         if pairs:
-            # For pytest-xdist: group tests by adapter pair
-            # Use both adapters in the group to ensure no conflicts
-            ids = []
+            argvalues = []
             for left, right in pairs:
-                ids.append(f"{left}:{right}")
+                group_name = f"pair:{left}:{right}"
+                mark = pytest.mark.xdist_group(name=group_name)
+                argvalues.append(
+                    pytest.param((left, right), marks=[mark], id=f"{left}:{right}")
+                )
 
-            metafunc.parametrize("adapter_pair", pairs, ids=ids)
+            metafunc.parametrize("adapter_pair", argvalues)
         else:
             # No pairs configured, skip all tests requiring adapter_pair
             pytest.skip("No adapter pairs configured via --adapter-pair")
-
-
-def pytest_collection_modifyitems(items):
-    """Add xdist_group marks to tests based on their adapter parameters."""
-    for item in items:
-        # Check if this test uses loopback_adapter parameter
-        if hasattr(item, "callspec") and "loopback_adapter" in item.callspec.params:
-            adapter = item.callspec.params["loopback_adapter"]
-            # Add xdist_group mark with the adapter path as the group name
-            item.add_marker(pytest.mark.xdist_group(name=f"adapter:{adapter}"))
-
-        # Check if this test uses adapter_pair parameter
-        elif hasattr(item, "callspec") and "adapter_pair" in item.callspec.params:
-            left, right = item.callspec.params["adapter_pair"]
-            # Group by both adapters to ensure no conflicts
-            # Tests using the same pair will be in the same group
-            item.add_marker(pytest.mark.xdist_group(name=f"pair:{left}:{right}"))
