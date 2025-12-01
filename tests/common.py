@@ -14,9 +14,6 @@ import pytest
 
 import serialx
 
-LOOPBACK_ADAPTER = os.environ.get("SERIALX_LOOPBACK_PORT")
-DUAL_LOOPBACK_LEFT = os.environ.get("SERIALX_DUAL_LOOPBACK_LEFT")
-DUAL_LOOPBACK_RIGHT = os.environ.get("SERIALX_DUAL_LOOPBACK_RIGHT")
 SOCAT_BINARY = shutil.which("socat")
 
 
@@ -130,6 +127,8 @@ async def async_create_reader_writer_pair(
 
 @contextlib.asynccontextmanager
 async def async_create_dual_loopback(
+    left_port: str,
+    right_port: str,
     **kwargs: Any,
 ) -> AsyncIterator[
     tuple[
@@ -141,17 +140,11 @@ async def async_create_dual_loopback(
 ]:
     """Create reader/writer pairs for dual loopback configuration.
 
-    Uses DUAL_LOOPBACK_LEFT and DUAL_LOOPBACK_RIGHT environment variables.
     Returns (reader_left, writer_left, reader_right, writer_right).
     """
-    if DUAL_LOOPBACK_LEFT is None or DUAL_LOOPBACK_RIGHT is None:
-        pytest.skip("Dual loopback ports not configured")
-
-    reader_left, writer_left = await serialx.open_serial_connection(
-        DUAL_LOOPBACK_LEFT, **kwargs
-    )
+    reader_left, writer_left = await serialx.open_serial_connection(left_port, **kwargs)
     reader_right, writer_right = await serialx.open_serial_connection(
-        DUAL_LOOPBACK_RIGHT, **kwargs
+        right_port, **kwargs
     )
 
     try:
@@ -190,18 +183,16 @@ def create_connected_pair(
 
 @contextlib.contextmanager
 def create_dual_loopback(
+    left_port: str,
+    right_port: str,
     **kwargs: Any,
 ) -> Iterator[tuple[serialx.Serial, serialx.Serial]]:
     """Create a connected pair of serial ports with dual loopback hardware.
 
-    Uses DUAL_LOOPBACK_LEFT and DUAL_LOOPBACK_RIGHT environment variables.
     Returns (serial_left, serial_right).
     """
-    if DUAL_LOOPBACK_LEFT is None or DUAL_LOOPBACK_RIGHT is None:
-        pytest.skip("Dual loopback ports not configured")
-
     with (
-        serialx.Serial(DUAL_LOOPBACK_LEFT, **kwargs) as serial_left,
-        serialx.Serial(DUAL_LOOPBACK_RIGHT, **kwargs) as serial_right,
+        serialx.Serial(left_port, **kwargs) as serial_left,
+        serialx.Serial(right_port, **kwargs) as serial_right,
     ):
         yield (serial_left, serial_right)

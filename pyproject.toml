@@ -22,8 +22,10 @@ dependencies = [
 dev = [
     "ruff",
     "pytest",
+    "pre-commit",
     "pytest-asyncio",
     "pytest-timeout",
+    "pytest-xdist",
 ]
 
 [tool.setuptools.packages.find]
@@ -33,7 +35,7 @@ exclude = ["tests", "tests.*"]
 enabled = true
 
 [tool.pytest.ini_options]
-addopts = "--showlocals --verbose"
+addopts = "--showlocals --verbose -n auto --dist loadgroup"
 testpaths = ["tests"]
 timeout = 20
 log_format = "%(asctime)s.%(msecs)03d %(levelname)s %(message)s"

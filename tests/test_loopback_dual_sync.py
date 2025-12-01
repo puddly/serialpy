@@ -5,17 +5,16 @@ import os
 import pytest
 
 from serialx import Parity, PinState, Serial, StopBits
-from tests.common import DUAL_LOOPBACK_LEFT, DUAL_LOOPBACK_RIGHT, create_dual_loopback
-
-pytestmark = pytest.mark.skipif(
-    not DUAL_LOOPBACK_LEFT or not DUAL_LOOPBACK_RIGHT,
-    reason="SERIALX_DUAL_LOOPBACK_LEFT and SERIALX_DUAL_LOOPBACK_RIGHT not set",
-)
+from tests.common import create_dual_loopback
 
 
-def test_all_bytes_dual() -> None:
+def test_all_bytes_dual(adapter_pair: tuple[str, str]) -> None:
     """Test that all bytes 0-255 can be transmitted."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         # Create a byte array with all possible byte values
         data = bytes(range(256))
 
@@ -25,9 +24,13 @@ def test_all_bytes_dual() -> None:
         assert result == data
 
 
-def test_segmented_binary_data_dual() -> None:
+def test_segmented_binary_data_dual(adapter_pair: tuple[str, str]) -> None:
     """Test binary data sent in segments."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         # Send all bytes in smaller segments
         segment_size = 16
         data = bytes(range(256))
@@ -43,9 +46,13 @@ def test_segmented_binary_data_dual() -> None:
     "size",
     [1, 16, 64, 256, 512, 1024],
 )
-def test_binary_payload_sizes_dual(size: int) -> None:
+def test_binary_payload_sizes_dual(adapter_pair: tuple[str, str], size: int) -> None:
     """Test various binary payload sizes."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         # Create binary data with repeating pattern
         data = bytes([i % 256 for i in range(size)])
 
@@ -55,9 +62,13 @@ def test_binary_payload_sizes_dual(size: int) -> None:
         assert result == data
 
 
-def test_null_bytes_dual() -> None:
+def test_null_bytes_dual(adapter_pair: tuple[str, str]) -> None:
     """Test that null bytes (0x00) can be transmitted."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         # Send a bunch of null bytes
         null_data = b"\x00" * 64
 
@@ -67,9 +78,13 @@ def test_null_bytes_dual() -> None:
         assert result == null_data
 
 
-def test_overlapping_read_write_dual() -> None:
+def test_overlapping_read_write_dual(adapter_pair: tuple[str, str]) -> None:
     """Test that read and write can overlap, data is buffered."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         data = bytes(range(256))
         read = b""
 
@@ -98,9 +113,15 @@ def test_overlapping_read_write_dual() -> None:
         # (921600, 1024),
     ],
 )
-def test_random_large_dual(baudrate: int, chunk_size: int) -> None:
+def test_random_large_dual(
+    adapter_pair: tuple[str, str], baudrate: int, chunk_size: int
+) -> None:
     """Test loopback adapter random read/write."""
-    with create_dual_loopback(baudrate=baudrate) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=baudrate) as (
+        serial_left,
+        serial_right,
+    ):
         data = os.urandom(chunk_size)
         serial_left.write(data)
 
@@ -112,9 +133,15 @@ def test_random_large_dual(baudrate: int, chunk_size: int) -> None:
     "iterations",
     [16, 32, 64],
 )
-def test_repeated_write_read_cycles_dual(iterations: int) -> None:
+def test_repeated_write_read_cycles_dual(
+    adapter_pair: tuple[str, str], iterations: int
+) -> None:
     """Test repeated write/read cycles."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         data = bytes(range(256))
 
         for _i in range(iterations):
@@ -123,9 +150,13 @@ def test_repeated_write_read_cycles_dual(iterations: int) -> None:
             assert result == data
 
 
-def test_buffered_writes_then_read_dual() -> None:
+def test_buffered_writes_then_read_dual(adapter_pair: tuple[str, str]) -> None:
     """Test multiple writes followed by a single read."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         chunk = bytes(range(256))
         iterations = 4
 
@@ -146,10 +177,14 @@ def test_buffered_writes_then_read_dual() -> None:
     "payload_size",
     [1024, 2048],  # Kernel buffers are typically ~4KB, stay well below that
 )
-def test_large_payload_dual(payload_size: int) -> None:
+def test_large_payload_dual(adapter_pair: tuple[str, str], payload_size: int) -> None:
     """Test large payload transmission."""
+    left_port, right_port = adapter_pair
     # Using 115200 instead of 921600 due to hardware limitations
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         data = bytes([i % 256 for i in range(payload_size)])
 
         serial_left.write(data)
@@ -158,9 +193,13 @@ def test_large_payload_dual(payload_size: int) -> None:
         assert result == data
 
 
-def test_rapid_small_writes_dual() -> None:
+def test_rapid_small_writes_dual(adapter_pair: tuple[str, str]) -> None:
     """Test rapid succession of small writes."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         # Send many small writes
         iterations = 256
         received = bytearray()
@@ -184,9 +223,15 @@ def test_rapid_small_writes_dual() -> None:
         # (921600, 512),  # Hardware can't reliably handle 921600 with dual loopback
     ],
 )
-def test_sustained_throughput_dual(baudrate: int, iterations: int) -> None:
+def test_sustained_throughput_dual(
+    adapter_pair: tuple[str, str], baudrate: int, iterations: int
+) -> None:
     """Test sustained data throughput at various baudrates."""
-    with create_dual_loopback(baudrate=baudrate) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=baudrate) as (
+        serial_left,
+        serial_right,
+    ):
         chunk = os.urandom(1024)
 
         for _ in range(iterations):
@@ -208,9 +253,10 @@ def test_sustained_throughput_dual(baudrate: int, iterations: int) -> None:
         # 921600,  # Hardware can't reliably handle 921600 with dual loopback
     ],
 )
-def test_valid_baudrates_dual(baudrate: int) -> None:
+def test_valid_baudrates_dual(adapter_pair: tuple[str, str], baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=baudrate) as serial:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=baudrate) as serial:
         assert serial.baudrate == baudrate
         serial.write(b"test")
 
@@ -219,9 +265,10 @@ def test_valid_baudrates_dual(baudrate: int) -> None:
     "parity",
     [Parity.NONE, Parity.ODD, Parity.EVEN, Parity.MARK, Parity.SPACE],
 )
-def test_valid_parity_dual(parity: Parity) -> None:
+def test_valid_parity_dual(adapter_pair: tuple[str, str], parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, parity=parity) as serial:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200, parity=parity) as serial:
         assert serial.parity == parity
         serial.write(b"test")
 
@@ -238,26 +285,30 @@ def test_valid_parity_dual(parity: Parity) -> None:
     ],
 )
 def test_valid_stopbits_dual(
+    adapter_pair: tuple[str, str],
     stopbits: StopBits | int | float,
     expected: StopBits,
 ) -> None:
     """Test that valid stopbits settings are accepted."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, stopbits=stopbits) as serial:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200, stopbits=stopbits) as serial:
         assert serial.stopbits == expected
         serial.write(b"test")
 
 
 @pytest.mark.parametrize("byte_size", [5, 6, 7, 8])
-def test_valid_byte_size_dual(byte_size: int) -> None:
+def test_valid_byte_size_dual(adapter_pair: tuple[str, str], byte_size: int) -> None:
     """Test that valid byte sizes are accepted."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, byte_size=byte_size) as serial:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200, byte_size=byte_size) as serial:
         serial.write(b"test")
 
 
 @pytest.mark.parametrize("xonxoff", [True, False])
-def test_xonxoff_setting_dual(xonxoff: bool) -> None:
+def test_xonxoff_setting_dual(adapter_pair: tuple[str, str], xonxoff: bool) -> None:
     """Test that xonxoff setting is accepted."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, xonxoff=xonxoff) as serial:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200, xonxoff=xonxoff) as serial:
         serial.write(b"test")
 
 
@@ -265,39 +316,43 @@ def test_xonxoff_setting_dual(xonxoff: bool) -> None:
     "rtscts",
     [True, False],
 )
-def test_rtscts_setting_dual(rtscts: bool) -> None:
+def test_rtscts_setting_dual(adapter_pair: tuple[str, str], rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, rtscts=rtscts) as serial:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200, rtscts=rtscts) as serial:
         serial.write(b"test")
 
 
-def test_exclusive_dual() -> None:
+def test_exclusive_dual(adapter_pair: tuple[str, str]) -> None:
     """Test that exclusive setting is respected."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, exclusive=True) as serial:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200, exclusive=True) as serial:
         assert serial.exclusive is True
 
         # Opening a second one will fail
         with pytest.raises(OSError):
-            with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, exclusive=True):
+            with Serial(adapter_pair[0], baudrate=115200, exclusive=True):
                 pass
 
 
-def test_exclusive_disabled_dual() -> None:
+def test_exclusive_disabled_dual(adapter_pair: tuple[str, str]) -> None:
     """Test that exclusive setting is respected."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, exclusive=False) as serial1:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200, exclusive=False) as serial1:
         assert serial1.exclusive is False
 
         # Can open the same port again without exclusive
-        with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200, exclusive=False) as serial2:
+        with Serial(adapter_pair[0], baudrate=115200, exclusive=False) as serial2:
             assert serial2.exclusive is False
             # Both can write without error
             serial2.write(b"test")
 
 
-def test_context_manager_multiple_times_dual() -> None:
+def test_context_manager_multiple_times_dual(adapter_pair: tuple[str, str]) -> None:
     """Test that context manager can be used multiple times."""
-    serial_left = Serial(DUAL_LOOPBACK_LEFT, baudrate=115200)
-    serial_right = Serial(DUAL_LOOPBACK_RIGHT, baudrate=115200)
+    left_port, right_port = adapter_pair
+    serial_left = Serial(adapter_pair[0], baudrate=115200)
+    serial_right = Serial(adapter_pair[1], baudrate=115200)
 
     # First context
     with serial_left, serial_right:
@@ -312,10 +367,11 @@ def test_context_manager_multiple_times_dual() -> None:
         assert result == b"test2"
 
 
-def test_open_close_cycles_dual() -> None:
+def test_open_close_cycles_dual(adapter_pair: tuple[str, str]) -> None:
     """Test multiple open/close cycles."""
-    serial_left = Serial(DUAL_LOOPBACK_LEFT, baudrate=115200)
-    serial_right = Serial(DUAL_LOOPBACK_RIGHT, baudrate=115200)
+    left_port, right_port = adapter_pair
+    serial_left = Serial(adapter_pair[0], baudrate=115200)
+    serial_right = Serial(adapter_pair[1], baudrate=115200)
 
     # Cycle 1
     serial_left.open()
@@ -348,9 +404,13 @@ def test_open_close_cycles_dual() -> None:
     serial_right.close()
 
 
-def test_flush_after_write_dual() -> None:
+def test_flush_after_write_dual(adapter_pair: tuple[str, str]) -> None:
     """Test flushing after write operation."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         serial_left.flush()
 
         data = b"Test flush operation"
@@ -361,9 +421,13 @@ def test_flush_after_write_dual() -> None:
         assert result == data
 
 
-def test_multiple_flush_calls_dual() -> None:
+def test_multiple_flush_calls_dual(adapter_pair: tuple[str, str]) -> None:
     """Test multiple consecutive flush calls."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         data = b""
 
         for i in range(5):
@@ -377,21 +441,25 @@ def test_multiple_flush_calls_dual() -> None:
         assert result == data
 
 
-def test_fast_open_close() -> None:
+def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
     """Test quickly opening and closing a port."""
 
     message = b"Fast write and close test"
 
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=300) as serial_left:
-        with Serial(DUAL_LOOPBACK_RIGHT, baudrate=300) as serial_right:
+    with Serial(adapter_pair[0], baudrate=300) as serial_left:
+        with Serial(adapter_pair[1], baudrate=300) as serial_right:
             serial_right.write(message)
 
         assert serial_left.readexactly(len(message)) == message
 
 
-def test_deprecated_dtr_cts_dual() -> None:
+def test_deprecated_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
     """Test DTR and CTS properties (deprecated alias)."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         serial_left.dtr = True
         assert serial_right.get_modem_pins().cts is PinState.HIGH
 
@@ -405,9 +473,13 @@ def test_deprecated_dtr_cts_dual() -> None:
         assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
-def test_dtr_cts_dual() -> None:
+def test_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
     """Test DTR and CTS."""
-    with create_dual_loopback(baudrate=115200) as (serial_left, serial_right):
+    left_port, right_port = adapter_pair
+    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
+        serial_left,
+        serial_right,
+    ):
         serial_left.set_modem_pins(dtr=True)
         assert serial_right.get_modem_pins().cts is PinState.HIGH
 
@@ -421,12 +493,13 @@ def test_dtr_cts_dual() -> None:
         assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
-def test_deassert_on_open() -> None:
+def test_deassert_on_open(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS deassertion on open."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+    left_port, right_port = adapter_pair
+    with Serial(left_port, baudrate=115200) as serial_left:
         # Open and set DTR/CTS
         with Serial(
-            DUAL_LOOPBACK_RIGHT,
+            right_port,
             baudrate=115200,
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
@@ -439,7 +512,7 @@ def test_deassert_on_open() -> None:
 
         # When we deassert on open, it should clear
         with Serial(
-            DUAL_LOOPBACK_RIGHT,
+            right_port,
             baudrate=115200,
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
@@ -451,12 +524,13 @@ def test_deassert_on_open() -> None:
         assert serial_left.get_modem_pins().cts is PinState.HIGH
 
 
-def test_hang_up_on_close() -> None:
+def test_hang_up_on_close(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS hang up on close."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+    left_port, right_port = adapter_pair
+    with Serial(adapter_pair[0], baudrate=115200) as serial_left:
         # Open and set DTR/CTS
         with Serial(
-            DUAL_LOOPBACK_RIGHT,
+            right_port,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
@@ -469,7 +543,7 @@ def test_hang_up_on_close() -> None:
 
         # Without hang up on close, it still persists
         with Serial(
-            DUAL_LOOPBACK_RIGHT,
+            right_port,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
@@ -480,7 +554,7 @@ def test_hang_up_on_close() -> None:
 
         # When we hang up on close, it should clear
         with Serial(
-            DUAL_LOOPBACK_RIGHT,
+            right_port,
             baudrate=115200,
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
@@ -500,13 +574,17 @@ def test_hang_up_on_close() -> None:
     ],
 )
 def test_deassert_on_open_with_rtscts(
-    rtscts: bool, rtsdtr_on_open: PinState, expected_state: PinState
+    adapter_pair: tuple[str, str],
+    rtscts: bool,
+    rtsdtr_on_open: PinState,
+    expected_state: PinState,
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
-    with Serial(DUAL_LOOPBACK_LEFT, baudrate=115200) as serial_left:
+    left_port, right_port = adapter_pair
+    with Serial(left_port, baudrate=115200) as serial_left:
         # Set DTR on right side, verify CTS appears on left
         with Serial(
-            DUAL_LOOPBACK_RIGHT,
+            right_port,
             baudrate=115200,
             rtscts=False,
             rtsdtr_on_open=PinState.HIGH,
@@ -519,7 +597,7 @@ def test_deassert_on_open_with_rtscts(
 
         # Open with test parameters
         with Serial(
-            DUAL_LOOPBACK_RIGHT,
+            right_port,
             baudrate=115200,
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
