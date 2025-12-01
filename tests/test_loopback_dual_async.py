@@ -459,7 +459,7 @@ async def test_read_with_timeout_async(adapter_pair: tuple[str, str]) -> None:
             await asyncio.wait_for(reader_right.readexactly(1), timeout=0.1)
 
 
-async def test_fast_open_close() -> None:
+async def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
     """Test quickly opening and closing a port."""
     message = b"Fast write and close test" * 10
     connection_lost_event = asyncio.Event()

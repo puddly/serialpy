@@ -46,7 +46,9 @@ async def test_segmented_binary_data_loopback_async(loopback_adapter: str) -> No
     "size",
     [1, 16, 64, 256, 512, 1024],
 )
-async def test_binary_payload_sizes_loopback_async(size: int) -> None:
+async def test_binary_payload_sizes_loopback_async(
+    loopback_adapter: str, size: int
+) -> None:
     """Test various binary payload sizes."""
     async with async_create_reader_writer(loopback_adapter, baudrate=115200) as (
         reader,
@@ -110,7 +112,9 @@ async def test_overlapping_read_write_loopback_async(loopback_adapter: str) -> N
         (921600, 1024),
     ],
 )
-async def test_random_large_loopback_async(baudrate: int, chunk_size: int) -> None:
+async def test_random_large_loopback_async(
+    loopback_adapter: str, baudrate: int, chunk_size: int
+) -> None:
     """Test random read/write at various speeds."""
     async with async_create_reader_writer(loopback_adapter, baudrate=baudrate) as (
         reader,
@@ -127,7 +131,9 @@ async def test_random_large_loopback_async(baudrate: int, chunk_size: int) -> No
     "iterations",
     [16, 32, 64],
 )
-async def test_repeated_write_read_cycles_loopback_async(iterations: int) -> None:
+async def test_repeated_write_read_cycles_loopback_async(
+    loopback_adapter: str, iterations: int
+) -> None:
     """Test repeated write/read cycles."""
     async with async_create_reader_writer(loopback_adapter, baudrate=115200) as (
         reader,
@@ -167,7 +173,9 @@ async def test_buffered_writes_then_read_loopback_async(loopback_adapter: str) -
     "payload_size",
     [1024, 2048],  # Kernel buffers are typically ~4KB, stay well below that
 )
-async def test_large_payload_loopback_async(payload_size: int) -> None:
+async def test_large_payload_loopback_async(
+    loopback_adapter: str, payload_size: int
+) -> None:
     """Test large payload transmission."""
     async with async_create_reader_writer(loopback_adapter, baudrate=921600) as (
         reader,
@@ -211,7 +219,7 @@ async def test_rapid_small_writes_loopback_async(loopback_adapter: str) -> None:
     ],
 )
 async def test_sustained_throughput_loopback_async(
-    baudrate: int, iterations: int
+    loopback_adapter: str, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
     async with async_create_reader_writer(loopback_adapter, baudrate=baudrate) as (
@@ -230,7 +238,9 @@ async def test_sustained_throughput_loopback_async(
     "baudrate",
     [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600],
 )
-async def test_valid_baudrates_loopback_async(baudrate: int) -> None:
+async def test_valid_baudrates_loopback_async(
+    loopback_adapter: str, baudrate: int
+) -> None:
     """Test that valid baudrates are accepted."""
     async with async_create_reader_writer(loopback_adapter, baudrate=baudrate) as (
         reader,
@@ -246,7 +256,9 @@ async def test_valid_baudrates_loopback_async(baudrate: int) -> None:
     "parity",
     [Parity.NONE, Parity.ODD, Parity.EVEN, Parity.MARK, Parity.SPACE],
 )
-async def test_valid_parity_loopback_async(parity: Parity) -> None:
+async def test_valid_parity_loopback_async(
+    loopback_adapter: str, parity: Parity
+) -> None:
     """Test that valid parity settings are accepted."""
     async with async_create_reader_writer(
         loopback_adapter, baudrate=115200, parity=parity
@@ -279,6 +291,7 @@ async def test_valid_parity_loopback_async(parity: Parity) -> None:
     ],
 )
 async def test_valid_stopbits_loopback_async(
+    loopback_adapter: str,
     stopbits: StopBits | int | float,
     expected: StopBits,
 ) -> None:
@@ -295,7 +308,9 @@ async def test_valid_stopbits_loopback_async(
 
 
 @pytest.mark.parametrize("byte_size", [5, 6, 7, 8])
-async def test_valid_byte_size_loopback_async(byte_size: int) -> None:
+async def test_valid_byte_size_loopback_async(
+    loopback_adapter: str, byte_size: int
+) -> None:
     """Test that valid byte sizes are accepted."""
     async with async_create_reader_writer(
         loopback_adapter, baudrate=115200, byte_size=byte_size
@@ -307,7 +322,9 @@ async def test_valid_byte_size_loopback_async(byte_size: int) -> None:
 
 
 @pytest.mark.parametrize("xonxoff", [True, False])
-async def test_xonxoff_setting_loopback_async(xonxoff: bool) -> None:
+async def test_xonxoff_setting_loopback_async(
+    loopback_adapter: str, xonxoff: bool
+) -> None:
     """Test that xonxoff setting is accepted."""
     async with async_create_reader_writer(
         loopback_adapter, baudrate=115200, xonxoff=xonxoff
@@ -322,7 +339,9 @@ async def test_xonxoff_setting_loopback_async(xonxoff: bool) -> None:
     "rtscts",
     [True, False],
 )
-async def test_rtscts_setting_loopback_async(rtscts: bool) -> None:
+async def test_rtscts_setting_loopback_async(
+    loopback_adapter: str, rtscts: bool
+) -> None:
     """Test that rtscts setting is accepted."""
     async with async_create_reader_writer(
         loopback_adapter, baudrate=115200, rtscts=rtscts
