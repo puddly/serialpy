@@ -7,21 +7,16 @@ import pytest
 
 from serialx import Parity, PinState, StopBits, create_serial_connection
 from tests.common import (
-    DUAL_LOOPBACK_LEFT,
-    DUAL_LOOPBACK_RIGHT,
     async_create_dual_loopback,
     async_create_reader_writer,
 )
 
-pytestmark = pytest.mark.skipif(
-    not DUAL_LOOPBACK_LEFT or not DUAL_LOOPBACK_RIGHT,
-    reason="SERIALX_DUAL_LOOPBACK_LEFT and SERIALX_DUAL_LOOPBACK_RIGHT not set",
-)
 
 
-async def test_all_bytes_async() -> None:
+
+async def test_all_bytes_async(adapter_pair: tuple[str, str]) -> None:
     """Test that all bytes 0-255 can be transmitted."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -36,9 +31,9 @@ async def test_all_bytes_async() -> None:
         assert result == data
 
 
-async def test_segmented_binary_data_async() -> None:
+async def test_segmented_binary_data_async(adapter_pair: tuple[str, str]) -> None:
     """Test binary data sent in segments."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -59,9 +54,9 @@ async def test_segmented_binary_data_async() -> None:
     "size",
     [1, 16, 64, 256, 512, 1024],
 )
-async def test_binary_payload_sizes_async(size: int) -> None:
+async def test_binary_payload_sizes_async(adapter_pair: tuple[str, str], size: int) -> None:
     """Test various binary payload sizes."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -76,9 +71,9 @@ async def test_binary_payload_sizes_async(size: int) -> None:
         assert result == data
 
 
-async def test_null_bytes_async() -> None:
+async def test_null_bytes_async(adapter_pair: tuple[str, str]) -> None:
     """Test that null bytes (0x00) can be transmitted."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -93,9 +88,9 @@ async def test_null_bytes_async() -> None:
         assert result == null_data
 
 
-async def test_overlapping_read_write_async() -> None:
+async def test_overlapping_read_write_async(adapter_pair: tuple[str, str]) -> None:
     """Test that read and write can overlap, data is buffered."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -129,9 +124,9 @@ async def test_overlapping_read_write_async() -> None:
         # (921600, 1024),
     ],
 )
-async def test_random_large_async(baudrate: int, chunk_size: int) -> None:
+async def test_random_large_async(adapter_pair: tuple[str, str], baudrate: int, chunk_size: int) -> None:
     """Test random read/write at various speeds."""
-    async with async_create_dual_loopback(baudrate=baudrate) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=baudrate) as (
         reader_left,
         writer_left,
         reader_right,
@@ -148,9 +143,9 @@ async def test_random_large_async(baudrate: int, chunk_size: int) -> None:
     "iterations",
     [16, 32, 64],
 )
-async def test_repeated_write_read_cycles_async(iterations: int) -> None:
+async def test_repeated_write_read_cycles_async(adapter_pair: tuple[str, str], iterations: int) -> None:
     """Test repeated write/read cycles."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -164,9 +159,9 @@ async def test_repeated_write_read_cycles_async(iterations: int) -> None:
             assert result == data
 
 
-async def test_buffered_writes_then_read_async() -> None:
+async def test_buffered_writes_then_read_async(adapter_pair: tuple[str, str]) -> None:
     """Test multiple writes followed by a single read."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -192,9 +187,9 @@ async def test_buffered_writes_then_read_async() -> None:
     "payload_size",
     [1024, 2048],  # Kernel buffers are typically ~4KB, stay well below that
 )
-async def test_large_payload_async(payload_size: int) -> None:
+async def test_large_payload_async(adapter_pair: tuple[str, str], payload_size: int) -> None:
     """Test large payload transmission."""
-    async with async_create_dual_loopback(baudrate=460800) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=460800) as (
         reader_left,
         writer_left,
         reader_right,
@@ -208,9 +203,9 @@ async def test_large_payload_async(payload_size: int) -> None:
         assert result == data
 
 
-async def test_rapid_small_writes_async() -> None:
+async def test_rapid_small_writes_async(adapter_pair: tuple[str, str]) -> None:
     """Test rapid succession of small writes."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -239,9 +234,9 @@ async def test_rapid_small_writes_async() -> None:
         # (921600, 512),  # Hardware can't reliably handle 921600 with dual loopback
     ],
 )
-async def test_sustained_throughput_async(baudrate: int, iterations: int) -> None:
+async def test_sustained_throughput_async(adapter_pair: tuple[str, str], baudrate: int, iterations: int) -> None:
     """Test sustained data throughput at various baudrates."""
-    async with async_create_dual_loopback(baudrate=baudrate) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=baudrate) as (
         reader_left,
         writer_left,
         reader_right,
@@ -268,9 +263,9 @@ async def test_sustained_throughput_async(baudrate: int, iterations: int) -> Non
         # 921600,  # Hardware can't reliably handle 921600 with dual loopback
     ],
 )
-async def test_valid_baudrates_async(baudrate: int) -> None:
+async def test_valid_baudrates_async(adapter_pair: tuple[str, str], baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
-    async with async_create_dual_loopback(baudrate=baudrate) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=baudrate) as (
         reader,
         writer,
         _,
@@ -285,9 +280,9 @@ async def test_valid_baudrates_async(baudrate: int) -> None:
     "parity",
     [Parity.NONE, Parity.ODD, Parity.EVEN, Parity.MARK, Parity.SPACE],
 )
-async def test_valid_parity_async(parity: Parity) -> None:
+async def test_valid_parity_async(adapter_pair: tuple[str, str], parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    async with async_create_dual_loopback(baudrate=115200, parity=parity) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200, parity=parity) as (
         reader,
         writer,
         _,
@@ -308,12 +303,12 @@ async def test_valid_parity_async(parity: Parity) -> None:
         (2, StopBits.TWO),
     ],
 )
-async def test_valid_stopbits_async(
+async def test_valid_stopbits_async(adapter_pair: tuple[str, str], 
     stopbits: StopBits | int | float,
     expected: StopBits,
 ) -> None:
     """Test that valid stopbits settings are accepted."""
-    async with async_create_dual_loopback(baudrate=115200, stopbits=stopbits) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200, stopbits=stopbits) as (
         reader,
         writer,
         _,
@@ -324,9 +319,9 @@ async def test_valid_stopbits_async(
 
 
 @pytest.mark.parametrize("byte_size", [5, 6, 7, 8])
-async def test_valid_byte_size_async(byte_size: int) -> None:
+async def test_valid_byte_size_async(adapter_pair: tuple[str, str], byte_size: int) -> None:
     """Test that valid byte sizes are accepted."""
-    async with async_create_dual_loopback(baudrate=115200, byte_size=byte_size) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200, byte_size=byte_size) as (
         reader,
         writer,
         _,
@@ -336,9 +331,9 @@ async def test_valid_byte_size_async(byte_size: int) -> None:
 
 
 @pytest.mark.parametrize("xonxoff", [True, False])
-async def test_xonxoff_setting_async(xonxoff: bool) -> None:
+async def test_xonxoff_setting_async(adapter_pair: tuple[str, str], xonxoff: bool) -> None:
     """Test that xonxoff setting is accepted."""
-    async with async_create_dual_loopback(baudrate=115200, xonxoff=xonxoff) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200, xonxoff=xonxoff) as (
         reader,
         writer,
         _,
@@ -351,9 +346,9 @@ async def test_xonxoff_setting_async(xonxoff: bool) -> None:
     "rtscts",
     [True, False],
 )
-async def test_rtscts_setting_async(rtscts: bool) -> None:
+async def test_rtscts_setting_async(adapter_pair: tuple[str, str], rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
-    async with async_create_dual_loopback(baudrate=115200, rtscts=rtscts) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200, rtscts=rtscts) as (
         reader,
         writer,
         _,
@@ -362,9 +357,9 @@ async def test_rtscts_setting_async(rtscts: bool) -> None:
         writer.write(b"test")
 
 
-async def test_concurrent_writes_async() -> None:
+async def test_concurrent_writes_async(adapter_pair: tuple[str, str]) -> None:
     """Test concurrent writes from multiple tasks."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -390,9 +385,9 @@ async def test_concurrent_writes_async() -> None:
         assert total_data == b"A" * 100 + b"B" * 100 + b"C" * 100
 
 
-async def test_read_with_timeout_async() -> None:
+async def test_read_with_timeout_async(adapter_pair: tuple[str, str]) -> None:
     """Test reading with timeout."""
-    async with async_create_dual_loopback(baudrate=115200) as (
+    async with async_create_dual_loopback(adapter_pair[0], adapter_pair[1], baudrate=115200) as (
         reader_left,
         writer_left,
         reader_right,
@@ -424,7 +419,7 @@ async def test_fast_open_close() -> None:
         def connection_lost(self, exc: Exception | None) -> None:
             connection_lost_event.set()
 
-    async with async_create_reader_writer(DUAL_LOOPBACK_RIGHT, baudrate=300) as (
+    async with async_create_reader_writer(adapter_pair[1], baudrate=300) as (
         reader,
         writer,
     ):
@@ -434,7 +429,7 @@ async def test_fast_open_close() -> None:
         transport, _ = await create_serial_connection(
             asyncio.get_running_loop(),
             FastCloseProtocol,
-            DUAL_LOOPBACK_LEFT,
+            adapter_pair[0],
             baudrate=300,
         )
 
@@ -442,15 +437,15 @@ async def test_fast_open_close() -> None:
         assert await read_task == message
 
 
-async def test_deassert_on_open_async() -> None:
+async def test_deassert_on_open_async(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS deassertion on open."""
-    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+    async with async_create_reader_writer(adapter_pair[0], baudrate=115200) as (
         reader_left,
         writer_left,
     ):
         # Open and set DTR/CTS
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT,
+            adapter_pair[1],
             baudrate=115200,
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
@@ -466,7 +461,7 @@ async def test_deassert_on_open_async() -> None:
 
         # When we deassert on open, it should clear
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT,
+            adapter_pair[1],
             baudrate=115200,
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
@@ -481,15 +476,15 @@ async def test_deassert_on_open_async() -> None:
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
 
-async def test_hang_up_on_close_async() -> None:
+async def test_hang_up_on_close_async(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS hang up on close."""
-    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+    async with async_create_reader_writer(adapter_pair[0], baudrate=115200) as (
         reader_left,
         writer_left,
     ):
         # Open and set DTR/CTS
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT,
+            adapter_pair[1],
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
@@ -505,7 +500,7 @@ async def test_hang_up_on_close_async() -> None:
 
         # Without hang up on close, it still persists
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT,
+            adapter_pair[1],
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
@@ -519,7 +514,7 @@ async def test_hang_up_on_close_async() -> None:
 
         # When we hang up on close, it should clear
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT,
+            adapter_pair[1],
             baudrate=115200,
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
@@ -541,17 +536,17 @@ async def test_hang_up_on_close_async() -> None:
         (True, PinState.LOW, PinState.LOW),  # Flow control, clear pins
     ],
 )
-async def test_deassert_on_open_with_rtscts_async(
+async def test_deassert_on_open_with_rtscts_async(adapter_pair: tuple[str, str], 
     rtscts: bool, rtsdtr_on_open: PinState, expected_state: PinState
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
-    async with async_create_reader_writer(DUAL_LOOPBACK_LEFT, baudrate=115200) as (
+    async with async_create_reader_writer(adapter_pair[0], baudrate=115200) as (
         reader_left,
         writer_left,
     ):
         # Set DTR on right side, verify CTS appears on left
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT,
+            adapter_pair[1],
             baudrate=115200,
             rtscts=False,
             rtsdtr_on_open=PinState.HIGH,
@@ -567,7 +562,7 @@ async def test_deassert_on_open_with_rtscts_async(
 
         # Open with test parameters
         async with async_create_reader_writer(
-            DUAL_LOOPBACK_RIGHT,
+            adapter_pair[1],
             baudrate=115200,
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
