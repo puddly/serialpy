@@ -35,6 +35,7 @@ exclude = ["tests", "tests.*"]
 target = "serialx._serialx_rust"
 path = "Cargo.toml"
 binding = "PyO3"
+optional = true
 
 [tool.pytest.ini_options]
 addopts = "--showlocals --verbose -n auto --dist loadgroup"
