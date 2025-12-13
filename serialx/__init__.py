@@ -7,16 +7,18 @@ from .async_serial import (
     create_serial_connection,
     open_serial_connection,
 )
-from .common import ModemPins, Parity, PinState, StopBits
-from .platforms import Serial, SerialTransport
+from .common import ModemPins, Parity, PinState, SerialPortInfo, StopBits
+from .platforms import Serial, SerialTransport, list_serial_ports
 
 __all__ = [
     "create_serial_connection",
+    "list_serial_ports",
     "open_serial_connection",
     "ModemPins",
     "Parity",
     "PinState",
     "Serial",
+    "SerialPortInfo",
     "SerialStreamWriter",
     "SerialTransport",
     "StopBits",

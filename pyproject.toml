@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel", "setuptools-git-versioning<2"]
+requires = ["setuptools>=80", "setuptools-scm[simple]>=8", "setuptools-rust"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -31,8 +31,10 @@ dev = [
 [tool.setuptools.packages.find]
 exclude = ["tests", "tests.*"]
 
-[tool.setuptools-git-versioning]
-enabled = true
+[[tool.setuptools-rust.ext-modules]]
+target = "serialx._serialx_rust"
+path = "Cargo.toml"
+binding = "PyO3"
 
 [tool.pytest.ini_options]
 addopts = "--showlocals --verbose -n auto --dist loadgroup"
