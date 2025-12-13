@@ -560,8 +560,8 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
             info = SerialPortInfo(
                 device=unique_device,
                 resolved_device=device,
-                vid=(usb_device / "idVendor").read_text()[:-1],
-                pid=(usb_device / "idProduct").read_text()[:-1],
+                vid=int((usb_device / "idVendor").read_text(), 16),
+                pid=int((usb_device / "idProduct").read_text(), 16),
                 serial_number=(usb_device / "serial").read_text()[:-1],
                 manufacturer=(usb_device / "manufacturer").read_text()[:-1],
                 product=(usb_device / "product").read_text()[:-1],
@@ -572,8 +572,8 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
             info = SerialPortInfo(
                 device=unique_device,
                 resolved_device=device,
-                vid=(usb_device / "idVendor").read_text()[:-1],
-                pid=(usb_device / "idProduct").read_text()[:-1],
+                vid=int((usb_device / "idVendor").read_text(), 16),
+                pid=int((usb_device / "idProduct").read_text(), 16),
                 serial_number=(usb_device / "serial").read_text()[:-1],
                 manufacturer=(usb_device / "manufacturer").read_text()[:-1],
                 product=(usb_device / "product").read_text()[:-1],

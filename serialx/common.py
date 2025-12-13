@@ -441,8 +441,8 @@ class SerialPortInfo:
     device: os.PathLike
     resolved_device: os.PathLike
 
-    vid: str | None
-    pid: str | None
+    vid: int | None
+    pid: int | None
     serial_number: str | None
     manufacturer: str | None
     product: str | None

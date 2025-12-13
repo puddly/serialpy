@@ -4,8 +4,8 @@ use serialport::{available_ports, SerialPortType};
 /// (port_name, vid, pid, serial_number, manufacturer, product)
 type PortInfo = (
     String,
-    Option<String>,
-    Option<String>,
+    Option<u16>,
+    Option<u16>,
     Option<String>,
     Option<String>,
     Option<String>,
@@ -21,8 +21,8 @@ fn list_serial_ports_impl() -> PyResult<Vec<PortInfo>> {
         .map(|p| {
             let (vid, pid, sn, mfr, prod) = match p.port_type {
                 SerialPortType::UsbPort(u) => (
-                    Some(format!("{:04x}", u.vid)),
-                    Some(format!("{:04x}", u.pid)),
+                    Some(u.vid),
+                    Some(u.pid),
                     u.serial_number,
                     u.manufacturer,
                     u.product,
