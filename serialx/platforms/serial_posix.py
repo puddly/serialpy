@@ -34,6 +34,9 @@ from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
 
+SYS_ROOT = Path("/sys")
+DEV_ROOT = Path("/dev")
+
 FLUSH_TIMEOUT = 10.0
 
 # Reportedly, some drivers benefit from delaying between the `open` syscall and using
@@ -535,13 +538,15 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
 def posix_list_serial_ports() -> list[SerialPortInfo]:
     """List serial ports on Linux."""
     by_id_symlinks = {}
+    by_id_path = DEV_ROOT / "serial/by-id"
 
-    for symlink in Path("/dev/serial/by-id").iterdir():
-        by_id_symlinks[symlink.resolve()] = symlink
+    if by_id_path.exists():
+        for symlink in by_id_path.iterdir():
+            by_id_symlinks[symlink.resolve()] = symlink
 
     results = []
 
-    for path in Path("/sys/class/tty").iterdir():
+    for path in (SYS_ROOT / "class/tty").iterdir():
         if not path.name.startswith("tty"):
             continue
 
@@ -549,7 +554,7 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
         if not (tty_device / "driver").exists():
             continue
 
-        device = Path("/dev") / path.name
+        device = DEV_ROOT / path.name
         resolved = tty_device.resolve()
         subsystem = (resolved / "subsystem").resolve().name
         unique_device = by_id_symlinks.get(device, device)
