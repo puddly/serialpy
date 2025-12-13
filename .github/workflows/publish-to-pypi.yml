@@ -15,7 +15,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Only build Rust extension wheels for Windows/macOS
+        os: [windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -31,16 +32,13 @@ jobs:
           # Build for Python 3.10+
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
           # Skip 32-bit builds
-          CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux_i686"
+          CIBW_SKIP: "*-win32"
           # Build for x86_64 and arm64 on macOS
           CIBW_ARCHS_MACOS: "x86_64 arm64"
-          # Build for x86_64 on Linux (add aarch64 if needed)
-          CIBW_ARCHS_LINUX: "x86_64 aarch64"
           # Build for x86_64 on Windows
           CIBW_ARCHS_WINDOWS: "AMD64"
-          # Install Rust in the build environment
-          CIBW_BEFORE_ALL_LINUX: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-          CIBW_ENVIRONMENT_LINUX: 'PATH="$HOME/.cargo/bin:$PATH"'
+          # Add cross-compilation targets for macOS (runners are arm64)
+          CIBW_BEFORE_ALL_MACOS: "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -49,7 +47,7 @@ jobs:
           path: ./wheelhouse/*.whl
 
   build-sdist:
-    name: Build source distribution
+    name: Build sdist and pure Python wheel
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,14 +62,20 @@ jobs:
       - name: Install build tools
         run: pip install build
 
-      - name: Build sdist
-        run: python -m build --sdist
+      - name: Build sdist and wheel
+        run: python -m build
 
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
           name: sdist
           path: dist/*.tar.gz
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-ubuntu
+          path: dist/*.whl
 
   publish:
     name: Publish to PyPI
