@@ -532,7 +532,7 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
             self._reset_empty_waiter()
 
 
-def list_serial_ports() -> list[SerialPortInfo]:
+def posix_list_serial_ports() -> list[SerialPortInfo]:
     """List serial ports on Linux."""
     by_id_symlinks = {}
 

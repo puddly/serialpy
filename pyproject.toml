@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel", "setuptools-git-versioning<2"]
+requires = ["setuptools>=61.0.0", "wheel", "setuptools-git-versioning<2", "setuptools-rust"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -30,6 +30,11 @@ dev = [
 
 [tool.setuptools.packages.find]
 exclude = ["tests", "tests.*"]
+
+[[tool.setuptools-rust.ext-modules]]
+target = "serialx._serialx_rust"
+path = "Cargo.toml"
+binding = "PyO3"
 
 [tool.setuptools-git-versioning]
 enabled = true
