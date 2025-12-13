@@ -26,12 +26,9 @@ jobs:
         with:
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-${{
+            1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/**') }}
-      - name: Set up Rust
-        if: steps.cache-venv.outputs.cache-hit != 'true'
-        uses: dtolnay/rust-toolchain@stable
+            hashFiles('pyproject.toml') }}
       - name: Create Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
@@ -39,7 +36,7 @@ jobs:
           uv venv venv
           . venv/bin/activate
           uv pip install -U pip setuptools pre-commit setuptools-rust
-          uv pip install -e .[dev]
+          SETUPTOOLS_RUST_SKIP_BUILD=1 uv pip install -e .[dev]
       - name: Cache base Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -66,9 +63,9 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-${{
+            1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/**') }}
+            hashFiles('pyproject.toml') }}
       - name: Restore pre-commit environment from cache
         id: cache-precommit
         uses: actions/cache/restore@v4
@@ -116,9 +113,9 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-${{
+            1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/**') }}
+            hashFiles('pyproject.toml') }}
       - name: Install socat
         run: |
           sudo apt-get update
@@ -170,9 +167,9 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-${{
+            1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/**') }}
+            hashFiles('pyproject.toml') }}
       - name: Download all coverage artifacts
         uses: actions/download-artifact@v4
       - name: Combine coverage results
