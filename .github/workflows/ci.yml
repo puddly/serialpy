@@ -72,6 +72,8 @@ jobs:
             1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
             hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Restore pre-commit environment from cache
         id: cache-precommit
         uses: actions/cache/restore@v4
@@ -122,10 +124,10 @@ jobs:
             1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
             hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
-      - name: Install socat
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y socat
+          sudo apt-get install -y socat libudev-dev
       - name: Register Python problem matcher
         run: |
           echo "::add-matcher::.github/workflows/matchers/python.json"

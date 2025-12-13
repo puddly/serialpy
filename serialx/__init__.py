@@ -8,8 +8,7 @@ from .async_serial import (
     open_serial_connection,
 )
 from .common import ModemPins, Parity, PinState, SerialPortInfo, StopBits
-from .platforms import Serial, SerialTransport
-from .port_listing import list_serial_ports
+from .platforms import Serial, SerialTransport, list_serial_ports
 
 __all__ = [
     "create_serial_connection",
