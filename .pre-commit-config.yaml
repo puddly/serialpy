@@ -22,3 +22,23 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: Cargo fmt
+        entry: cargo fmt --all
+        language: system
+        pass_filenames: false
+
+      - id: cargo-check
+        name: Cargo check
+        entry: cargo check --workspace
+        language: system
+        pass_filenames: false
+
+      - id: rust-clippy
+        name: Cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -Dclippy::all -Dclippy::nursery
+        language: system
+        pass_filenames: false

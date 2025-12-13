@@ -1,19 +1,20 @@
 use pyo3::prelude::*;
 use serialport::{available_ports, SerialPortType};
 
+/// (port_name, vid, pid, serial_number, manufacturer, product)
+type PortInfo = (
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 #[pyfunction]
-fn list_serial_ports_impl() -> PyResult<
-    Vec<(
-        String,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-        Option<String>,
-    )>,
-> {
+fn list_serial_ports_impl() -> PyResult<Vec<PortInfo>> {
     let ports = available_ports()
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyOSError, _>(format!("{}", e)))?;
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyOSError, _>(format!("{e}")))?;
 
     Ok(ports
         .into_iter()
