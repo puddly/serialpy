@@ -29,15 +29,10 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22
         env:
-          # Build for Python 3.10+
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
-          # Skip 32-bit builds
-          CIBW_SKIP: "*-win32"
-          # Build for x86_64 and arm64 on macOS
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp314-*"
           CIBW_ARCHS_MACOS: "x86_64 arm64"
-          # Build for x86_64 on Windows
-          CIBW_ARCHS_WINDOWS: "AMD64"
-          # Add cross-compilation targets for macOS (runners are arm64)
+          CIBW_ARCHS_WINDOWS: "AMD64 x86 ARM64"
+          CIBW_BEFORE_ALL_WINDOWS: "rustup target add aarch64-pc-windows-msvc i686-pc-windows-msvc"
           CIBW_BEFORE_ALL_MACOS: "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
 
       - name: Upload wheels
