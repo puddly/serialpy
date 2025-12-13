@@ -9,6 +9,7 @@ import errno
 import fcntl
 import logging
 import os
+from pathlib import Path
 import sys
 import termios
 import time
@@ -26,6 +27,7 @@ from ..common import (
     ModemPins,
     Parity,
     PinState,
+    SerialPortInfo,
     StopBits,
 )
 from ..descriptor_transport import DescriptorTransport
@@ -528,3 +530,72 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
                 await self._loop.run_in_executor(None, self._serial.flush)
         finally:
             self._reset_empty_waiter()
+
+
+def list_serial_ports() -> list[SerialPortInfo]:
+    """List serial ports on Linux."""
+    by_id_symlinks = {}
+
+    for symlink in Path("/dev/serial/by-id").iterdir():
+        by_id_symlinks[symlink.resolve()] = symlink
+
+    results = []
+
+    for path in Path("/sys/class/tty").iterdir():
+        if not path.name.startswith("tty"):
+            continue
+
+        tty_device = path / "device"
+        if not (tty_device / "driver").exists():
+            continue
+
+        device = Path("/dev") / path.name
+        resolved = tty_device.resolve()
+        subsystem = (resolved / "subsystem").resolve().name
+        unique_device = by_id_symlinks.get(device, device)
+
+        if subsystem == "usb-serial":
+            # USB-serial chips
+            usb_device = resolved.parent.parent
+            info = SerialPortInfo(
+                device=unique_device,
+                resolved_device=device,
+                vid=(usb_device / "idVendor").read_text()[:-1],
+                pid=(usb_device / "idProduct").read_text()[:-1],
+                serial_number=(usb_device / "serial").read_text()[:-1],
+                manufacturer=(usb_device / "manufacturer").read_text()[:-1],
+                product=(usb_device / "product").read_text()[:-1],
+            )
+        elif subsystem == "usb":
+            # CDC ACM devices
+            usb_device = resolved.parent
+            info = SerialPortInfo(
+                device=unique_device,
+                resolved_device=device,
+                vid=(usb_device / "idVendor").read_text()[:-1],
+                pid=(usb_device / "idProduct").read_text()[:-1],
+                serial_number=(usb_device / "serial").read_text()[:-1],
+                manufacturer=(usb_device / "manufacturer").read_text()[:-1],
+                product=(usb_device / "product").read_text()[:-1],
+            )
+        elif subsystem == "serial-base":
+            # Native serial ports
+            info = SerialPortInfo(
+                device=unique_device,
+                resolved_device=device,
+                vid=None,
+                pid=None,
+                serial_number=None,
+                manufacturer=None,
+                product=None,
+            )
+        else:
+            LOGGER.warning(
+                "Unknown serial device subsystem %r for device %r",
+                subsystem,
+                device,
+            )
+
+        results.append(info)
+
+    return results

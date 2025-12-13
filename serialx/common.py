@@ -7,8 +7,10 @@ import asyncio
 import dataclasses
 from enum import Enum
 import io
+import os
 from pathlib import Path
 from typing import Any
+import warnings
 
 from typing_extensions import Self
 
@@ -430,3 +432,27 @@ class BaseSerialTransport(asyncio.Transport):
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         raise NotImplementedError
+
+
+@dataclasses.dataclass
+class SerialPortInfo:
+    """A serial port."""
+
+    device: os.PathLike
+    resolved_device: os.PathLike
+
+    vid: str | None
+    pid: str | None
+    serial_number: str | None
+    manufacturer: str | None
+    product: str | None
+
+    @property
+    def description(self) -> str | None:
+        """Deprecated alias for `product`."""
+        warnings.warn(
+            "`description` is deprecated, use `product` instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.product
