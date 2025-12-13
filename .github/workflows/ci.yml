@@ -42,7 +42,7 @@ jobs:
           uv venv venv
           . venv/bin/activate
           uv pip install -U pip setuptools pre-commit setuptools-rust
-          uv pip install -e .[dev]
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv pip install -e .[dev]
       - name: Cache base Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
