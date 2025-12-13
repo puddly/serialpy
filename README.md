@@ -82,6 +82,9 @@ All development dependencies are listed in `pyproject.toml`. To install them, us
 uv pip install '.[dev]'
 ```
 
+On macOS and Windows, a Rust toolchain is required to build the native serial port
+enumeration extension. Install Rust via [rustup](https://rustup.rs/).
+
 Set up pre-commit hooks with `pre-commit install`. Your code will then be type checked
 and auto-formatted when you run `git commit`. You can do this on-demand with
 `pre-commit run`.
