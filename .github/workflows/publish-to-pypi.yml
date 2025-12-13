@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Rust
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22

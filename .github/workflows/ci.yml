@@ -31,7 +31,7 @@ jobs:
             hashFiles('pyproject.toml', 'Cargo.toml', 'src/**') }}
       - name: Set up Rust
         if: steps.cache-venv.outputs.cache-hit != 'true'
-        uses: dtolnay/rust-action@stable
+        uses: dtolnay/rust-toolchain@stable
       - name: Create Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
