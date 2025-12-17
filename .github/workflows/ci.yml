@@ -172,13 +172,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies and run tests
         run: |
-          pip install -e .[dev]
-          pytest --timeout=20 tests
+          pip install -e .[dev] pytest-cov
+          pytest --timeout=20 --cov serialx --cov-config pyproject.toml tests
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          include-hidden-files: true
+          path: .coverage
 
   coverage:
     name: Process test coverage
     runs-on: ubuntu-latest
-    needs: pytest
+    needs: [pytest, pytest-other]
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4
