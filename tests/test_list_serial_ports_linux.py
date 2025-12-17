@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
-from unittest.mock import patch
 
 import pytest
 
 if sys.platform != "linux":
-    pytest.skip("POSIX-only tests", allow_module_level=True)
+    pytest.skip("Linux-only tests", allow_module_level=True)
+
+from pathlib import Path
+from unittest.mock import patch
 
 from serialx.common import SerialPortInfo
 from serialx.platforms import serial_posix
@@ -294,7 +295,7 @@ def fake_sysfs(tmp_path):
         yield sys_root, dev_root
 
 
-def test_list_serial_ports(fake_sysfs) -> None:
+def test_list_serial_ports_linux(fake_sysfs) -> None:
     """Test listing all serial ports on a system mimicking test-yellow-core."""
     sys_root, dev_root = fake_sysfs
 
