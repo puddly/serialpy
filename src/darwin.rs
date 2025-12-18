@@ -24,17 +24,14 @@ const KIO_SERVICE_PLANE: &CStr = c"IOService";
 struct IoObject(io_object_t);
 
 impl IoObject {
-    /// Create a new scoped object from a raw pointer.
     const unsafe fn from_raw(obj: io_object_t) -> Self {
         Self(obj)
     }
 
-    /// Get the underlying raw object.
     const fn raw(&self) -> io_object_t {
         self.0
     }
 
-    /// Get a string property from the registry entry.
     fn string_property(&self, key: &str) -> Option<String> {
         unsafe {
             let cf_key = CFString::new(key);
@@ -54,59 +51,44 @@ impl IoObject {
         }
     }
 
-    /// Search for a string property in the registry (recursively up parents).
-    fn search_parent_string_property(&self, key: &str) -> Option<String> {
-        unsafe {
-            let cf_key = CFString::new(key);
-            let value = IORegistryEntrySearchCFProperty(
+    fn search_parent_property(&self, key: &str) -> Option<CFType> {
+        let cf_key = CFString::new(key);
+        let value = unsafe {
+            IORegistryEntrySearchCFProperty(
                 self.0,
                 KIO_SERVICE_PLANE.as_ptr() as *mut _,
                 cf_key.as_concrete_TypeRef() as _,
                 kCFAllocatorDefault,
                 kIORegistryIterateRecursively | kIORegistryIterateParents,
-            );
+            )
+        };
 
-            if value.is_null() {
-                return None;
-            }
-
-            let cf_type: CFType = TCFType::wrap_under_create_rule(value);
-            cf_type.downcast::<CFString>().map(|s| s.to_string())
+        if value.is_null() {
+            return None;
         }
+
+        Some(unsafe { TCFType::wrap_under_create_rule(value) })
     }
 
-    /// Search for a u16 property in the registry (recursively up parents).
+    fn search_parent_string_property(&self, key: &str) -> Option<String> {
+        self.search_parent_property(key)?
+            .downcast::<CFString>()
+            .map(|s| s.to_string())
+    }
+
     fn search_parent_u16_property(&self, key: &str) -> Option<u16> {
-        unsafe {
-            let cf_key = CFString::new(key);
-            let value = IORegistryEntrySearchCFProperty(
-                self.0,
-                KIO_SERVICE_PLANE.as_ptr() as *mut _,
-                cf_key.as_concrete_TypeRef() as _,
-                kCFAllocatorDefault,
-                kIORegistryIterateRecursively | kIORegistryIterateParents,
-            );
-
-            if value.is_null() {
-                return None;
-            }
-
-            let cf_type: CFType = TCFType::wrap_under_create_rule(value);
-            cf_type
-                .downcast::<CFNumber>()
-                .and_then(|n| n.to_i64().map(|i| i as u16))
-        }
+        self.search_parent_property(key)?
+            .downcast::<CFNumber>()
+            .and_then(|n| n.to_i64().map(|i| i as u16))
     }
 }
 
 impl Clone for IoObject {
     fn clone(&self) -> Self {
-        unsafe {
-            if self.0 != 0 {
-                IOObjectRetain(self.0);
-            }
-            Self(self.0)
+        if self.0 != 0 {
+            unsafe { IOObjectRetain(self.0) };
         }
+        Self(self.0)
     }
 }
 
@@ -120,6 +102,12 @@ impl Drop for IoObject {
 
 /// Iterator wrapper for IOKit iterators.
 struct IoIterator(IoObject);
+
+impl IoIterator {
+    const unsafe fn from_raw(iter: io_iterator_t) -> Self {
+        Self(IoObject::from_raw(iter))
+    }
+}
 
 impl Iterator for IoIterator {
     type Item = IoObject;
@@ -138,31 +126,23 @@ impl Iterator for IoIterator {
 
 /// List all serial ports using IOKit.
 pub fn list_serial_ports() -> Result<Vec<RustSerialPortInfo>, String> {
-    let mut results = Vec::new();
-
-    unsafe {
-        // Create matching dictionary for IOSerialBSDClient
-        let matching = IOServiceMatching(c"IOSerialBSDClient".as_ptr());
-        if matching.is_null() {
-            return Err("IOServiceMatching returned null".into());
-        }
-
-        let mut iterator_raw: io_iterator_t = 0;
-        let kr = IOServiceGetMatchingServices(kIOMasterPortDefault, matching, &mut iterator_raw);
-        if kr != kIOReturnSuccess {
-            return Err(format!("IOServiceGetMatchingServices failed: {}", kr));
-        }
-
-        let iterator = IoIterator(IoObject::from_raw(iterator_raw));
-
-        for service in iterator {
-            if let Some(port_info) = get_serial_port_info(&service) {
-                results.push(port_info);
-            }
-        }
+    let matching = unsafe { IOServiceMatching(c"IOSerialBSDClient".as_ptr()) };
+    if matching.is_null() {
+        return Err("IOServiceMatching returned null".into());
     }
 
-    Ok(results)
+    let mut iterator_raw: io_iterator_t = 0;
+    let kr =
+        unsafe { IOServiceGetMatchingServices(kIOMasterPortDefault, matching, &mut iterator_raw) };
+    if kr != kIOReturnSuccess {
+        return Err(format!("IOServiceGetMatchingServices failed: {}", kr));
+    }
+
+    let iterator = unsafe { IoIterator::from_raw(iterator_raw) };
+
+    Ok(iterator
+        .filter_map(|service| get_serial_port_info(&service))
+        .collect())
 }
 
 /// Get info for a single serial port service.
