@@ -30,6 +30,7 @@ def create_usb_serial_device(
     product: str,
     bcd_device: str,
     interface: str | None = None,
+    interface_num: str = "00",
     by_id_name: str | None = None,
 ) -> None:
     """Create a fake usb-serial device (ttyUSB*) in the fake sysfs."""
@@ -64,8 +65,9 @@ def create_usb_serial_device(
     (usb_device_path / "product").write_text(product + "\n")
     (usb_device_path / "bcdDevice").write_text(bcd_device + "\n")
 
-    # Interface string is at the USB interface level
+    # Interface string and number are at the USB interface level
     interface_path.mkdir(parents=True, exist_ok=True)
+    (interface_path / "bInterfaceNumber").write_text(interface_num + "\n")
     if interface is not None:
         (interface_path / "interface").write_text(interface + "\n")
 
@@ -88,6 +90,7 @@ def create_cdc_acm_device(
     product: str,
     bcd_device: str,
     interface: str | None = None,
+    interface_num: str = "00",
     by_id_name: str | None = None,
 ) -> None:
     """Create a fake CDC ACM device (ttyACM*) in the fake sysfs."""
@@ -121,7 +124,8 @@ def create_cdc_acm_device(
     (usb_device_path / "product").write_text(product + "\n")
     (usb_device_path / "bcdDevice").write_text(bcd_device + "\n")
 
-    # Interface string is at the USB interface level
+    # Interface string and number are at the USB interface level
+    (interface_path / "bInterfaceNumber").write_text(interface_num + "\n")
     if interface is not None:
         (interface_path / "interface").write_text(interface + "\n")
 
@@ -315,7 +319,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer="Silicon Labs",
         product="CP2102 USB to UART Bridge Controller",
         bcd_device=0x0100,
-        interface="CP2102 USB to UART Bridge Controller",
+        interface_description="CP2102 USB to UART Bridge Controller",
+        interface_num=0,
     )
 
     # /dev/ttyUSB1: Another CP2102
@@ -329,7 +334,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer="Silicon Labs",
         product="CP2102 USB to UART Bridge Controller",
         bcd_device=0x0100,
-        interface="CP2102 USB to UART Bridge Controller",
+        interface_description="CP2102 USB to UART Bridge Controller",
+        interface_num=0,
     )
 
     # /dev/ttyUSB2: FTDI
@@ -342,7 +348,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer="FTDI",
         product="FT232R USB UART",
         bcd_device=0x0600,
-        interface="FT232R USB UART",
+        interface_description="FT232R USB UART",
+        interface_num=0,
     )
 
     # /dev/ttyUSB3: Prolific
@@ -356,7 +363,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer="Prolific Technology Inc.",
         product="USB-Serial Controller",
         bcd_device=0x0605,
-        interface=None,
+        interface_description=None,
+        interface_num=0,
     )
 
     # /dev/ttyUSB4: FTDI with custom serial
@@ -369,7 +377,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer="FTDI",
         product="FT232R USB UART",
         bcd_device=0x0600,
-        interface="FT232R USB UART",
+        interface_description="FT232R USB UART",
+        interface_num=0,
     )
 
     # /dev/ttyACM0: ZBT-2 CDC ACM
@@ -382,7 +391,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer="Nabu Casa",
         product="ZBT-2",
         bcd_device=0x0100,
-        interface="Nabu Casa ZBT-2",
+        interface_description="Nabu Casa ZBT-2",
+        interface_num=0,
     )
 
     # /dev/ttyAMA0: Native UART
@@ -395,7 +405,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer=None,
         product=None,
         bcd_device=None,
-        interface=None,
+        interface_description=None,
+        interface_num=None,
     )
 
     # /dev/ttyAMA1: Native UART
@@ -408,7 +419,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer=None,
         product=None,
         bcd_device=None,
-        interface=None,
+        interface_description=None,
+        interface_num=None,
     )
 
     # /dev/ttyAMA2: Native UART
@@ -421,5 +433,6 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         manufacturer=None,
         product=None,
         bcd_device=None,
-        interface=None,
+        interface_description=None,
+        interface_num=None,
     )
