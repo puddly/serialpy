@@ -24,7 +24,7 @@ const KIO_SERVICE_PLANE: &CStr = c"IOService";
 struct IoObject(io_object_t);
 
 impl IoObject {
-    const unsafe fn from_raw(obj: io_object_t) -> Self {
+    const fn from_raw(obj: io_object_t) -> Self {
         Self(obj)
     }
 
@@ -33,22 +33,22 @@ impl IoObject {
     }
 
     fn string_property(&self, key: &str) -> Option<String> {
-        unsafe {
-            let cf_key = CFString::new(key);
-            let value = IORegistryEntryCreateCFProperty(
+        let cf_key = CFString::new(key);
+        let value = unsafe {
+            IORegistryEntryCreateCFProperty(
                 self.0,
                 cf_key.as_concrete_TypeRef() as _,
                 kCFAllocatorDefault,
                 0,
-            );
+            )
+        };
 
-            if value.is_null() {
-                return None;
-            }
-
-            let cf_type: CFType = TCFType::wrap_under_create_rule(value);
-            cf_type.downcast::<CFString>().map(|s| s.to_string())
+        if value.is_null() {
+            return None;
         }
+
+        let cf_type: CFType = unsafe { TCFType::wrap_under_create_rule(value) };
+        cf_type.downcast::<CFString>().map(|s| s.to_string())
     }
 
     fn search_parent_property(&self, key: &str) -> Option<CFType> {
@@ -104,7 +104,7 @@ impl Drop for IoObject {
 struct IoIterator(IoObject);
 
 impl IoIterator {
-    const unsafe fn from_raw(iter: io_iterator_t) -> Self {
+    const fn from_raw(iter: io_iterator_t) -> Self {
         Self(IoObject::from_raw(iter))
     }
 }
@@ -113,14 +113,8 @@ impl Iterator for IoIterator {
     type Item = IoObject;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let obj = IOIteratorNext(self.0.raw());
-            if obj == 0 {
-                None
-            } else {
-                Some(IoObject::from_raw(obj))
-            }
-        }
+        let obj = unsafe { IOIteratorNext(self.0.raw()) };
+        (obj != 0).then(|| IoObject::from_raw(obj))
     }
 }
 
@@ -138,7 +132,7 @@ pub fn list_serial_ports() -> Result<Vec<RustSerialPortInfo>, String> {
         return Err(format!("IOServiceGetMatchingServices failed: {}", kr));
     }
 
-    let iterator = unsafe { IoIterator::from_raw(iterator_raw) };
+    let iterator = IoIterator::from_raw(iterator_raw);
 
     Ok(iterator
         .filter_map(|service| get_serial_port_info(&service))
