@@ -573,7 +573,7 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 manufacturer=(usb_device / "manufacturer").read_text()[:-1],
                 product=(usb_device / "product").read_text()[:-1],
                 bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                interface=(
+                interface_description=(
                     interface_file.read_text()[:-1] if interface_file.exists() else None
                 ),
                 interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
@@ -592,7 +592,7 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 manufacturer=(usb_device / "manufacturer").read_text()[:-1],
                 product=(usb_device / "product").read_text()[:-1],
                 bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                interface=(
+                interface_description=(
                     interface_file.read_text()[:-1] if interface_file.exists() else None
                 ),
                 interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
@@ -608,7 +608,7 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 manufacturer=None,
                 product=None,
                 bcd_device=None,
-                interface=None,
+                interface_description=None,
                 interface_num=None,
             )
         else:

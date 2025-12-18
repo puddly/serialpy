@@ -30,7 +30,7 @@ pub fn list_serial_ports() -> Result<Vec<RustSerialPortInfo>, String> {
                 manufacturer,
                 product,
                 bcd_device: None,
-                interface: None,
+                interface_description: None,
                 interface_num,
             }
         })

@@ -447,7 +447,7 @@ class SerialPortInfo:
     manufacturer: str | None
     product: str | None
     bcd_device: int | None
-    interface: str | None
+    interface_description: str | None
     interface_num: int | None
 
     @property

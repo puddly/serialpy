@@ -183,8 +183,8 @@ fn get_serial_port_info(service: &IoObject) -> Option<RustSerialPortInfo> {
             manufacturer: service.search_parent_string_property("kUSBVendorString"),
             product: service.search_parent_string_property("kUSBProductString"),
             bcd_device: service.search_parent_u16_property("bcdDevice"),
-            // Interface name is usually kUSBString on the IOUSBHostInterface parent
-            interface: service.search_parent_string_property("kUSBString"),
+            // Interface description is usually kUSBString on the IOUSBHostInterface parent
+            interface_description: service.search_parent_string_property("kUSBString"),
             interface_num: service
                 .search_parent_u16_property("bInterfaceNumber")
                 .map(|n| n as u8),
@@ -199,7 +199,7 @@ fn get_serial_port_info(service: &IoObject) -> Option<RustSerialPortInfo> {
             manufacturer: None,
             product: None,
             bcd_device: None,
-            interface: None,
+            interface_description: None,
             interface_num: None,
         })
     }

@@ -51,7 +51,7 @@ def darwin_list_serial_ports() -> list[SerialPortInfo]:
             manufacturer=port.manufacturer,
             product=port.product,
             bcd_device=port.bcd_device,
-            interface=port.interface,
+            interface_description=port.interface_description,
             interface_num=port.interface_num,
         )
         for port in list_serial_ports_darwin_impl()

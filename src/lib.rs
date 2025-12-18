@@ -16,7 +16,7 @@ pub struct RustSerialPortInfo {
     pub manufacturer: Option<String>,
     pub product: Option<String>,
     pub bcd_device: Option<u16>,
-    pub interface: Option<String>,
+    pub interface_description: Option<String>,
     pub interface_num: Option<u8>,
 }
 
