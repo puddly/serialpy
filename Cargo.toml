@@ -16,9 +16,4 @@ core-foundation-sys = "0.8"
 io-kit-sys = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.58", features = [
-    "Win32_Devices_DeviceAndDriverInstallation",
-    "Win32_Devices_Properties",
-    "Win32_Foundation",
-    "Win32_System_Registry",
-] }
+serialport = "4"
