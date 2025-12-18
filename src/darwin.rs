@@ -147,7 +147,6 @@ pub fn list_serial_ports() -> Result<Vec<RustSerialPortInfo>, String> {
             return Err("IOServiceMatching returned null".into());
         }
 
-        // Get iterator for matching services
         let mut iterator_raw: io_iterator_t = 0;
         let kr = IOServiceGetMatchingServices(kIOMasterPortDefault, matching, &mut iterator_raw);
         if kr != kIOReturnSuccess {
@@ -168,22 +167,18 @@ pub fn list_serial_ports() -> Result<Vec<RustSerialPortInfo>, String> {
 
 /// Get info for a single serial port service.
 fn get_serial_port_info(service: &IoObject) -> Option<RustSerialPortInfo> {
-    // Get the device path (IOCalloutDevice property)
     let device = service.string_property("IOCalloutDevice")?;
 
     // Check if it's a USB device by searching for idVendor up the tree.
-    // IORegistryEntrySearchCFProperty will search parents recursively.
     if let Some(vid) = service.search_parent_u16_property("idVendor") {
         Some(RustSerialPortInfo {
             device,
             vid: Some(vid),
             pid: service.search_parent_u16_property("idProduct"),
             serial_number: service.search_parent_string_property("kUSBSerialNumberString"),
-            // Manufacturers are sometimes in kUSBVendorString
             manufacturer: service.search_parent_string_property("kUSBVendorString"),
             product: service.search_parent_string_property("kUSBProductString"),
             bcd_device: service.search_parent_u16_property("bcdDevice"),
-            // Interface description is usually kUSBString on the IOUSBHostInterface parent
             interface_description: service.search_parent_string_property("kUSBString"),
             interface_num: service
                 .search_parent_u16_property("bInterfaceNumber")
