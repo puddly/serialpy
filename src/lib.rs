@@ -17,6 +17,7 @@ pub struct RustSerialPortInfo {
     pub product: Option<String>,
     pub bcd_device: Option<u16>,
     pub interface: Option<String>,
+    pub interface_num: Option<u8>,
 }
 
 #[cfg(target_os = "macos")]

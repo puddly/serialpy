@@ -16,4 +16,4 @@ core-foundation-sys = "0.8"
 io-kit-sys = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-serialport = "4"
+serialport = { version = "4", features = ["usbportinfo-interface"] }

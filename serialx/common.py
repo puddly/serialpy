@@ -448,6 +448,7 @@ class SerialPortInfo:
     product: str | None
     bcd_device: int | None
     interface: str | None
+    interface_num: int | None
 
     @property
     def description(self) -> str | None:

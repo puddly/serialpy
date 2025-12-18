@@ -576,6 +576,7 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 interface=(
                     interface_file.read_text()[:-1] if interface_file.exists() else None
                 ),
+                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
             )
         elif subsystem == "usb":
             # CDC ACM devices
@@ -594,6 +595,7 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 interface=(
                     interface_file.read_text()[:-1] if interface_file.exists() else None
                 ),
+                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
             )
         elif subsystem == "serial-base":
             # Native serial ports
@@ -607,6 +609,7 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 product=None,
                 bcd_device=None,
                 interface=None,
+                interface_num=None,
             )
         else:
             LOGGER.warning(

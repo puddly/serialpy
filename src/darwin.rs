@@ -185,6 +185,9 @@ fn get_serial_port_info(service: &IoObject) -> Option<RustSerialPortInfo> {
             bcd_device: service.search_parent_u16_property("bcdDevice"),
             // Interface name is usually kUSBString on the IOUSBHostInterface parent
             interface: service.search_parent_string_property("kUSBString"),
+            interface_num: service
+                .search_parent_u16_property("bInterfaceNumber")
+                .map(|n| n as u8),
         })
     } else {
         // Non-USB serial port (Bluetooth, native, etc.)
@@ -197,6 +200,7 @@ fn get_serial_port_info(service: &IoObject) -> Option<RustSerialPortInfo> {
             product: None,
             bcd_device: None,
             interface: None,
+            interface_num: None,
         })
     }
 }

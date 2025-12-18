@@ -7,18 +7,20 @@ pub fn list_serial_ports() -> Result<Vec<RustSerialPortInfo>, String> {
     Ok(ports
         .into_iter()
         .map(|port| {
-            let (vid, pid, serial_number, manufacturer, product) = match port.port_type {
-                SerialPortType::UsbPort(info) => (
-                    Some(info.vid),
-                    Some(info.pid),
-                    info.serial_number,
-                    info.manufacturer,
-                    info.product,
-                ),
-                SerialPortType::PciPort
-                | SerialPortType::BluetoothPort
-                | SerialPortType::Unknown => (None, None, None, None, None),
-            };
+            let (vid, pid, serial_number, manufacturer, product, interface_num) =
+                match port.port_type {
+                    SerialPortType::UsbPort(info) => (
+                        Some(info.vid),
+                        Some(info.pid),
+                        info.serial_number,
+                        info.manufacturer,
+                        info.product,
+                        info.interface,
+                    ),
+                    SerialPortType::PciPort
+                    | SerialPortType::BluetoothPort
+                    | SerialPortType::Unknown => (None, None, None, None, None, None),
+                };
 
             RustSerialPortInfo {
                 device: port.port_name,
@@ -29,6 +31,7 @@ pub fn list_serial_ports() -> Result<Vec<RustSerialPortInfo>, String> {
                 product,
                 bcd_device: None,
                 interface: None,
+                interface_num,
             }
         })
         .collect())

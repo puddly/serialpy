@@ -480,6 +480,7 @@ def win32_list_serial_ports() -> list[SerialPortInfo]:
             product=port.product,
             bcd_device=port.bcd_device,
             interface=port.interface,
+            interface_num=port.interface_num,
         )
         for port in list_serial_ports_windows_impl()
     ]
