@@ -565,3 +565,29 @@ async def test_remove_writer() -> None:
 
         out_transport.close()
         in_transport.close()
+
+
+async def test_pause_resume() -> None:
+    """Test transport pause and resume."""
+
+    async with (
+        async_create_socat_pair() as (left, right),
+        async_create_reader_writer_pair(left, right, baudrate=115200) as (
+            reader_left,
+            writer_left,
+            reader_right,
+            writer_right,
+        ),
+    ):
+        writer_left.transport.pause_reading()
+
+        writer_right.write(b"A long message")
+        await writer_right.drain()
+
+        # Nothing can be read
+        with pytest.raises(asyncio.TimeoutError):
+            async with asyncio_timeout(1):
+                await reader_left.read(1)
+
+        writer_left.transport.resume_reading()
+        assert (await reader_left.read(14)) == b"A long message"
