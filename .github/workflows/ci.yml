@@ -103,8 +103,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-    name: >-
-      Run tests Python ${{ matrix.python-version }}
+    name: Run tests Python ${{ matrix.python-version }} (Linux)
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4
@@ -144,8 +143,7 @@ jobs:
             -qq \
             --timeout=20 \
             --durations=10 \
-            --cov serialx \
-            --cov-config pyproject.toml \
+            --cov=serialx \
             -o console_output_style=count \
             -p no:sugar \
             tests
@@ -156,10 +154,36 @@ jobs:
           include-hidden-files: true
           path: .coverage
 
+  pytest-other:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    name: Run tests Python 3.13 (${{ matrix.os }})
+    steps:
+      - name: Check out code from GitHub
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies and run tests
+        run: |
+          pip install -e .[dev] pytest-cov
+          pytest --timeout=20 --cov=serialx tests
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          include-hidden-files: true
+          path: .coverage
+
   coverage:
     name: Process test coverage
     runs-on: ubuntu-latest
-    needs: pytest
+    needs: [pytest, pytest-other]
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4

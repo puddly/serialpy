@@ -1,5 +1,7 @@
 """Windows serial port implementation using Win32 API."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
@@ -48,6 +50,9 @@ from win32file import (
     WriteFile,
 )
 from winerror import ERROR_IO_PENDING
+
+from serialx._serialx_rust import list_serial_ports_windows_impl
+from serialx.common import SerialPortInfo
 
 from ..common import (
     BaseSerial,
@@ -460,3 +465,22 @@ class Win32SerialTransport(BaseSerialTransport):
             await self._loop.run_in_executor(None, self._serial.flush)
         finally:
             self._internal_transport._reset_empty_waiter()
+
+
+def win32_list_serial_ports() -> list[SerialPortInfo]:
+    """List available serial ports on Windows."""
+    return [
+        SerialPortInfo(
+            device=port.device,
+            resolved_device=port.device,
+            vid=port.vid,
+            pid=port.pid,
+            serial_number=port.serial_number,
+            manufacturer=port.manufacturer,
+            product=port.product,
+            bcd_device=port.bcd_device,
+            interface_description=port.interface_description,
+            interface_num=port.interface_num,
+        )
+        for port in list_serial_ports_windows_impl()
+    ]

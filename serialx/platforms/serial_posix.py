@@ -561,7 +561,9 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
 
         if subsystem == "usb-serial":
             # USB-serial chips
-            usb_device = resolved.parent.parent
+            usb_interface = resolved.parent
+            usb_device = usb_interface.parent
+            interface_file = usb_interface / "interface"
             info = SerialPortInfo(
                 device=unique_device,
                 resolved_device=device,
@@ -570,10 +572,17 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 serial_number=(usb_device / "serial").read_text()[:-1],
                 manufacturer=(usb_device / "manufacturer").read_text()[:-1],
                 product=(usb_device / "product").read_text()[:-1],
+                bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
+                interface_description=(
+                    interface_file.read_text()[:-1] if interface_file.exists() else None
+                ),
+                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
             )
         elif subsystem == "usb":
             # CDC ACM devices
-            usb_device = resolved.parent
+            usb_interface = resolved
+            usb_device = usb_interface.parent
+            interface_file = usb_interface / "interface"
             info = SerialPortInfo(
                 device=unique_device,
                 resolved_device=device,
@@ -582,6 +591,11 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 serial_number=(usb_device / "serial").read_text()[:-1],
                 manufacturer=(usb_device / "manufacturer").read_text()[:-1],
                 product=(usb_device / "product").read_text()[:-1],
+                bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
+                interface_description=(
+                    interface_file.read_text()[:-1] if interface_file.exists() else None
+                ),
+                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
             )
         elif subsystem == "serial-base":
             # Native serial ports
@@ -593,6 +607,9 @@ def posix_list_serial_ports() -> list[SerialPortInfo]:
                 serial_number=None,
                 manufacturer=None,
                 product=None,
+                bcd_device=None,
+                interface_description=None,
+                interface_num=None,
             )
         else:
             LOGGER.warning(

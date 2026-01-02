@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import patch
+import sys
 
 import pytest
+
+if sys.platform != "linux":
+    pytest.skip("Linux-only tests", allow_module_level=True)
+
+from pathlib import Path
+from unittest.mock import patch
 
 from serialx.common import SerialPortInfo
 from serialx.platforms import serial_posix
@@ -23,6 +28,9 @@ def create_usb_serial_device(
     serial: str,
     manufacturer: str,
     product: str,
+    bcd_device: str,
+    interface: str | None = None,
+    interface_num: str = "00",
     by_id_name: str | None = None,
 ) -> None:
     """Create a fake usb-serial device (ttyUSB*) in the fake sysfs."""
@@ -55,6 +63,13 @@ def create_usb_serial_device(
     (usb_device_path / "serial").write_text(serial + "\n")
     (usb_device_path / "manufacturer").write_text(manufacturer + "\n")
     (usb_device_path / "product").write_text(product + "\n")
+    (usb_device_path / "bcdDevice").write_text(bcd_device + "\n")
+
+    # Interface string and number are at the USB interface level
+    interface_path.mkdir(parents=True, exist_ok=True)
+    (interface_path / "bInterfaceNumber").write_text(interface_num + "\n")
+    if interface is not None:
+        (interface_path / "interface").write_text(interface + "\n")
 
     if by_id_name:
         by_id_dir = dev_root / "serial/by-id"
@@ -73,6 +88,9 @@ def create_cdc_acm_device(
     serial: str,
     manufacturer: str,
     product: str,
+    bcd_device: str,
+    interface: str | None = None,
+    interface_num: str = "00",
     by_id_name: str | None = None,
 ) -> None:
     """Create a fake CDC ACM device (ttyACM*) in the fake sysfs."""
@@ -104,6 +122,12 @@ def create_cdc_acm_device(
     (usb_device_path / "serial").write_text(serial + "\n")
     (usb_device_path / "manufacturer").write_text(manufacturer + "\n")
     (usb_device_path / "product").write_text(product + "\n")
+    (usb_device_path / "bcdDevice").write_text(bcd_device + "\n")
+
+    # Interface string and number are at the USB interface level
+    (interface_path / "bInterfaceNumber").write_text(interface_num + "\n")
+    if interface is not None:
+        (interface_path / "interface").write_text(interface + "\n")
 
     if by_id_name:
         by_id_dir = dev_root / "serial/by-id"
@@ -159,6 +183,8 @@ def fake_sysfs(tmp_path):
         serial="ec4903cb",
         manufacturer="Silicon Labs",
         product="CP2102 USB to UART Bridge Controller",
+        bcd_device="0100",
+        interface="CP2102 USB to UART Bridge Controller",
         by_id_name="usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_ec4903cb-if00-port0",
     )
 
@@ -173,6 +199,8 @@ def fake_sysfs(tmp_path):
         serial="41b06ea8",
         manufacturer="Silicon Labs",
         product="CP2102 USB to UART Bridge Controller",
+        bcd_device="0100",
+        interface="CP2102 USB to UART Bridge Controller",
         by_id_name="usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_41b06ea8-if00-port0",
     )
 
@@ -187,10 +215,12 @@ def fake_sysfs(tmp_path):
         serial="A5069RR4",
         manufacturer="FTDI",
         product="FT232R USB UART",
+        bcd_device="0600",
+        interface="FT232R USB UART",
         by_id_name="usb-FTDI_FT232R_USB_UART_A5069RR4-if00-port0",
     )
 
-    # /dev/ttyUSB3: Prolific through hub
+    # /dev/ttyUSB3: Prolific through hub (no interface string)
     create_usb_serial_device(
         sys_root,
         dev_root,
@@ -201,6 +231,8 @@ def fake_sysfs(tmp_path):
         serial="DSDCb147613",
         manufacturer="Prolific Technology Inc.",
         product="USB-Serial Controller",
+        bcd_device="0605",
+        interface=None,
         by_id_name="usb-Prolific_Technology_Inc._USB-Serial_Controller_DSDCb147613-if00-port0",
     )
 
@@ -215,6 +247,8 @@ def fake_sysfs(tmp_path):
         serial="rutabaga",
         manufacturer="FTDI",
         product="FT232R USB UART",
+        bcd_device="0600",
+        interface="FT232R USB UART",
         by_id_name="usb-FTDI_FT232R_USB_UART_rutabaga-if00-port0",
     )
 
@@ -229,6 +263,8 @@ def fake_sysfs(tmp_path):
         serial="80B54EEFAE18",
         manufacturer="Nabu Casa",
         product="ZBT-2",
+        bcd_device="0100",
+        interface="Nabu Casa ZBT-2",
         by_id_name="usb-Nabu_Casa_ZBT-2_80B54EEFAE18-if00",
     )
 
@@ -263,7 +299,7 @@ def fake_sysfs(tmp_path):
         yield sys_root, dev_root
 
 
-def test_list_serial_ports(fake_sysfs) -> None:
+def test_list_serial_ports_linux(fake_sysfs) -> None:
     """Test listing all serial ports on a system mimicking test-yellow-core."""
     sys_root, dev_root = fake_sysfs
 
@@ -282,6 +318,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number="ec4903cb",
         manufacturer="Silicon Labs",
         product="CP2102 USB to UART Bridge Controller",
+        bcd_device=0x0100,
+        interface_description="CP2102 USB to UART Bridge Controller",
+        interface_num=0,
     )
 
     # /dev/ttyUSB1: Another CP2102
@@ -294,6 +333,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number="41b06ea8",
         manufacturer="Silicon Labs",
         product="CP2102 USB to UART Bridge Controller",
+        bcd_device=0x0100,
+        interface_description="CP2102 USB to UART Bridge Controller",
+        interface_num=0,
     )
 
     # /dev/ttyUSB2: FTDI
@@ -305,6 +347,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number="A5069RR4",
         manufacturer="FTDI",
         product="FT232R USB UART",
+        bcd_device=0x0600,
+        interface_description="FT232R USB UART",
+        interface_num=0,
     )
 
     # /dev/ttyUSB3: Prolific
@@ -317,6 +362,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number="DSDCb147613",
         manufacturer="Prolific Technology Inc.",
         product="USB-Serial Controller",
+        bcd_device=0x0605,
+        interface_description=None,
+        interface_num=0,
     )
 
     # /dev/ttyUSB4: FTDI with custom serial
@@ -328,6 +376,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number="rutabaga",
         manufacturer="FTDI",
         product="FT232R USB UART",
+        bcd_device=0x0600,
+        interface_description="FT232R USB UART",
+        interface_num=0,
     )
 
     # /dev/ttyACM0: ZBT-2 CDC ACM
@@ -339,6 +390,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number="80B54EEFAE18",
         manufacturer="Nabu Casa",
         product="ZBT-2",
+        bcd_device=0x0100,
+        interface_description="Nabu Casa ZBT-2",
+        interface_num=0,
     )
 
     # /dev/ttyAMA0: Native UART
@@ -350,6 +404,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number=None,
         manufacturer=None,
         product=None,
+        bcd_device=None,
+        interface_description=None,
+        interface_num=None,
     )
 
     # /dev/ttyAMA1: Native UART
@@ -361,6 +418,9 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number=None,
         manufacturer=None,
         product=None,
+        bcd_device=None,
+        interface_description=None,
+        interface_num=None,
     )
 
     # /dev/ttyAMA2: Native UART
@@ -372,4 +432,7 @@ def test_list_serial_ports(fake_sysfs) -> None:
         serial_number=None,
         manufacturer=None,
         product=None,
+        bcd_device=None,
+        interface_description=None,
+        interface_num=None,
     )

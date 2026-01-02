@@ -9,4 +9,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.23", features = ["extension-module"] }
-serialport = "4"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+io-kit-sys = "0.4"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+serialport = { version = "4", features = ["usbportinfo-interface"] }

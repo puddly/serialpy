@@ -53,6 +53,7 @@ show_error_context = true
 
 [tool.coverage.run]
 source = ["serialx"]
+relative_files = true
 
 [tool.ruff]
 target-version = "py310"
