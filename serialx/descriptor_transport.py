@@ -77,12 +77,12 @@ class DescriptorTransport(asyncio.Transport):
                 exc, f"Fatal read error in {self.transport_name} transport"
             )
         else:
+            LOGGER.debug("Received %r", data)
+
             if data:
-                LOGGER.debug("Received %r", data)
                 self._protocol.data_received(data)
             else:
-                if self._loop.get_debug():
-                    LOGGER.info("%r was closed by peer", self)
+                LOGGER.info("%r was closed by peer", self)
                 self._closing = True
                 self._loop.remove_reader(self._fileno)
                 self._loop.call_soon(self._protocol.eof_received)
@@ -95,8 +95,8 @@ class DescriptorTransport(asyncio.Transport):
         assert self._fileno is not None
         self._paused = True
         self._loop.remove_reader(self._fileno)
-        if self._loop.get_debug():
-            LOGGER.debug("%r pauses reading", self)
+
+        LOGGER.debug("%r pauses reading", self)
 
     def resume_reading(self) -> None:
         """Resume reading from the file descriptor."""
@@ -105,8 +105,8 @@ class DescriptorTransport(asyncio.Transport):
         assert self._fileno is not None
         self._paused = False
         self._loop.add_reader(self._fileno, self._read_ready)
-        if self._loop.get_debug():
-            LOGGER.debug("%r resumes reading", self)
+
+        LOGGER.debug("%r resumes reading", self)
 
     def _maybe_pause_protocol(self) -> None:
         size = self.get_write_buffer_size()
@@ -315,11 +315,10 @@ class DescriptorTransport(asyncio.Transport):
         exc: Exception | None,
         message: str = f"Fatal error in {transport_name} transport",
     ) -> None:
+        LOGGER.debug("%r: %s", self, message, exc_info=True)
+
         # should be called by exception handler only
-        if isinstance(exc, OSError) and exc.errno in (errno.EIO, errno.ENXIO):
-            if self._loop.get_debug():
-                LOGGER.debug("%r: %s", self, message, exc_info=True)
-        else:
+        if not isinstance(exc, OSError) or exc.errno not in (errno.EIO, errno.ENXIO):
             self._loop.call_exception_handler(
                 {
                     "message": message,
@@ -328,6 +327,7 @@ class DescriptorTransport(asyncio.Transport):
                     "protocol": self._protocol,
                 }
             )
+
         self._close(exc)
 
     def abort(self) -> None:
@@ -345,6 +345,8 @@ class DescriptorTransport(asyncio.Transport):
 
     def _maybe_background_close(self, exc: Exception | None) -> None:
         """Start background task to close the transport if not already started."""
+        LOGGER.debug("Backgrounding a close request: %r", exc)
+
         if self._close_task is not None:
             LOGGER.debug("Close task already exists, not closing again")
             return
