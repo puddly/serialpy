@@ -1,5 +1,12 @@
 """Linux serial port tests."""
 
+import sys
+
+import pytest
+
+if sys.platform not in ("linux", "darwin"):
+    pytest.skip("Linux-only tests", allow_module_level=True)
+
 import errno
 import fcntl
 from typing import Any
