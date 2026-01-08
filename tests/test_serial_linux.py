@@ -40,3 +40,27 @@ def test_tiocgserial_ioctl_not_supported() -> None:
                 pass
 
     assert call(ANY, TIOCGSERIAL, ANY) in mock_ioctl.mock_calls
+
+
+@patch("serialx.platforms.serial_posix.TIOCGSERIAL", TIOCGSERIAL)
+@patch("serialx.platforms.serial_posix.TIOCSSERIAL", TIOCSSERIAL)
+def test_tiocgserial_ioctl_unexpected() -> None:
+    """Test that TIOCGSERIAL ioctl not supported is handled gracefully."""
+    ioctl_orig = fcntl.ioctl
+
+    def ioctl(fd: int, request: int, arg: Any = 0, mutate_flag: bool = True) -> None:
+        if request in (TIOCGSERIAL, TIOCSSERIAL):
+            raise OSError(errno.EINVAL, "Invalid argument")
+
+        return ioctl_orig(fd, request, arg, mutate_flag)
+
+    with patch(
+        "serialx.platforms.serial_posix.fcntl.ioctl", side_effect=ioctl
+    ) as mock_ioctl:
+        with create_socat_pair() as (left, _right):
+            with pytest.raises(OSError, match="Invalid argument"):
+                with PosixSerial(left, baudrate=115200):
+                    # The serial port will fail to open
+                    pass
+
+    assert call(ANY, TIOCGSERIAL, ANY) in mock_ioctl.mock_calls
