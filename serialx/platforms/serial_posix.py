@@ -353,8 +353,8 @@ class PosixSerial(BaseSerial):
             try:
                 self._set_low_latency(self._low_latency)
             except OSError as exc:
-                if exc.errno == errno.ENOTTY:
-                    LOGGER.debug("Device is not a serial port, cannot set low latency")
+                if exc.errno in (errno.ENOTTY, errno.EOPNOTSUPP):
+                    LOGGER.debug("Device does not support setting low latency")
                 else:
                     raise
 
