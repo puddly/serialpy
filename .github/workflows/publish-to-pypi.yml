@@ -29,12 +29,16 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22
         env:
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp314-*"
+          CIBW_BUILD: "cp310-*"
           CIBW_ARCHS_MACOS: "x86_64 arm64"
           CIBW_ARCHS_WINDOWS: "AMD64 x86 ARM64"
           CIBW_BEFORE_ALL_WINDOWS: "rustup target add aarch64-pc-windows-msvc i686-pc-windows-msvc"
           CIBW_BEFORE_ALL_MACOS: "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
           CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.12"
+          # Validate abi3 compliance and repair wheels
+          CIBW_BEFORE_BUILD: "pip install abi3audit"
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: "abi3audit {wheel} && delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "abi3audit {wheel} && cp {wheel} {dest_dir}"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
