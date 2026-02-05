@@ -36,6 +36,8 @@ target = "serialx._serialx_rust"
 path = "Cargo.toml"
 binding = "PyO3"
 optional = true
+
+[tool.distutils.bdist_wheel]
 py_limited_api = "cp310"
 
 [tool.pytest.ini_options]
