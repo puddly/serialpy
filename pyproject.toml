@@ -37,6 +37,9 @@ path = "Cargo.toml"
 binding = "PyO3"
 optional = true
 
+[tool.distutils.bdist_wheel]
+py_limited_api = "cp310"
+
 [tool.pytest.ini_options]
 addopts = "--showlocals --verbose -n auto --dist loadgroup"
 testpaths = ["tests"]
