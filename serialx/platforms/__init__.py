@@ -8,7 +8,7 @@ if sys.platform == "win32":
         Win32SerialTransport as SerialTransport,
         win32_list_serial_ports as list_serial_ports,
     )
-elif sys.platform == "linux":
+elif sys.platform == "linux" or sys.platform == "freebsd":
     from .serial_posix import (
         PosixSerial as Serial,
         PosixSerialTransport as SerialTransport,
