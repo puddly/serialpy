@@ -13,8 +13,6 @@ from serialx.common import BaseSerialTransport, ModemPins, Parity, PinState, Sto
 
 LOGGER = logging.getLogger(__name__)
 
-ESPHOME_DEFAULT_PORT = 6053
-
 PARITY_MAP = {
     Parity.NONE: aioesphomeapi.SerialProxyParity.NONE,
     Parity.EVEN: aioesphomeapi.SerialProxyParity.EVEN,
@@ -62,7 +60,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         params = urllib.parse.parse_qs(parsed.query)
 
         host = parsed.hostname
-        port = parsed.port or ESPHOME_DEFAULT_PORT
+        port = parsed.port
 
         # Instance from path: "/0" -> 0, "/" -> 0, "" -> 0
         path = parsed.path.strip("/")
