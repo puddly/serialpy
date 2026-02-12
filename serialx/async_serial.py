@@ -51,7 +51,9 @@ async def create_serial_connection(
         )
     elif parsed_path.scheme == "esphome":
         try:
-            from .esphome_transport import ESPHomeSerialTransport  # noqa: PLC0415
+            from .platforms.serial_esphome import (  # noqa: PLC0415
+                ESPHomeSerialTransport,
+            )
         except ImportError as exc:
             raise RuntimeError(
                 "aioesphomeapi is required for esphome:// URLs. "

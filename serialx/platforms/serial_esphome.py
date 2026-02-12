@@ -9,7 +9,7 @@ import urllib.parse
 
 import aioesphomeapi
 
-from .common import BaseSerialTransport, ModemPins, Parity, PinState, StopBits
+from serialx.common import BaseSerialTransport, ModemPins, Parity, PinState, StopBits
 
 LOGGER = logging.getLogger(__name__)
 
