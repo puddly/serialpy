@@ -49,6 +49,25 @@ async def create_serial_connection(
         transport, protocol = await loop.create_connection(
             protocol_factory, parsed_path.hostname, parsed_path.port
         )
+    elif parsed_path.scheme == "esphome":
+        try:
+            from .esphome_transport import ESPHomeSerialTransport  # noqa: PLC0415
+        except ImportError as exc:
+            raise RuntimeError(
+                "aioesphomeapi is required for esphome:// URLs. "
+                "Install it with: pip install serialx[esphome]"
+            ) from exc
+
+        protocol = protocol_factory()
+        transport = ESPHomeSerialTransport(loop=loop, protocol=protocol)
+        await transport.connect(
+            url=url,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+        )
     else:
         protocol = protocol_factory()
         transport = transport_factory(loop=loop, protocol=protocol)

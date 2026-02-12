@@ -19,6 +19,9 @@ dependencies = [
     "pywin32; platform_system == 'Windows'",
 ]
 [project.optional-dependencies]
+esphome = [
+    "aioesphomeapi @ git+https://github.com/esphome/aioesphomeapi.git@20260210-serial-proxy",
+]
 dev = [
     "ruff",
     "pytest",
