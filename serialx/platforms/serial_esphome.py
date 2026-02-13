@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Buffer, Callable
 import logging
+from pathlib import Path
 import urllib.parse
 
 import aioesphomeapi
 
-from serialx.common import BaseSerialTransport, ModemPins, Parity, PinState, StopBits
+from serialx.common import (
+    BaseSerial,
+    BaseSerialTransport,
+    ModemPins,
+    Parity,
+    PinState,
+    StopBits,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,115 +35,156 @@ STOP_BITS_MAP = {
 }
 
 
-class ESPHomeSerialShim:
-    """Pyserial-compatible shim for ESPHome serial proxy.
+class ESPHomeSerial(BaseSerial):
+    """Synchronous serial interface over ESPHome serial proxy API.
 
-    Provides synchronous ``.rts``/``.dtr`` setters that callers expect from
-    ``transport.serial``, routing them through the ESPHome API's
-    fire-and-forget ``serial_proxy_set_modem_pins``.
+    ESPHome does not have a native synchronous API, using this interface is heavily
+    discouraged. Please use the async API.
     """
 
     def __init__(
         self,
-        api: aioesphomeapi.APIClient,
-        instance: int,
+        path: str | Path,
         baudrate: int,
-        parity: Parity,
-        stopbits: StopBits,
-        byte_size: int,
-    ) -> None:
-        self._api = api
-        self._instance = instance
-        self._baudrate = baudrate
-        self._parity = parity
-        self._stopbits = stopbits
-        self._byte_size = byte_size
-
-        self._rts = False
-        self._dtr = False
-
-    @property
-    def baudrate(self) -> int:
-        return self._baudrate
-
-    @property
-    def parity(self) -> Parity:
-        return self._parity
-
-    @property
-    def stopbits(self) -> StopBits:
-        return self._stopbits
-
-    @property
-    def byte_size(self) -> int:
-        return self._byte_size
-
-    @property
-    def exclusive(self) -> bool:
-        return True
-
-    @property
-    def rts(self) -> bool:
-        return self._rts
-
-    @rts.setter
-    def rts(self, value: bool) -> None:
-        self._rts = value
-        self._sync_modem_pins()
-
-    @property
-    def dtr(self) -> bool:
-        return self._dtr
-
-    @dtr.setter
-    def dtr(self, value: bool) -> None:
-        self._dtr = value
-        self._sync_modem_pins()
-
-    def _sync_modem_pins(self) -> None:
-        self._api.serial_proxy_set_modem_pins(
-            instance=self._instance,
-            rts=self._rts,
-            dtr=self._dtr,
-        )
-
-    def set_modem_pins(
-        self,
-        modem_pins: ModemPins | None = None,
+        parity: Parity = Parity.NONE,
+        stopbits: StopBits = StopBits.ONE,
+        xonxoff: bool = False,
+        rtscts: bool = False,
+        byte_size: int = 8,
         **kwargs,
     ) -> None:
-        if modem_pins is None:
-            modem_pins = ModemPins(
-                dtr=PinState.convert(kwargs.get("dtr")),
-                rts=PinState.convert(kwargs.get("rts")),
-            )
-
-        if modem_pins.rts is not PinState.UNDEFINED:
-            self._rts = modem_pins.rts is PinState.HIGH
-        if modem_pins.dtr is not PinState.UNDEFINED:
-            self._dtr = modem_pins.dtr is PinState.HIGH
-
-        self._sync_modem_pins()
-
-    def get_modem_pins(self) -> ModemPins:
-        return ModemPins(
-            rts=PinState.convert(self._rts),
-            dtr=PinState.convert(self._dtr),
+        """Initialize ESPHome serial port."""
+        super().__init__(
+            path=path,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            byte_size=byte_size,
+            **kwargs,
         )
+
+        parsed = urllib.parse.urlparse(str(path))
+        params = urllib.parse.parse_qs(parsed.query)
+
+        self._host = parsed.hostname
+        self._port = parsed.port or ESPHOME_DEFAULT_PORT
+
+        path_str = parsed.path.strip("/")
+        self.instance = int(path_str) if path_str else 0
+
+        self._password = params["password"][0] if "password" in params else None
+        self._noise_psk = params["noise_psk"][0] if "noise_psk" in params else None
+
+        self.api: aioesphomeapi.APIClient | None = None
+        self._read_buffer = bytearray()
+        self._read_event = asyncio.Event()
+        self._unsub: Callable[[], None] | None = None
+
+    def _on_data(self, msg: aioesphomeapi.SerialProxyDataReceived) -> None:
+        if msg.instance == self.instance:
+            self._read_buffer.extend(msg.data)
+            self._read_event.set()
+
+    def open(self) -> None:
+        """Open the serial port."""
+        asyncio.run(self._async_open())
+        assert self.api is not None
+        self._unsub = self.api.subscribe_serial_proxy_data(self._on_data)
+
+    async def _async_open(self) -> None:
+        self.api = aioesphomeapi.APIClient(
+            self._host,
+            self._port,
+            password=self._password,
+            noise_psk=self._noise_psk,
+        )
+        await self.api.connect(login=True)
+
+    def configure_port(self) -> None:
+        """Configure the serial port settings."""
+        assert self.api is not None
+        self.api.serial_proxy_configure(
+            instance=self.instance,
+            baudrate=self._baudrate,
+            flow_control=self._rtscts,
+            parity=PARITY_MAP[self._parity],
+            stop_bits=STOP_BITS_MAP[self._stopbits],
+            data_size=self._byte_size,
+        )
+
+    def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        assert self.api is not None
+        self.api.serial_proxy_set_modem_pins(
+            instance=self.instance,
+            rts=modem_pins.rts is PinState.HIGH,
+            dtr=modem_pins.dtr is PinState.HIGH,
+        )
+
+    def _get_modem_pins(self) -> ModemPins:
+        return asyncio.run(self._async_get_modem_pins())
+
+    async def _async_get_modem_pins(self) -> ModemPins:
+        assert self.api is not None
+        resp = await self.api.serial_proxy_get_modem_pins(instance=self.instance)
+        return ModemPins(
+            dtr=PinState.convert(resp.dtr),
+            rts=PinState.convert(resp.rts),
+        )
+
+    def flush(self) -> None:
+        """Flush write buffers."""
+        asyncio.run(self._async_flush())
+
+    async def _async_flush(self) -> None:
+        assert self.api is not None
+        await self.api.serial_proxy_flush(instance=self.instance)
+
+    def write(self, b: Buffer) -> int:
+        """Write bytes to serial port."""
+        assert self.api is not None
+        data = bytes(b)
+        self.api.serial_proxy_write(instance=self.instance, data=data)
+        return len(data)
+
+    def readinto(self, b: Buffer) -> int:
+        """Read bytes from serial port into buffer."""
+        return asyncio.run(self._async_readinto(b))
+
+    async def _async_readinto(self, b: Buffer) -> int:
+        while not self._read_buffer:
+            self._read_event.clear()
+            await self._read_event.wait()
+
+        m = memoryview(b).cast("B")
+        n = min(len(m), len(self._read_buffer))
+        m[:n] = self._read_buffer[:n]
+        del self._read_buffer[:n]
+        return n
+
+    def close(self) -> None:
+        """Close the serial port."""
+        if self._unsub is not None:
+            self._unsub()
+            self._unsub = None
+
+        if self.api is not None:
+            asyncio.run(self.api.disconnect())
+            self.api = None
 
 
 class ESPHomeSerialTransport(BaseSerialTransport):
     """Serial transport over ESPHome serial proxy API."""
 
     transport_name = "esphome"
+    _serial: ESPHomeSerial
 
     def __init__(
         self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
     ) -> None:
         """Initialize the ESPHome serial transport."""
         super().__init__(loop, protocol)
-        self._api: aioesphomeapi.APIClient | None = None
-        self._instance: int = 0
         self._unsub: Callable[[], None] | None = None
 
     async def _connect(  # type: ignore[override]
@@ -150,58 +199,31 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         byte_size: int = 8,
         **kwargs,
     ) -> None:
-        parsed = urllib.parse.urlparse(url)
-        params = urllib.parse.parse_qs(parsed.query)
-
-        host = parsed.hostname
-        port = parsed.port or ESPHOME_DEFAULT_PORT
-
-        # Instance from path: "/0" -> 0, "/" -> 0, "" -> 0
-        path = parsed.path.strip("/")
-        self._instance = int(path) if path else 0
-
-        password = params["password"][0] if "password" in params else None
-        noise_psk = params["noise_psk"][0] if "noise_psk" in params else None
-
-        self._api = aioesphomeapi.APIClient(
-            host,
-            port,
-            password=password,
-            noise_psk=noise_psk,
-        )
-
-        await self._api.connect(login=True)
-
-        self._unsub = self._api.subscribe_serial_proxy_data(self._on_data)
-
-        self._api.serial_proxy_configure(
-            instance=self._instance,
-            baudrate=baudrate,
-            flow_control=rtscts,
-            parity=PARITY_MAP[parity],
-            stop_bits=STOP_BITS_MAP[stopbits],
-            data_size=byte_size,
-        )
-
-        self._serial = ESPHomeSerialShim(
-            api=self._api,
-            instance=self._instance,
+        self._serial = ESPHomeSerial(
+            path=url,
             baudrate=baudrate,
             parity=parity,
             stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
             byte_size=byte_size,
         )
+
+        await self._serial._async_open()
+        self._serial.configure_port()
+
+        assert self._serial.api is not None
+        self._unsub = self._serial.api.subscribe_serial_proxy_data(self._on_data)
 
         self._protocol.connection_made(self)
 
     def _on_data(self, msg: aioesphomeapi.SerialProxyDataReceived) -> None:
-        if msg.instance == self._instance:
+        if msg.instance == self._serial.instance:
             self._protocol.data_received(msg.data)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial proxy."""
-        assert self._api is not None
-        self._api.serial_proxy_write(instance=self._instance, data=bytes(data))
+        self._serial.write(data)
 
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
@@ -217,12 +239,13 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._unsub()
             self._unsub = None
 
-        if self._api is not None:
-            api = self._api
-            self._api = None
+        if self._serial is not None and self._serial.api is not None:
+            api = self._serial.api
+            self._serial.api = None
             self._loop.create_task(self._async_close(api))
 
     async def _async_close(self, api: aioesphomeapi.APIClient) -> None:
+        """Close the API connection."""
         try:
             await api.disconnect()
         finally:
@@ -230,37 +253,11 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     async def flush(self) -> None:
         """Flush write buffers."""
-        assert self._api is not None
-        await self._api.serial_proxy_flush(instance=self._instance)
+        await self._serial._async_flush()
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
-        assert self._api is not None
-        resp = await self._api.serial_proxy_get_modem_pins(instance=self._instance)
-        return ModemPins(
-            dtr=PinState.convert(resp.dtr),
-            rts=PinState.convert(resp.rts),
-        )
-
-    async def set_modem_pins(
-        self,
-        modem_pins: ModemPins | None = None,
-        **kwargs,
-    ) -> None:
-        """Set modem control bits."""
-        assert self._api is not None
-
-        if modem_pins is None:
-            modem_pins = ModemPins(
-                dtr=PinState.convert(kwargs.get("dtr")),
-                rts=PinState.convert(kwargs.get("rts")),
-            )
-
-        self._api.serial_proxy_set_modem_pins(
-            instance=self._instance,
-            dtr=modem_pins.dtr is PinState.HIGH,
-            rts=modem_pins.rts is PinState.HIGH,
-        )
+        return await self._serial._async_get_modem_pins()
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
