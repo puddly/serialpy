@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 import urllib.parse
 
-import aioesphomeapi
+from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
 
 from serialx.common import (
     BaseSerial,
@@ -24,9 +24,9 @@ LOGGER = logging.getLogger(__name__)
 ESPHOME_DEFAULT_PORT = 6053
 
 PARITY_MAP = {
-    Parity.NONE: aioesphomeapi.SerialProxyParity.NONE,
-    Parity.EVEN: aioesphomeapi.SerialProxyParity.EVEN,
-    Parity.ODD: aioesphomeapi.SerialProxyParity.ODD,
+    Parity.NONE: SerialProxyParity.NONE,
+    Parity.EVEN: SerialProxyParity.EVEN,
+    Parity.ODD: SerialProxyParity.ODD,
 }
 
 STOP_BITS_MAP = {
@@ -77,12 +77,12 @@ class ESPHomeSerial(BaseSerial):
         self._password = params["password"][0] if "password" in params else None
         self._noise_psk = params["noise_psk"][0] if "noise_psk" in params else None
 
-        self.api: aioesphomeapi.APIClient | None = None
+        self.api: APIClient | None = None
         self._read_buffer = bytearray()
         self._read_event = asyncio.Event()
         self._unsub: Callable[[], None] | None = None
 
-    def _on_data(self, msg: aioesphomeapi.SerialProxyDataReceived) -> None:
+    def _on_data(self, msg: SerialProxyDataReceived) -> None:
         if msg.instance == self.instance:
             self._read_buffer.extend(msg.data)
             self._read_event.set()
@@ -94,7 +94,7 @@ class ESPHomeSerial(BaseSerial):
         self._unsub = self.api.subscribe_serial_proxy_data(self._on_data)
 
     async def _async_open(self) -> None:
-        self.api = aioesphomeapi.APIClient(
+        self.api = APIClient(
             self._host,
             self._port,
             password=self._password,
@@ -217,7 +217,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
         self._protocol.connection_made(self)
 
-    def _on_data(self, msg: aioesphomeapi.SerialProxyDataReceived) -> None:
+    def _on_data(self, msg: SerialProxyDataReceived) -> None:
         if msg.instance == self._serial.instance:
             self._protocol.data_received(msg.data)
 
@@ -244,7 +244,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._serial.api = None
             self._loop.create_task(self._async_close(api))
 
-    async def _async_close(self, api: aioesphomeapi.APIClient) -> None:
+    async def _async_close(self, api: APIClient) -> None:
         """Close the API connection."""
         try:
             await api.disconnect()
