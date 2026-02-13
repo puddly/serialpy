@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import logging
 from typing import Generic, TypeVar
 import urllib.parse
 
-from .common import Parity, StopBits
+from .common import BaseSerialTransport, Parity, StopBits
 from .platforms import SerialTransport
+from .platforms.serial_socket import SocketSerialTransport
+
+ESPHomeSerialTransport: type[BaseSerialTransport] | None = None
+
+try:
+    from .platforms.serial_esphome import ESPHomeSerialTransport
+except ImportError:
+    ESPHomeSerialTransport = None
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -24,9 +34,28 @@ class SerialStreamWriter(asyncio.StreamWriter, Generic[_T]):
         return super().transport  # type: ignore[return-value]
 
 
+def get_protocol_handler(url: str) -> type[BaseSerialTransport]:
+    """Get the appropriate protocol handler based on the URL scheme."""
+    parsed_path = urllib.parse.urlparse(url)
+
+    if parsed_path.scheme in ("socket", "tcp"):
+        return SocketSerialTransport
+    elif parsed_path.scheme == "esphome":
+        if ESPHomeSerialTransport is None:
+            raise RuntimeError(
+                "aioesphomeapi is required for esphome:// URLs. "
+                "Install it with: pip install serialx[esphome]"
+            )
+
+        return ESPHomeSerialTransport
+    else:
+        # We fall back to the platform-specific transport
+        return SerialTransport
+
+
 async def create_serial_connection(
     loop,
-    protocol_factory,
+    protocol_factory: Callable[[], asyncio.Protocol],
     url,
     baudrate,
     parity=Parity.NONE,
@@ -34,55 +63,26 @@ async def create_serial_connection(
     xonxoff=False,
     rtscts=False,
     exclusive=True,
-    *,
-    transport_factory=SerialTransport,
     **kwargs,
-) -> tuple[SerialTransport, asyncio.Protocol]:
+) -> tuple[BaseSerialTransport, asyncio.Protocol]:
     """Create a serial port connection with asyncio."""
     if not exclusive:
         raise ValueError("Only exclusive=True is supported")
 
-    parsed_path = urllib.parse.urlparse(url)
+    transport_cls = get_protocol_handler(url)
 
-    protocol: asyncio.Protocol
-    if parsed_path.scheme in ("socket", "tcp"):
-        transport, protocol = await loop.create_connection(
-            protocol_factory, parsed_path.hostname, parsed_path.port
-        )
-    elif parsed_path.scheme == "esphome":
-        try:
-            from .platforms.serial_esphome import (  # noqa: PLC0415
-                ESPHomeSerialTransport,
-            )
-        except ImportError as exc:
-            raise RuntimeError(
-                "aioesphomeapi is required for esphome:// URLs. "
-                "Install it with: pip install serialx[esphome]"
-            ) from exc
+    protocol = protocol_factory()
+    transport = transport_cls(loop=loop, protocol=protocol)
 
-        protocol = protocol_factory()
-        transport = ESPHomeSerialTransport(loop=loop, protocol=protocol)
-        await transport.connect(
-            url=url,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-        )
-    else:
-        protocol = protocol_factory()
-        transport = transport_factory(loop=loop, protocol=protocol)
-
-        await transport.connect(
-            path=url,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-            **kwargs,
-        )
+    await transport.connect(
+        path=url,
+        baudrate=baudrate,
+        parity=parity,
+        stopbits=stopbits,
+        xonxoff=xonxoff,
+        rtscts=rtscts,
+        **kwargs,
+    )
 
     return transport, protocol
 
