@@ -46,19 +46,11 @@ class SocketSerial(BaseSerial):
 
         self._socket: socket.socket | None = None
 
-        self._async_reader: asyncio.StreamReader | None = None
-        self._async_writer: asyncio.StreamWriter | None = None
-
     def open(self) -> None:
         """Open the socket connection."""
         assert self._host is not None
         assert self._port is not None
         self._socket = socket.create_connection((self._host, self._port))
-
-    async def _async_open(self) -> None:
-        reader, writer = await asyncio.open_connection(self._host, self._port)
-        self._async_reader = reader
-        self._async_writer = writer
 
     def configure_port(self) -> None:
         """Configure the serial port settings (no-op for sockets)."""
@@ -74,21 +66,15 @@ class SocketSerial(BaseSerial):
 
     def write(self, b: Buffer) -> int:
         """Write bytes to socket."""
+        assert self._socket is not None
+
         data = bytes(b)
-
-        if self._socket is not None:
-            self._socket.sendall(data)
-        elif self._async_writer is not None:
-            self._async_writer.write(data)
-        else:
-            raise RuntimeError("Socket is not open")
-
+        self._socket.sendall(data)
         return len(data)
 
     def readinto(self, b: Buffer) -> int:
         """Read bytes from socket into buffer."""
-        if self._socket is None:
-            raise RuntimeError("Socket is not open")
+        assert self._socket is not None
 
         m = memoryview(b).cast("B")
         return self._socket.recv_into(m)
@@ -99,10 +85,20 @@ class SocketSerial(BaseSerial):
             self._socket.close()
             self._socket = None
 
-        if self._async_writer is not None:
-            self._async_writer.close()
-            self._async_writer = None
-            self._async_reader = None
+
+class _SocketProtocol(asyncio.Protocol):
+    """Bridge protocol between asyncio TCP transport and SocketSerialTransport."""
+
+    def __init__(self, serial_transport: SocketSerialTransport) -> None:
+        self._serial_transport = serial_transport
+
+    def data_received(self, data: bytes) -> None:
+        self._serial_transport._protocol.data_received(data)
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        if not self._serial_transport._closing:
+            self._serial_transport._closing = True
+            self._serial_transport._protocol.connection_lost(exc)
 
 
 class SocketSerialTransport(BaseSerialTransport):
@@ -116,7 +112,7 @@ class SocketSerialTransport(BaseSerialTransport):
     ) -> None:
         """Initialize the socket serial transport."""
         super().__init__(loop, protocol)
-        self._read_task: asyncio.Task | None = None
+        self._tcp_transport: asyncio.Transport | None = None
 
     async def _connect(  # type: ignore[override]
         self,
@@ -140,30 +136,22 @@ class SocketSerialTransport(BaseSerialTransport):
             byte_size=byte_size,
         )
 
-        await self._serial._async_open()
+        self._serial.open()
+        assert self._serial._socket is not None
+        self._serial._socket.setblocking(False)
 
-        self._read_task = self._loop.create_task(self._read_loop())
+        tcp_transport, _ = await self._loop.create_connection(
+            lambda: _SocketProtocol(self),
+            sock=self._serial._socket,
+        )
+        self._tcp_transport = tcp_transport
+
         self._protocol.connection_made(self)
-
-    async def _read_loop(self) -> None:
-        reader = self._serial._async_reader
-        assert reader is not None
-
-        try:
-            while not self._closing:
-                data = await reader.read(4096)
-
-                if not data:
-                    break
-
-                self._protocol.data_received(data)
-        finally:
-            if not self._closing:
-                self.close()
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the socket."""
-        self._serial.write(data)
+        assert self._tcp_transport is not None
+        self._tcp_transport.write(data)
 
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
@@ -175,20 +163,17 @@ class SocketSerialTransport(BaseSerialTransport):
             return
         self._closing = True
 
-        if self._read_task is not None:
-            self._read_task.cancel()
-            self._read_task = None
+        if self._tcp_transport is not None:
+            self._tcp_transport.close()
+            self._tcp_transport = None
 
-        self._serial.close()
         self._protocol.connection_lost(None)
 
     async def flush(self) -> None:
-        """Flush write buffers."""
-        writer = self._serial._async_writer
-
-        if writer is not None:
-            await writer.drain()
+        """Flush write buffers (no-op, TCP transport handles buffering)."""
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
+        if self._tcp_transport is not None:
+            return self._tcp_transport.get_write_buffer_size()
         return 0
