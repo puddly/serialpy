@@ -10,6 +10,7 @@ import io
 import os
 from pathlib import Path
 from typing import Any
+import urllib.parse
 import warnings
 
 from typing_extensions import Self
@@ -432,6 +433,33 @@ class BaseSerialTransport(asyncio.Transport):
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         raise NotImplementedError
+
+
+def get_serial_classes(
+    url: str,
+) -> tuple[type[BaseSerial], type[BaseSerialTransport]]:
+    """Get the appropriate serial and transport classes based on the URL scheme."""
+    parsed_path = urllib.parse.urlparse(url)
+
+    if parsed_path.scheme in ("socket", "tcp"):
+        from .platforms.serial_socket import SocketSerial, SocketSerialTransport
+
+        return SocketSerial, SocketSerialTransport
+    elif parsed_path.scheme == "esphome":
+        from .platforms.serial_esphome import ESPHomeSerial, ESPHomeSerialTransport
+
+        return ESPHomeSerial, ESPHomeSerialTransport
+    elif parsed_path.scheme == "esphomezigbee":
+        from .platforms.serial_esphome_zigbee import (
+            ESPHomeZigbeeSerial,
+            ESPHomeZigbeeTransport,
+        )
+
+        return ESPHomeZigbeeSerial, ESPHomeZigbeeTransport
+    else:
+        from .platforms import Serial, SerialTransport
+
+        return Serial, SerialTransport
 
 
 @dataclasses.dataclass

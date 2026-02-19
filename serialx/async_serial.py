@@ -6,19 +6,8 @@ import asyncio
 from collections.abc import Callable
 import logging
 from typing import Generic, TypeVar
-import urllib.parse
 
-from .common import BaseSerialTransport, Parity, StopBits
-from .platforms import SerialTransport
-from .platforms.serial_socket import SocketSerialTransport
-
-ESPHomeSerialTransport: type[BaseSerialTransport] | None = None
-
-try:
-    from .platforms.serial_esphome import ESPHomeSerialTransport
-except ImportError:
-    ESPHomeSerialTransport = None
-
+from .common import BaseSerialTransport, Parity, StopBits, get_serial_classes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -32,25 +21,6 @@ class SerialStreamWriter(asyncio.StreamWriter, Generic[_T]):
     def transport(self) -> _T:  # type: ignore[override]
         """Return the underlying transport."""
         return super().transport  # type: ignore[return-value]
-
-
-def get_protocol_handler(url: str) -> type[BaseSerialTransport]:
-    """Get the appropriate protocol handler based on the URL scheme."""
-    parsed_path = urllib.parse.urlparse(url)
-
-    if parsed_path.scheme in ("socket", "tcp"):
-        return SocketSerialTransport
-    elif parsed_path.scheme == "esphome":
-        if ESPHomeSerialTransport is None:
-            raise RuntimeError(
-                "aioesphomeapi is required for esphome:// URLs. "
-                "Install it with: pip install serialx[esphome]"
-            )
-
-        return ESPHomeSerialTransport
-    else:
-        # We fall back to the platform-specific transport
-        return SerialTransport
 
 
 async def create_serial_connection(
@@ -69,7 +39,7 @@ async def create_serial_connection(
     if not exclusive:
         raise ValueError("Only exclusive=True is supported")
 
-    transport_cls = get_protocol_handler(url)
+    _, transport_cls = get_serial_classes(url)
 
     protocol = protocol_factory()
     transport = transport_cls(loop=loop, protocol=protocol)

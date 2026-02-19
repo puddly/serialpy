@@ -86,19 +86,17 @@ class SocketSerial(BaseSerial):
             self._socket = None
 
 
-class _SocketProtocol(asyncio.Protocol):
+class _SocketProxyProtocol(asyncio.Protocol):
     """Bridge protocol between asyncio TCP transport and SocketSerialTransport."""
 
     def __init__(self, serial_transport: SocketSerialTransport) -> None:
         self._serial_transport = serial_transport
 
     def data_received(self, data: bytes) -> None:
-        self._serial_transport._protocol.data_received(data)
+        self._serial_transport._data_received(data)
 
     def connection_lost(self, exc: Exception | None) -> None:
-        if not self._serial_transport._closing:
-            self._serial_transport._closing = True
-            self._serial_transport._protocol.connection_lost(exc)
+        self._serial_transport._connection_lost(exc)
 
 
 class SocketSerialTransport(BaseSerialTransport):
@@ -136,17 +134,26 @@ class SocketSerialTransport(BaseSerialTransport):
             byte_size=byte_size,
         )
 
-        self._serial.open()
-        assert self._serial._socket is not None
-        self._serial._socket.setblocking(False)
-
         tcp_transport, _ = await self._loop.create_connection(
-            lambda: _SocketProtocol(self),
-            sock=self._serial._socket,
+            lambda: _SocketProxyProtocol(self),
+            host=self._serial._host,
+            port=self._serial._port,
         )
         self._tcp_transport = tcp_transport
 
         self._protocol.connection_made(self)
+
+    def _data_received(self, data: bytes) -> None:
+        """Handle data received from the TCP transport."""
+        self._protocol.data_received(data)
+
+    def _connection_lost(self, exc: Exception | None) -> None:
+        """Handle connection lost from the TCP transport."""
+        if self._closing:
+            return
+        self._closing = True
+        self._tcp_transport = None
+        self._protocol.connection_lost(exc)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the socket."""
@@ -165,9 +172,6 @@ class SocketSerialTransport(BaseSerialTransport):
 
         if self._tcp_transport is not None:
             self._tcp_transport.close()
-            self._tcp_transport = None
-
-        self._protocol.connection_lost(None)
 
     async def flush(self) -> None:
         """Flush write buffers (no-op, TCP transport handles buffering)."""

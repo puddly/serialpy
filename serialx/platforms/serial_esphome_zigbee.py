@@ -1,4 +1,4 @@
-"""ESPHome serial proxy transport."""
+"""ESPHome Zigbee proxy transport."""
 
 from __future__ import annotations
 
@@ -8,35 +8,18 @@ import logging
 from pathlib import Path
 import urllib.parse
 
-from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
+from aioesphomeapi import APIClient
+from aioesphomeapi.model import ZigbeeProxyFrame, ZigbeeProxyRequestType
 
-from serialx.common import (
-    BaseSerial,
-    BaseSerialTransport,
-    ModemPins,
-    Parity,
-    PinState,
-    StopBits,
-)
+from serialx.common import BaseSerial, BaseSerialTransport, Parity, StopBits
 
 LOGGER = logging.getLogger(__name__)
 
 ESPHOME_DEFAULT_PORT = 6053
 
-PARITY_MAP = {
-    Parity.NONE: SerialProxyParity.NONE,
-    Parity.EVEN: SerialProxyParity.EVEN,
-    Parity.ODD: SerialProxyParity.ODD,
-}
 
-STOP_BITS_MAP = {
-    StopBits.ONE: 1,
-    StopBits.TWO: 2,
-}
-
-
-class ESPHomeSerial(BaseSerial):
-    """Synchronous serial interface over ESPHome serial proxy API.
+class ESPHomeZigbeeSerial(BaseSerial):
+    """Synchronous serial interface over ESPHome Zigbee proxy API.
 
     ESPHome does not have a native synchronous API, using this interface is heavily
     discouraged. Please use the async API.
@@ -53,7 +36,7 @@ class ESPHomeSerial(BaseSerial):
         byte_size: int = 8,
         **kwargs,
     ) -> None:
-        """Initialize ESPHome serial port."""
+        """Initialize ESPHome Zigbee serial port."""
         super().__init__(
             path=path,
             baudrate=baudrate,
@@ -82,16 +65,16 @@ class ESPHomeSerial(BaseSerial):
         self._read_event = asyncio.Event()
         self._unsub: Callable[[], None] | None = None
 
-    def _on_data(self, msg: SerialProxyDataReceived) -> None:
-        if msg.instance == self.instance:
-            self._read_buffer.extend(msg.data)
-            self._read_event.set()
+    def _on_data(self, msg: ZigbeeProxyFrame) -> None:
+        self._read_buffer.extend(msg.data)
+        self._read_event.set()
 
     def open(self) -> None:
         """Open the serial port."""
         asyncio.run(self._async_open())
         assert self.api is not None
-        self._unsub = self.api.subscribe_serial_proxy_data(self._on_data)
+        self._unsub = self.api.subscribe_zigbee_proxy_frame(self._on_data)
+        self.api.send_zigbee_proxy_request(ZigbeeProxyRequestType.SUBSCRIBE)
 
     async def _async_open(self) -> None:
         self.api = APIClient(
@@ -103,49 +86,24 @@ class ESPHomeSerial(BaseSerial):
         await self.api.connect(login=True)
 
     def configure_port(self) -> None:
-        """Configure the serial port settings."""
-        assert self.api is not None
-        self.api.serial_proxy_configure(
-            instance=self.instance,
-            baudrate=self._baudrate,
-            flow_control=self._rtscts,
-            parity=PARITY_MAP[self._parity],
-            stop_bits=STOP_BITS_MAP[self._stopbits],
-            data_size=self._byte_size,
-        )
+        """Configure the serial port settings (no-op for Zigbee proxy)."""
 
-    def _set_modem_pins(self, modem_pins: ModemPins) -> None:
-        assert self.api is not None
-        self.api.serial_proxy_set_modem_pins(
-            instance=self.instance,
-            rts=modem_pins.rts is PinState.HIGH,
-            dtr=modem_pins.dtr is PinState.HIGH,
-        )
+    def _set_modem_pins(self, modem_pins) -> None:
+        pass
 
-    def _get_modem_pins(self) -> ModemPins:
-        return asyncio.run(self._async_get_modem_pins())
+    def _get_modem_pins(self):
+        from serialx.common import ModemPins
 
-    async def _async_get_modem_pins(self) -> ModemPins:
-        assert self.api is not None
-        resp = await self.api.serial_proxy_get_modem_pins(instance=self.instance)
-        return ModemPins(
-            dtr=PinState.convert(resp.dtr),
-            rts=PinState.convert(resp.rts),
-        )
+        return ModemPins()
 
     def flush(self) -> None:
-        """Flush write buffers."""
-        asyncio.run(self._async_flush())
-
-    async def _async_flush(self) -> None:
-        assert self.api is not None
-        await self.api.serial_proxy_flush(instance=self.instance)
+        """Flush write buffers (no-op for Zigbee proxy)."""
 
     def write(self, b: Buffer) -> int:
         """Write bytes to serial port."""
         assert self.api is not None
         data = bytes(b)
-        self.api.serial_proxy_write(instance=self.instance, data=data)
+        self.api.send_zigbee_proxy_frame(data)
         return len(data)
 
     def readinto(self, b: Buffer) -> int:
@@ -170,20 +128,21 @@ class ESPHomeSerial(BaseSerial):
             self._unsub = None
 
         if self.api is not None:
+            self.api.send_zigbee_proxy_request(ZigbeeProxyRequestType.UNSUBSCRIBE)
             asyncio.run(self.api.disconnect())
             self.api = None
 
 
-class ESPHomeSerialTransport(BaseSerialTransport):
-    """Serial transport over ESPHome serial proxy API."""
+class ESPHomeZigbeeTransport(BaseSerialTransport):
+    """Serial transport over ESPHome Zigbee proxy API."""
 
-    transport_name = "esphome"
-    _serial: ESPHomeSerial
+    transport_name = "esphome_zigbee"
+    _serial: ESPHomeZigbeeSerial
 
     def __init__(
         self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
     ) -> None:
-        """Initialize the ESPHome serial transport."""
+        """Initialize the ESPHome Zigbee transport."""
         super().__init__(loop, protocol)
         self._unsub: Callable[[], None] | None = None
 
@@ -199,7 +158,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         byte_size: int = 8,
         **kwargs,
     ) -> None:
-        self._serial = ESPHomeSerial(
+        self._serial = ESPHomeZigbeeSerial(
             path=path,
             baudrate=baudrate,
             parity=parity,
@@ -210,19 +169,18 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         )
 
         await self._serial._async_open()
-        self._serial.configure_port()
 
         assert self._serial.api is not None
-        self._unsub = self._serial.api.subscribe_serial_proxy_data(self._on_data)
+        self._unsub = self._serial.api.subscribe_zigbee_proxy_frame(self._on_data)
+        self._serial.api.send_zigbee_proxy_request(ZigbeeProxyRequestType.SUBSCRIBE)
 
         self._protocol.connection_made(self)
 
-    def _on_data(self, msg: SerialProxyDataReceived) -> None:
-        if msg.instance == self._serial.instance:
-            self._protocol.data_received(msg.data)
+    def _on_data(self, msg: ZigbeeProxyFrame) -> None:
+        self._protocol.data_received(msg.data)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
-        """Write data to the serial proxy."""
+        """Write data to the Zigbee proxy."""
         self._serial.write(data)
 
     def is_closing(self) -> bool:
@@ -247,17 +205,10 @@ class ESPHomeSerialTransport(BaseSerialTransport):
     async def _async_close(self, api: APIClient) -> None:
         """Close the API connection."""
         try:
+            api.send_zigbee_proxy_request(ZigbeeProxyRequestType.UNSUBSCRIBE)
             await api.disconnect()
         finally:
             self._protocol.connection_lost(None)
-
-    async def flush(self) -> None:
-        """Flush write buffers."""
-        await self._serial._async_flush()
-
-    async def get_modem_pins(self) -> ModemPins:
-        """Get modem control bits."""
-        return await self._serial._async_get_modem_pins()
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
