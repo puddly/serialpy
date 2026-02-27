@@ -71,14 +71,23 @@ async def async_create_socket_pair() -> AsyncIterator[tuple[str, str]]:
                 if data is None:
                     return
 
-                writer.write(data)
-                await writer.drain()
-                LOGGER.debug(
-                    "forwarded %d bytes from %s to %s",
-                    len(data),
-                    peer_side,
-                    side,
-                )
+                try:
+                    writer.write(data)
+                    await writer.drain()
+                    LOGGER.debug(
+                        "forwarded %d bytes from %s to %s",
+                        len(data),
+                        peer_side,
+                        side,
+                    )
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    LOGGER.debug(
+                        "failed forwarding bytes from %s to %s",
+                        peer_side,
+                        side,
+                        exc_info=True,
+                    )
+                    return
 
         read_task = asyncio.create_task(reader_to_queue())
         write_task = asyncio.create_task(queue_to_writer())
@@ -95,6 +104,10 @@ async def async_create_socket_pair() -> AsyncIterator[tuple[str, str]]:
             await asyncio.gather(*pending, return_exceptions=True)
             await asyncio.gather(*done, return_exceptions=True)
         finally:
+            for relay_task in (read_task, write_task):
+                if not relay_task.done():
+                    relay_task.cancel()
+            await asyncio.gather(read_task, write_task, return_exceptions=True)
             writer.close()
             with contextlib.suppress(
                 ConnectionResetError,

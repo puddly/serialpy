@@ -129,7 +129,7 @@ class SocketSerialTransport(BaseSerialTransport):
         path: str,
         baudrate: int,
         parity: Parity = Parity.NONE,
-        stopbits: StopBits = StopBits.ONE,
+        stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
@@ -153,6 +153,7 @@ class SocketSerialTransport(BaseSerialTransport):
         self._tcp_transport = tcp_transport
 
         if self._connection_lost_called:
+            tcp_transport.close()
             self._tcp_transport = None
             return
 
