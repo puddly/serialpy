@@ -23,7 +23,7 @@ class SocketSerial(BaseSerial):
         path: str | Path,
         baudrate: int,
         parity: Parity = Parity.NONE,
-        stopbits: StopBits = StopBits.ONE,
+        stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
