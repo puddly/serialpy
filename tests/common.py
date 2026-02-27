@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 import serialx
+from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
 
@@ -80,7 +81,7 @@ async def async_create_reader_writer(
     port: str | None,
     **kwargs: Any,
 ) -> AsyncIterator[
-    tuple[asyncio.StreamReader, serialx.SerialStreamWriter[serialx.SerialTransport]]
+    tuple[asyncio.StreamReader, serialx.SerialStreamWriter[BaseSerialTransport]]
 ]:
     """Create a single reader/writer pair."""
 
@@ -104,9 +105,9 @@ async def async_create_reader_writer_pair(
 ) -> AsyncIterator[
     tuple[
         asyncio.StreamReader,
-        serialx.SerialStreamWriter[serialx.SerialTransport],
+        serialx.SerialStreamWriter[BaseSerialTransport],
         asyncio.StreamReader,
-        serialx.SerialStreamWriter[serialx.SerialTransport],
+        serialx.SerialStreamWriter[BaseSerialTransport],
     ]
 ]:
     """Create reader/writer pairs for both sides of a socat connection.
@@ -133,9 +134,9 @@ async def async_create_dual_loopback(
 ) -> AsyncIterator[
     tuple[
         asyncio.StreamReader,
-        serialx.SerialStreamWriter[serialx.SerialTransport],
+        serialx.SerialStreamWriter[BaseSerialTransport],
         asyncio.StreamReader,
-        serialx.SerialStreamWriter[serialx.SerialTransport],
+        serialx.SerialStreamWriter[BaseSerialTransport],
     ]
 ]:
     """Create reader/writer pairs for dual loopback configuration.
