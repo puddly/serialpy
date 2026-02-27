@@ -10,6 +10,7 @@ import io
 import os
 from pathlib import Path
 from typing import Any
+import urllib.parse
 import warnings
 
 from typing_extensions import Self
@@ -432,6 +433,25 @@ class BaseSerialTransport(asyncio.Transport):
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         raise NotImplementedError
+
+
+def get_serial_classes(
+    url: str,
+) -> tuple[type[BaseSerial], type[BaseSerialTransport]]:
+    """Get the appropriate serial and transport classes based on the URL scheme."""
+    parsed_path = urllib.parse.urlparse(url)
+
+    if parsed_path.scheme in ("socket", "tcp"):
+        from .platforms.serial_socket import (  # noqa: PLC0415
+            SocketSerial,
+            SocketSerialTransport,
+        )
+
+        return SocketSerial, SocketSerialTransport
+    else:
+        from .platforms import Serial, SerialTransport  # noqa: PLC0415
+
+        return Serial, SerialTransport
 
 
 @dataclasses.dataclass

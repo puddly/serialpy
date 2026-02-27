@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 import logging
 from typing import Generic, TypeVar
-import urllib.parse
 
-from .common import Parity, StopBits
-from .platforms import SerialTransport
+from .common import BaseSerialTransport, Parity, StopBits, get_serial_classes
 
 LOGGER = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ class SerialStreamWriter(asyncio.StreamWriter, Generic[_T]):
 
 async def create_serial_connection(
     loop,
-    protocol_factory,
+    protocol_factory: Callable[[], asyncio.Protocol],
     url,
     baudrate,
     parity=Parity.NONE,
@@ -34,41 +33,35 @@ async def create_serial_connection(
     xonxoff=False,
     rtscts=False,
     exclusive=True,
-    *,
-    transport_factory=SerialTransport,
     **kwargs,
-) -> tuple[SerialTransport, asyncio.Protocol]:
+) -> tuple[BaseSerialTransport, asyncio.Protocol]:
     """Create a serial port connection with asyncio."""
     if not exclusive:
         raise ValueError("Only exclusive=True is supported")
 
-    parsed_path = urllib.parse.urlparse(url)
+    _, transport_cls = await asyncio.get_running_loop().run_in_executor(
+        None, get_serial_classes, url
+    )
 
-    protocol: asyncio.Protocol
-    if parsed_path.scheme in ("socket", "tcp"):
-        transport, protocol = await loop.create_connection(
-            protocol_factory, parsed_path.hostname, parsed_path.port
-        )
-    else:
-        protocol = protocol_factory()
-        transport = transport_factory(loop=loop, protocol=protocol)
+    protocol = protocol_factory()
+    transport = transport_cls(loop=loop, protocol=protocol)
 
-        await transport.connect(
-            path=url,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-            **kwargs,
-        )
+    await transport.connect(
+        path=url,
+        baudrate=baudrate,
+        parity=parity,
+        stopbits=stopbits,
+        xonxoff=xonxoff,
+        rtscts=rtscts,
+        **kwargs,
+    )
 
     return transport, protocol
 
 
 async def open_serial_connection(
     *args, **kwargs
-) -> tuple[asyncio.StreamReader, SerialStreamWriter[SerialTransport]]:
+) -> tuple[asyncio.StreamReader, SerialStreamWriter[BaseSerialTransport]]:
     """Open a serial port connection using StreamReader and StreamWriter."""
     loop = asyncio.get_running_loop()
 
@@ -77,7 +70,7 @@ async def open_serial_connection(
     transport, _ = await create_serial_connection(
         loop, lambda: protocol, *args, **kwargs
     )
-    writer: SerialStreamWriter[SerialTransport] = SerialStreamWriter(
+    writer: SerialStreamWriter[BaseSerialTransport] = SerialStreamWriter(
         transport, protocol, reader, loop
     )
 
