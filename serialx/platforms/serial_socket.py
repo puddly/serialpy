@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Buffer
 import logging
 from pathlib import Path
 import socket
 import urllib.parse
+
+from typing_extensions import Buffer
 
 from serialx.common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
 
@@ -105,7 +106,6 @@ class _SocketProxyProtocol(asyncio.Protocol):
         self._serial_transport._resume_writing()
 
     def connection_lost(self, exc: Exception | None) -> None:
-        LOGGER.debug("Socket proxy connection lost exc=%r", exc)
         self._serial_transport._connection_lost(exc)
 
 
