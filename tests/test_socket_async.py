@@ -29,7 +29,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 @contextlib.asynccontextmanager
-async def async_create_socket_pair() -> AsyncIterator[tuple[str, str]]:
+async def async_create_socket_pair(
+    relay_read_delay: float = 0.0,
+) -> AsyncIterator[tuple[str, str]]:
     """Create two socket:// endpoints backed by a bidirectional relay."""
     left_to_right: asyncio.Queue[bytes | None] = asyncio.Queue()
     right_to_left: asyncio.Queue[bytes | None] = asyncio.Queue()
@@ -59,6 +61,8 @@ async def async_create_socket_pair() -> AsyncIterator[tuple[str, str]]:
                         side,
                         peer_side,
                     )
+                    if relay_read_delay > 0:
+                        await asyncio.sleep(relay_read_delay)
             except (BrokenPipeError, ConnectionResetError):
                 LOGGER.debug("%s client disconnected abruptly", side)
             finally:
@@ -142,14 +146,16 @@ async def async_create_socket_pair() -> AsyncIterator[tuple[str, str]]:
     try:
         yield (left_url, right_url)
     finally:
+        wait_closed_coros = []
         for server in (left_server, right_server):
             try:
                 server.close()
             except OSError:  # noqa: PERF203
                 continue
+            wait_closed_coros.append(server.wait_closed())
 
-        await left_server.wait_closed()
-        await right_server.wait_closed()
+        if wait_closed_coros:
+            await asyncio.gather(*wait_closed_coros)
 
         if handler_tasks:
             for task in list(handler_tasks):
@@ -185,6 +191,76 @@ def test_socket_url_uses_dedicated_socket_platform() -> None:
 
     assert serial_cls is SocketSerial
     assert transport_cls is SocketSerialTransport
+
+
+async def test_transport_backpressure_callbacks_async() -> None:
+    """Test backpressure pause/resume callbacks through public async APIs."""
+    output_pause_count = 0
+    output_resume_count = 0
+
+    async with async_create_socket_pair(relay_read_delay=0.001) as (in_tty, out_tty):
+
+        class Input(asyncio.Protocol):
+            def data_received(self, data: bytes) -> None:
+                return
+
+        class Output(asyncio.Protocol):
+            _transport: SocketSerialTransport
+
+            def connection_made(self, transport: asyncio.BaseTransport) -> None:
+                assert isinstance(transport, SocketSerialTransport)
+                self._transport = transport
+
+            def pause_writing(self) -> None:
+                nonlocal output_pause_count
+                output_pause_count += 1
+
+            def resume_writing(self) -> None:
+                nonlocal output_resume_count
+                output_resume_count += 1
+
+        loop = asyncio.get_running_loop()
+        in_transport, _ = await create_serial_connection(
+            loop, Input, in_tty, baudrate=115200
+        )
+        out_transport, _ = await create_serial_connection(
+            loop, Output, out_tty, baudrate=115200
+        )
+        await asyncio.sleep(0)
+
+        payload = b"X" * 65536
+        for _ in range(64):
+            out_transport.write(payload)
+
+        async with asyncio_timeout(10):
+            while out_transport.get_write_buffer_size() > 0:
+                await asyncio.sleep(0.05)
+
+        await asyncio.sleep(0.1)
+        assert output_pause_count > 0
+        assert output_resume_count > 0
+
+        out_transport.close()
+        in_transport.close()
+
+
+async def test_transport_close_is_idempotent_async() -> None:
+    """Test closing socket writer multiple times is safe and drains buffer state."""
+    async with (
+        async_create_socket_pair() as (left, right),
+        async_create_reader_writer_pair(left, right, baudrate=115200) as (
+            reader_left,
+            writer_left,
+            reader_right,
+            writer_right,
+        ),
+    ):
+        writer_left.close()
+        await writer_left.wait_closed()
+        assert writer_left.transport.get_write_buffer_size() == 0
+
+        writer_left.close()
+        await writer_left.wait_closed()
 
 
 async def test_segmented_binary_data_async() -> None:
