@@ -129,9 +129,14 @@ async def async_create_socket_pair() -> AsyncIterator[tuple[str, str]]:
     try:
         yield (left_url, right_url)
     finally:
-        left_server.close()
-        right_server.close()
-        await asyncio.gather(left_server.wait_closed(), right_server.wait_closed())
+        for server in (left_server, right_server):
+            try:
+                server.close()
+            except OSError:  # noqa: PERF203
+                continue
+
+        await left_server.wait_closed()
+        await right_server.wait_closed()
 
         if handler_tasks:
             for task in list(handler_tasks):
