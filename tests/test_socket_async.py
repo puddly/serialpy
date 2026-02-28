@@ -213,12 +213,15 @@ async def test_transport_close_before_connect_completes_async() -> None:
         def __init__(self) -> None:
             self.connection_made_calls = 0
             self.connection_lost_calls = 0
+            self.connection_lost_future = asyncio.get_running_loop().create_future()
 
         def connection_made(self, transport: asyncio.BaseTransport) -> None:
             self.connection_made_calls += 1
 
         def connection_lost(self, exc: Exception | None) -> None:
             self.connection_lost_calls += 1
+            if not self.connection_lost_future.done():
+                self.connection_lost_future.set_result(None)
 
     async with async_create_socket_pair() as (left, _right):
         loop = asyncio.get_running_loop()
@@ -230,6 +233,7 @@ async def test_transport_close_before_connect_completes_async() -> None:
         )
         transport.close()
         await connect_task
+        await asyncio.wait_for(protocol.connection_lost_future, timeout=5)
         await asyncio.sleep(0)
 
         # connection_made should never fire in this race path.
@@ -251,10 +255,17 @@ async def test_transport_backpressure_callbacks_async() -> None:
     output_resume_count = 0
 
     async with async_create_socket_pair(relay_read_delay=0.001) as (in_tty, out_tty):
+        loop = asyncio.get_running_loop()
+        input_lost = loop.create_future()
+        output_lost = loop.create_future()
 
         class Input(asyncio.Protocol):
             def data_received(self, data: bytes) -> None:
                 return
+
+            def connection_lost(self, exc: Exception | None) -> None:
+                if not input_lost.done():
+                    input_lost.set_result(None)
 
         class Output(asyncio.Protocol):
             _transport: SocketSerialTransport
@@ -271,7 +282,10 @@ async def test_transport_backpressure_callbacks_async() -> None:
                 nonlocal output_resume_count
                 output_resume_count += 1
 
-        loop = asyncio.get_running_loop()
+            def connection_lost(self, exc: Exception | None) -> None:
+                if not output_lost.done():
+                    output_lost.set_result(None)
+
         in_transport, _ = await create_serial_connection(
             loop, Input, in_tty, baudrate=115200
         )
@@ -294,6 +308,7 @@ async def test_transport_backpressure_callbacks_async() -> None:
 
         out_transport.close()
         in_transport.close()
+        await asyncio.gather(input_lost, output_lost)
 
 
 async def test_transport_close_is_idempotent_async() -> None:
@@ -771,6 +786,9 @@ async def test_remove_writer() -> None:
     COUNT = 8 * 1024
     output_resume_event = asyncio.Event()
     data_received_count = 0
+    loop = asyncio.get_running_loop()
+    input_lost = loop.create_future()
+    output_lost = loop.create_future()
 
     async with async_create_socket_pair() as (in_tty, out_tty):
 
@@ -785,6 +803,10 @@ async def test_remove_writer() -> None:
                 nonlocal data_received_count
                 data_received_count += len(data)
                 self._transport.write(data)
+
+            def connection_lost(self, exc: Exception | None) -> None:
+                if not input_lost.done():
+                    input_lost.set_result(None)
 
         class Output(asyncio.Protocol):
             """Provides backpressure to writer via output_resume_event."""
@@ -802,7 +824,9 @@ async def test_remove_writer() -> None:
             def resume_writing(self) -> None:
                 output_resume_event.set()
 
-        loop = asyncio.get_running_loop()
+            def connection_lost(self, exc: Exception | None) -> None:
+                if not output_lost.done():
+                    output_lost.set_result(None)
 
         in_transport, _ = await create_serial_connection(
             loop, Input, in_tty, baudrate=115200
@@ -831,6 +855,7 @@ async def test_remove_writer() -> None:
 
         out_transport.close()
         in_transport.close()
+        await asyncio.gather(input_lost, output_lost)
 
 
 async def test_pause_resume() -> None:
