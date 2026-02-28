@@ -193,6 +193,58 @@ def test_socket_url_uses_dedicated_socket_platform() -> None:
     assert transport_cls is SocketSerialTransport
 
 
+async def test_invalid_socket_uri_async() -> None:
+    """Test invalid socket URI is rejected by public async API."""
+    loop = asyncio.get_running_loop()
+
+    with pytest.raises(ValueError, match="expected both host and port"):
+        await create_serial_connection(
+            loop,
+            asyncio.Protocol,
+            "socket://127.0.0.1",
+            baudrate=115200,
+        )
+
+
+async def test_transport_close_before_connect_completes_async() -> None:
+    """Test close-before-connect race is handled without duplicate callbacks."""
+
+    class ProbeProtocol(asyncio.Protocol):
+        def __init__(self) -> None:
+            self.connection_made_calls = 0
+            self.connection_lost_calls = 0
+
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            self.connection_made_calls += 1
+
+        def connection_lost(self, exc: Exception | None) -> None:
+            self.connection_lost_calls += 1
+
+    async with async_create_socket_pair() as (left, _right):
+        loop = asyncio.get_running_loop()
+        protocol = ProbeProtocol()
+        transport = SocketSerialTransport(loop, protocol)
+
+        connect_task = asyncio.create_task(
+            transport.connect(path=left, baudrate=115200)
+        )
+        transport.close()
+        await connect_task
+        await asyncio.sleep(0)
+
+        # connection_made should never fire in this race path.
+        assert protocol.connection_made_calls == 0
+        # close-before-connect should notify connection_lost exactly once.
+        assert protocol.connection_lost_calls == 1
+        assert transport.is_closing() is True
+        assert transport.get_write_buffer_size() == 0
+
+        # Additional closes are idempotent after connection_lost.
+        transport.close()
+        await asyncio.sleep(0)
+        assert protocol.connection_lost_calls == 1
+
+
 async def test_transport_backpressure_callbacks_async() -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
     output_pause_count = 0
