@@ -1,6 +1,8 @@
 """Test sync APIs with socket:// endpoints."""
 
-from collections.abc import Iterator
+# Async imports
+import asyncio
+from collections.abc import AsyncIterator, Iterator
 import contextlib
 import logging
 import queue
@@ -210,3 +212,140 @@ def create_socket_pair() -> Iterator[tuple[str, str]]:
         yield (relay.left_url, relay.right_url)
     finally:
         relay.close()
+
+
+@contextlib.asynccontextmanager
+async def async_create_socket_pair(
+    relay_read_delay: float = 0.0,
+) -> AsyncIterator[tuple[str, str]]:
+    """Create two socket:// endpoints backed by a bidirectional relay."""
+    left_to_right: asyncio.Queue[bytes | None] = asyncio.Queue()
+    right_to_left: asyncio.Queue[bytes | None] = asyncio.Queue()
+    handler_tasks: set[asyncio.Task[None]] = set()
+
+    async def handle_client(
+        side: str,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        task = asyncio.current_task()
+        assert task is not None
+        handler_tasks.add(task)
+
+        peer_side = "right" if side == "left" else "left"
+        LOGGER.debug("accepted %s client connection", side)
+        outbound_queue = left_to_right if side == "left" else right_to_left
+        inbound_queue = right_to_left if side == "left" else left_to_right
+
+        async def reader_to_queue() -> None:
+            try:
+                while data := await reader.read(4096):
+                    await outbound_queue.put(data)
+                    LOGGER.debug(
+                        "queued %d bytes from %s to %s",
+                        len(data),
+                        side,
+                        peer_side,
+                    )
+                    if relay_read_delay > 0:
+                        await asyncio.sleep(relay_read_delay)
+            except (BrokenPipeError, ConnectionResetError):
+                LOGGER.debug("%s client disconnected abruptly", side)
+            finally:
+                await outbound_queue.put(None)
+                LOGGER.debug("%s client reached EOF", side)
+
+        async def queue_to_writer() -> None:
+            while True:
+                data = await inbound_queue.get()
+                if data is None:
+                    return
+
+                try:
+                    writer.write(data)
+                    await writer.drain()
+                    LOGGER.debug(
+                        "forwarded %d bytes from %s to %s",
+                        len(data),
+                        peer_side,
+                        side,
+                    )
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    LOGGER.debug(
+                        "failed forwarding bytes from %s to %s",
+                        peer_side,
+                        side,
+                        exc_info=True,
+                    )
+                    return
+
+        read_task = asyncio.create_task(reader_to_queue())
+        write_task = asyncio.create_task(queue_to_writer())
+
+        try:
+            done, pending = await asyncio.wait(
+                {read_task, write_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            for pending_task in pending:
+                pending_task.cancel()
+
+            await asyncio.gather(*pending, return_exceptions=True)
+            await asyncio.gather(*done, return_exceptions=True)
+        finally:
+            for relay_task in (read_task, write_task):
+                if not relay_task.done():
+                    relay_task.cancel()
+            await asyncio.gather(read_task, write_task, return_exceptions=True)
+            writer.close()
+            with contextlib.suppress(
+                ConnectionResetError,
+                BrokenPipeError,
+                OSError,
+                asyncio.CancelledError,
+            ):
+                await writer.wait_closed()
+            handler_tasks.discard(task)
+            LOGGER.debug("closed %s client connection", side)
+
+    left_server = await asyncio.start_server(
+        lambda reader, writer: handle_client("left", reader, writer),
+        host="127.0.0.1",
+        port=0,
+    )
+    right_server = await asyncio.start_server(
+        lambda reader, writer: handle_client("right", reader, writer),
+        host="127.0.0.1",
+        port=0,
+    )
+
+    left_socket_info = left_server.sockets
+    right_socket_info = right_server.sockets
+    assert left_socket_info is not None and left_socket_info
+    assert right_socket_info is not None and right_socket_info
+
+    left_url = f"socket://127.0.0.1:{left_socket_info[0].getsockname()[1]}"
+    right_url = f"socket://127.0.0.1:{right_socket_info[0].getsockname()[1]}"
+    LOGGER.debug("started socket pair server left=%s right=%s", left_url, right_url)
+
+    try:
+        yield (left_url, right_url)
+    finally:
+        wait_closed_coros = []
+        for server in (left_server, right_server):
+            try:
+                server.close()
+            except OSError:  # noqa: PERF203
+                continue
+            wait_closed_coros.append(server.wait_closed())
+
+        if wait_closed_coros:
+            await asyncio.gather(*wait_closed_coros)
+
+        if handler_tasks:
+            for task in list(handler_tasks):
+                task.cancel()
+            await asyncio.gather(*handler_tasks, return_exceptions=True)
+
+        LOGGER.debug("stopped socket pair servers")
