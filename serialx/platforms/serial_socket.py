@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Buffer
 import logging
 from pathlib import Path
 import socket
 import urllib.parse
+
+from typing_extensions import Buffer
 
 from serialx.common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
 
@@ -22,7 +23,7 @@ class SocketSerial(BaseSerial):
         path: str | Path,
         baudrate: int,
         parity: Parity = Parity.NONE,
-        stopbits: StopBits = StopBits.ONE,
+        stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
@@ -41,6 +42,9 @@ class SocketSerial(BaseSerial):
         )
 
         parsed = urllib.parse.urlparse(str(path))
+        if parsed.hostname is None or parsed.port is None:
+            raise ValueError(f"Invalid socket URI, expected both host and port: {path}")
+
         self._host = parsed.hostname
         self._port = parsed.port
 
@@ -95,7 +99,14 @@ class _SocketProxyProtocol(asyncio.Protocol):
     def data_received(self, data: bytes) -> None:
         self._serial_transport._data_received(data)
 
+    def pause_writing(self) -> None:
+        self._serial_transport._pause_writing()
+
+    def resume_writing(self) -> None:
+        self._serial_transport._resume_writing()
+
     def connection_lost(self, exc: Exception | None) -> None:
+        self._serial_transport._tcp_connection_lost()
         self._serial_transport._connection_lost(exc)
 
 
@@ -111,21 +122,23 @@ class SocketSerialTransport(BaseSerialTransport):
         """Initialize the socket serial transport."""
         super().__init__(loop, protocol)
         self._tcp_transport: asyncio.Transport | None = None
+        self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
+        self._connection_lost_called = False
 
     async def _connect(  # type: ignore[override]
         self,
         *,
-        url: str,
+        path: str,
         baudrate: int,
         parity: Parity = Parity.NONE,
-        stopbits: StopBits = StopBits.ONE,
+        stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
         **kwargs,
     ) -> None:
         self._serial = SocketSerial(
-            path=url,
+            path=path,
             baudrate=baudrate,
             parity=parity,
             stopbits=stopbits,
@@ -133,6 +146,7 @@ class SocketSerialTransport(BaseSerialTransport):
             rtscts=rtscts,
             byte_size=byte_size,
         )
+        self._tcp_connection_lost_waiter = self._loop.create_future()
 
         tcp_transport, _ = await self._loop.create_connection(
             lambda: _SocketProxyProtocol(self),
@@ -141,24 +155,59 @@ class SocketSerialTransport(BaseSerialTransport):
         )
         self._tcp_transport = tcp_transport
 
+        if self._connection_lost_called:
+            tcp_transport.close()
+            if self._tcp_connection_lost_waiter is not None:
+                await self._tcp_connection_lost_waiter
+
+            self._tcp_transport = None
+            return
+
         self._protocol.connection_made(self)
 
     def _data_received(self, data: bytes) -> None:
         """Handle data received from the TCP transport."""
         self._protocol.data_received(data)
 
+    def _pause_writing(self) -> None:
+        """Propagate backpressure from TCP transport to serial protocol."""
+        self._protocol.pause_writing()
+
+    def _resume_writing(self) -> None:
+        """Propagate resume signal from TCP transport to serial protocol."""
+        self._protocol.resume_writing()
+
     def _connection_lost(self, exc: Exception | None) -> None:
         """Handle connection lost from the TCP transport."""
-        if self._closing:
+        if self._connection_lost_called:
             return
+        self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
         self._protocol.connection_lost(exc)
+
+    def _tcp_connection_lost(self) -> None:
+        """Track the underlying TCP transport's connection_lost callback."""
+        if (
+            self._tcp_connection_lost_waiter is not None
+            and not self._tcp_connection_lost_waiter.done()
+        ):
+            self._tcp_connection_lost_waiter.set_result(None)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the socket."""
         assert self._tcp_transport is not None
         self._tcp_transport.write(data)
+
+    def pause_reading(self) -> None:
+        """Pause reading from the socket transport."""
+        assert self._tcp_transport is not None
+        self._tcp_transport.pause_reading()
+
+    def resume_reading(self) -> None:
+        """Resume reading from the socket transport."""
+        assert self._tcp_transport is not None
+        self._tcp_transport.resume_reading()
 
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
@@ -166,12 +215,14 @@ class SocketSerialTransport(BaseSerialTransport):
 
     def close(self) -> None:
         """Close the transport."""
-        if self._closing:
+        if self._connection_lost_called:
             return
         self._closing = True
 
         if self._tcp_transport is not None:
             self._tcp_transport.close()
+        else:
+            self._connection_lost(None)
 
     async def flush(self) -> None:
         """Flush write buffers (no-op, TCP transport handles buffering)."""

@@ -39,7 +39,9 @@ async def create_serial_connection(
     if not exclusive:
         raise ValueError("Only exclusive=True is supported")
 
-    _, transport_cls = get_serial_classes(url)
+    _, transport_cls = await asyncio.get_running_loop().run_in_executor(
+        None, get_serial_classes, url
+    )
 
     protocol = protocol_factory()
     transport = transport_cls(loop=loop, protocol=protocol)
@@ -59,7 +61,7 @@ async def create_serial_connection(
 
 async def open_serial_connection(
     *args, **kwargs
-) -> tuple[asyncio.StreamReader, SerialStreamWriter[SerialTransport]]:
+) -> tuple[asyncio.StreamReader, SerialStreamWriter[BaseSerialTransport]]:
     """Open a serial port connection using StreamReader and StreamWriter."""
     loop = asyncio.get_running_loop()
 
@@ -68,7 +70,7 @@ async def open_serial_connection(
     transport, _ = await create_serial_connection(
         loop, lambda: protocol, *args, **kwargs
     )
-    writer: SerialStreamWriter[SerialTransport] = SerialStreamWriter(
+    writer: SerialStreamWriter[BaseSerialTransport] = SerialStreamWriter(
         transport, protocol, reader, loop
     )
 

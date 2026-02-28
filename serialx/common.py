@@ -442,22 +442,28 @@ def get_serial_classes(
     parsed_path = urllib.parse.urlparse(url)
 
     if parsed_path.scheme in ("socket", "tcp"):
-        from .platforms.serial_socket import SocketSerial, SocketSerialTransport
+        from .platforms.serial_socket import (  # noqa: PLC0415
+            SocketSerial,
+            SocketSerialTransport,
+        )
 
         return SocketSerial, SocketSerialTransport
     elif parsed_path.scheme == "esphome":
-        from .platforms.serial_esphome import ESPHomeSerial, ESPHomeSerialTransport
+        from .platforms.serial_esphome import (  # noqa: PLC0415
+            ESPHomeSerial,
+            ESPHomeSerialTransport,
+        )
 
         return ESPHomeSerial, ESPHomeSerialTransport
     elif parsed_path.scheme == "esphomezigbee":
-        from .platforms.serial_esphome_zigbee import (
+        from .platforms.serial_esphome_zigbee import (  # noqa: PLC0415
             ESPHomeZigbeeSerial,
             ESPHomeZigbeeTransport,
         )
 
         return ESPHomeZigbeeSerial, ESPHomeZigbeeTransport
     else:
-        from .platforms import Serial, SerialTransport
+        from .platforms import Serial, SerialTransport  # noqa: PLC0415
 
         return Serial, SerialTransport
 
