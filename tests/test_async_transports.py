@@ -657,3 +657,16 @@ async def test_async_transport_close_before_connect_completes(
     # Additional closes are idempotent
     transport.close()
     await asyncio.sleep(0)
+
+
+async def test_async_invalid_uri() -> None:
+    """Test invalid URIs are rejected by public async API."""
+    loop = asyncio.get_running_loop()
+
+    with pytest.raises(ValueError, match="expected both host and port"):
+        await create_serial_connection(
+            loop,
+            asyncio.Protocol,
+            "socket://127.0.0.1",
+            baudrate=115200,
+        )
