@@ -106,6 +106,7 @@ class _SocketProxyProtocol(asyncio.Protocol):
         self._serial_transport._resume_writing()
 
     def connection_lost(self, exc: Exception | None) -> None:
+        self._serial_transport._tcp_connection_lost()
         self._serial_transport._connection_lost(exc)
 
 
@@ -121,6 +122,7 @@ class SocketSerialTransport(BaseSerialTransport):
         """Initialize the socket serial transport."""
         super().__init__(loop, protocol)
         self._tcp_transport: asyncio.Transport | None = None
+        self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
         self._connection_lost_called = False
 
     async def _connect(  # type: ignore[override]
@@ -144,6 +146,7 @@ class SocketSerialTransport(BaseSerialTransport):
             rtscts=rtscts,
             byte_size=byte_size,
         )
+        self._tcp_connection_lost_waiter = self._loop.create_future()
 
         tcp_transport, _ = await self._loop.create_connection(
             lambda: _SocketProxyProtocol(self),
@@ -154,6 +157,9 @@ class SocketSerialTransport(BaseSerialTransport):
 
         if self._connection_lost_called:
             tcp_transport.close()
+            if self._tcp_connection_lost_waiter is not None:
+                await self._tcp_connection_lost_waiter
+
             self._tcp_transport = None
             return
 
@@ -179,6 +185,14 @@ class SocketSerialTransport(BaseSerialTransport):
         self._closing = True
         self._tcp_transport = None
         self._protocol.connection_lost(exc)
+
+    def _tcp_connection_lost(self) -> None:
+        """Track the underlying TCP transport's connection_lost callback."""
+        if (
+            self._tcp_connection_lost_waiter is not None
+            and not self._tcp_connection_lost_waiter.done()
+        ):
+            self._tcp_connection_lost_waiter.set_result(None)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the socket."""
