@@ -518,6 +518,11 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
 
         await self._loop.run_in_executor(None, self._serial.configure_port)
         await super()._connect()
+
+        if self.is_closing():
+            # If we are closing, we should not call `connection_made`
+            return
+
         self._protocol.connection_made(self)
 
     async def flush(self) -> None:

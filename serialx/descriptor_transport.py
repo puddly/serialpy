@@ -296,8 +296,16 @@ class DescriptorTransport(asyncio.Transport):
     def close(self) -> None:
         """Close the transport."""
         LOGGER.debug("Closing at the request of the application")
-        if self._fileno is not None and not self._closing:
+        if self._closing:
+            return
+
+        if self._fileno is not None:
             self.write_eof()
+        else:
+            # If we haven't opened yet, but close is requested, ensure we notify protocol
+            # or ensure we don't open.
+            self._closing = True
+            self._maybe_background_close(None)
 
     def __del__(self) -> None:
         """Clean up transport on deletion."""
