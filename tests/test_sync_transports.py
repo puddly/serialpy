@@ -6,9 +6,8 @@ import os
 
 import pytest
 
-from serialx import ModemPins, Parity, PinState, Serial, StopBits
+from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
 from serialx.common import BaseSerial
-from serialx.platforms.serial_socket import SocketSerial
 from tests.common import SOCAT_BINARY, create_socat_pair
 from tests.socket_relay import create_socket_pair
 
@@ -16,9 +15,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 @pytest.fixture(params=["socat", "socket"])
-def sync_transport_pair(
-    request: pytest.FixtureRequest,
-) -> Iterator[tuple[str, str]]:
+def sync_transport_pair(request: pytest.FixtureRequest) -> Iterator[tuple[str, str]]:
     """Yield a connected pair of transports."""
     backend = request.param
 
@@ -41,13 +38,10 @@ def sync_serial_pair(
 ) -> Iterator[tuple[BaseSerial, BaseSerial]]:
     """Yield a connected pair of opened Serial objects with default settings."""
     left_path, right_path = sync_transport_pair
-    # Detect which class to use based on the path/url
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    right_cls = SocketSerial if right_path.startswith("socket://") else Serial
 
     with (
-        left_cls(left_path, baudrate=115200) as left_serial,
-        right_cls(right_path, baudrate=115200) as right_serial,
+        serial_for_url(left_path, baudrate=115200) as left_serial,
+        serial_for_url(right_path, baudrate=115200) as right_serial,
     ):
         yield left_serial, right_serial
 
@@ -131,12 +125,10 @@ def test_sync_random_large(
 ) -> None:
     """Test random read/write at various speeds (requires custom setup per test)."""
     left_path, right_path = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    right_cls = SocketSerial if right_path.startswith("socket://") else Serial
 
     with (
-        left_cls(left_path, baudrate=baudrate) as left,
-        right_cls(right_path, baudrate=baudrate) as right,
+        serial_for_url(left_path, baudrate=baudrate) as left,
+        serial_for_url(right_path, baudrate=baudrate) as right,
     ):
         data = os.urandom(chunk_size)
         left.write(data)
@@ -181,12 +173,10 @@ def test_sync_large_payload(
 ) -> None:
     """Test large payload transmission."""
     left_path, right_path = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    right_cls = SocketSerial if right_path.startswith("socket://") else Serial
 
     with (
-        left_cls(left_path, baudrate=921600) as left,
-        right_cls(right_path, baudrate=921600) as right,
+        serial_for_url(left_path, baudrate=921600) as left,
+        serial_for_url(right_path, baudrate=921600) as right,
     ):
         data = bytes([i % 256 for i in range(payload_size)])
         left.write(data)
@@ -218,12 +208,10 @@ def test_sync_sustained_throughput(
 ) -> None:
     """Test sustained data throughput at various baudrates."""
     left_path, right_path = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    right_cls = SocketSerial if right_path.startswith("socket://") else Serial
 
     with (
-        left_cls(left_path, baudrate=baudrate) as left,
-        right_cls(right_path, baudrate=baudrate) as right,
+        serial_for_url(left_path, baudrate=baudrate) as left,
+        serial_for_url(right_path, baudrate=baudrate) as right,
     ):
         chunk = os.urandom(1024)
         for _ in range(iterations):
@@ -240,8 +228,7 @@ def test_sync_valid_baudrates(
 ) -> None:
     """Test that valid baudrates are accepted."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    with left_cls(left_path, baudrate=baudrate) as serial:
+    with serial_for_url(left_path, baudrate=baudrate) as serial:
         assert serial.baudrate == baudrate
         serial.write(b"test")
 
@@ -254,8 +241,7 @@ def test_sync_valid_parity(
 ) -> None:
     """Test that valid parity settings are accepted."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    with left_cls(left_path, baudrate=115200, parity=parity) as serial:
+    with serial_for_url(left_path, baudrate=115200, parity=parity) as serial:
         assert serial.parity == parity
         serial.write(b"test")
 
@@ -278,8 +264,7 @@ def test_sync_valid_stopbits(
 ) -> None:
     """Test that valid stopbits settings are accepted."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    with left_cls(left_path, baudrate=115200, stopbits=stopbits) as serial:
+    with serial_for_url(left_path, baudrate=115200, stopbits=stopbits) as serial:
         assert serial.stopbits == expected
         serial.write(b"test")
 
@@ -290,8 +275,7 @@ def test_sync_valid_byte_size(
 ) -> None:
     """Test that valid byte sizes are accepted."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    with left_cls(left_path, baudrate=115200, byte_size=byte_size) as serial:
+    with serial_for_url(left_path, baudrate=115200, byte_size=byte_size) as serial:
         serial.write(b"test")
 
 
@@ -301,8 +285,7 @@ def test_sync_xonxoff_setting(
 ) -> None:
     """Test that xonxoff setting is accepted."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    with left_cls(left_path, baudrate=115200, xonxoff=xonxoff) as serial:
+    with serial_for_url(left_path, baudrate=115200, xonxoff=xonxoff) as serial:
         serial.write(b"test")
 
 
@@ -312,39 +295,36 @@ def test_sync_rtscts_setting(
 ) -> None:
     """Test that rtscts setting is accepted."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    with left_cls(left_path, baudrate=115200, rtscts=rtscts) as serial:
+    with serial_for_url(left_path, baudrate=115200, rtscts=rtscts) as serial:
         serial.write(b"test")
 
 
 def test_sync_exclusive(sync_transport_pair: tuple[str, str]) -> None:
     """Test that exclusive setting is respected."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
 
-    with left_cls(left_path, baudrate=115200, exclusive=True) as serial:
+    with serial_for_url(left_path, baudrate=115200, exclusive=True) as serial:
         assert serial.exclusive is True
 
         # Behavior depends on backend
         if left_path.startswith("socket://"):
             # Socket endpoints are not lockable tty devices
-            with left_cls(left_path, baudrate=115200, exclusive=True) as serial2:
+            with serial_for_url(left_path, baudrate=115200, exclusive=True) as serial2:
                 assert serial2.exclusive is True
         else:
             # Socat PTYs should lock
             with pytest.raises(OSError):
-                with left_cls(left_path, baudrate=115200, exclusive=True):
+                with serial_for_url(left_path, baudrate=115200, exclusive=True):
                     pass
 
 
 def test_sync_exclusive_disabled(sync_transport_pair: tuple[str, str]) -> None:
     """Test that exclusive setting is respected."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
 
-    with left_cls(left_path, baudrate=115200, exclusive=False) as serial1:
+    with serial_for_url(left_path, baudrate=115200, exclusive=False) as serial1:
         assert serial1.exclusive is False
-        with left_cls(left_path, baudrate=115200, exclusive=False) as serial2:
+        with serial_for_url(left_path, baudrate=115200, exclusive=False) as serial2:
             assert serial2.exclusive is False
             serial2.write(b"test")
 
@@ -354,11 +334,9 @@ def test_sync_context_manager_multiple_times(
 ) -> None:
     """Test that context manager can be used multiple times."""
     left_path, right_path = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    right_cls = SocketSerial if right_path.startswith("socket://") else Serial
 
-    serial_left = left_cls(left_path, baudrate=115200)
-    serial_right = right_cls(right_path, baudrate=115200)
+    serial_left = serial_for_url(left_path, baudrate=115200)
+    serial_right = serial_for_url(right_path, baudrate=115200)
 
     # First context
     with serial_left, serial_right:
@@ -376,11 +354,9 @@ def test_sync_context_manager_multiple_times(
 def test_sync_open_close_cycles(sync_transport_pair: tuple[str, str]) -> None:
     """Test multiple open/close cycles."""
     left_path, right_path = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
-    right_cls = SocketSerial if right_path.startswith("socket://") else Serial
 
-    serial_left = left_cls(left_path, baudrate=115200)
-    serial_right = right_cls(right_path, baudrate=115200)
+    serial_left = serial_for_url(left_path, baudrate=115200)
+    serial_right = serial_for_url(right_path, baudrate=115200)
 
     for i in range(1, 4):
         serial_left.open()
@@ -425,9 +401,8 @@ def test_sync_multiple_flush_calls(sync_serial_pair: tuple[Serial, Serial]) -> N
 def test_sync_get_modem_pins(sync_transport_pair: tuple[str, str]) -> None:
     """Test reading modem control bits."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
 
-    with left_cls(left_path, baudrate=115200) as serial:
+    with serial_for_url(left_path, baudrate=115200) as serial:
         modem_pins = serial.get_modem_pins()
         assert isinstance(modem_pins, ModemPins)
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
@@ -438,9 +413,8 @@ def test_sync_get_modem_pins(sync_transport_pair: tuple[str, str]) -> None:
 def test_sync_set_modem_pins(sync_transport_pair: tuple[str, str]) -> None:
     """Test setting modem control bits."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
 
-    with left_cls(left_path, baudrate=115200) as serial:
+    with serial_for_url(left_path, baudrate=115200) as serial:
         serial.set_modem_pins(dtr=True, rts=True)
         assert isinstance(serial.get_modem_pins(), ModemPins)
 
@@ -454,9 +428,8 @@ def test_sync_set_modem_pins(sync_transport_pair: tuple[str, str]) -> None:
 def test_sync_deprecated_dtr_property(sync_transport_pair: tuple[str, str]) -> None:
     """Test DTR property (deprecated alias)."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
 
-    with left_cls(left_path, baudrate=115200) as serial:
+    with serial_for_url(left_path, baudrate=115200) as serial:
         serial.dtr = True
         serial.dtr = False
 
@@ -464,8 +437,7 @@ def test_sync_deprecated_dtr_property(sync_transport_pair: tuple[str, str]) -> N
 def test_sync_deprecated_rts_property(sync_transport_pair: tuple[str, str]) -> None:
     """Test RTS property (deprecated alias)."""
     left_path, _ = sync_transport_pair
-    left_cls = SocketSerial if left_path.startswith("socket://") else Serial
 
-    with left_cls(left_path, baudrate=115200) as serial:
+    with serial_for_url(left_path, baudrate=115200) as serial:
         serial.rts = True
         serial.rts = False
