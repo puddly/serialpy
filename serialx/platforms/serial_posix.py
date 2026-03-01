@@ -517,11 +517,12 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
         await asyncio.sleep(AFTER_OPEN_DELAY)
 
         await self._loop.run_in_executor(None, self._serial.configure_port)
-        await super()._connect()
 
         if self.is_closing():
             # If we are closing, we should not call `connection_made`
             return
+
+        await super()._connect()
 
         self._protocol.connection_made(self)
 
