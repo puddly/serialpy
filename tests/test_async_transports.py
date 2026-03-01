@@ -48,9 +48,6 @@ async def async_transport_pair(
             yield (left, right)
     elif backend == "socket":
         # Introduce a small delay to simulate network latency/backpressure
-        # if the test seems to require it, or use the default.
-        # However, async_create_socket_pair's signature in test_socket_async.py allows args.
-        # But here we call it without args.
         async with async_create_socket_pair(relay_read_delay=0.001) as (left, right):
             yield (left, right)
     else:
