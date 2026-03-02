@@ -191,6 +191,49 @@ jobs:
           $driverDir = Join-Path $PWD "tests/drivers/com0com"
           $inf = Join-Path $driverDir "com0com.inf"
           $setupc = Join-Path $driverDir "setupc.exe"
+          $setupApiLog = Join-Path $env:windir "INF\setupapi.dev.log"
+
+          function Show-DriverDiagnostics {
+            Write-Host "=== setupapi.dev.log (tail) ==="
+            if (Test-Path $setupApiLog) {
+              Get-Content $setupApiLog -Tail 300
+            }
+            Write-Host "=== Installed drivers (filtered) ==="
+            pnputil /enum-drivers | Select-String -Pattern "Published Name|Original Name|Provider Name|com0com|cncport" -Context 0,1
+            Write-Host "=== Connected devices (filtered) ==="
+            pnputil /enum-devices /connected | Select-String -Pattern "com0com|CNCA|CNCB|COM1|COM2" -Context 0,1
+          }
+
+          function Invoke-Setupc {
+            param(
+              [string]$Name,
+              [string[]]$Arguments
+            )
+
+            $log = Join-Path $env:RUNNER_TEMP "setupc-$Name.log"
+            $argList = @("--silent", "--wait", "120", "--output", $log) + $Arguments
+
+            Write-Host "Running setupc [$Name]: $($argList -join ' ')"
+            $proc = Start-Process -FilePath $setupc -WorkingDirectory $driverDir -ArgumentList $argList -PassThru -NoNewWindow
+            if (-not $proc.WaitForExit(180000)) {
+              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+              Write-Host "setupc [$Name] timed out"
+              if (Test-Path $log) {
+                Get-Content $log -Tail 200
+              }
+              Show-DriverDiagnostics
+              throw "setupc [$Name] timed out"
+            }
+
+            if (Test-Path $log) {
+              Get-Content $log -Tail 200
+            }
+
+            if ($proc.ExitCode -ne 0) {
+              Show-DriverDiagnostics
+              throw "setupc [$Name] failed with exit code $($proc.ExitCode)"
+            }
+          }
 
           pnputil /add-driver "$inf" /install
           if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) {
@@ -201,10 +244,10 @@ jobs:
 
           Push-Location $driverDir
           try {
-            & $setupc --silent --no-update install - -
-            & $setupc change CNCA0 PortName=COM1
-            & $setupc change CNCB0 PortName=COM2
-            & $setupc list
+            Invoke-Setupc -Name "install" -Arguments @("--no-update", "install", "-", "-")
+            Invoke-Setupc -Name "change-cnca0" -Arguments @("change", "CNCA0", "PortName=COM1")
+            Invoke-Setupc -Name "change-cncb0" -Arguments @("change", "CNCB0", "PortName=COM2")
+            Invoke-Setupc -Name "list" -Arguments @("list")
           } finally {
             Pop-Location
             reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 0 /f
