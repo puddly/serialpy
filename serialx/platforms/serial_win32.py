@@ -92,6 +92,25 @@ WIN32_STOPBITS_MAP = {
 }
 
 
+def _normalize_windows_port_path(path: os.PathLike | str) -> str:
+    """Normalize a Windows serial device path for CreateFile."""
+    normalized_path = os.fspath(path)
+
+    # Keep already namespaced or UNC paths unchanged.
+    if (
+        normalized_path.startswith("\\\\.\\")
+        or normalized_path.startswith("\\\\?\\")
+        or normalized_path.startswith("\\\\")
+    ):
+        return normalized_path
+
+    # Bare device names (COM8, CNCA0, etc.) should be opened via the device namespace.
+    if "/" not in normalized_path and "\\" not in normalized_path:
+        return "\\\\.\\" + normalized_path
+
+    return normalized_path
+
+
 class Win32Serial(BaseSerial):
     """Windows serial port implementation using Win32 API."""
 
@@ -112,11 +131,7 @@ class Win32Serial(BaseSerial):
         if self._handle is not None:
             raise ValueError("Serial port is already open")
 
-        path = str(self._path)
-
-        # COM9+ need to be opened with a \\.\ prefix
-        if path.upper().startswith("COM") and int(path[3:]) > 8:
-            path = "\\\\.\\" + path
+        path = _normalize_windows_port_path(self._path)
 
         try:
             self._handle = CreateFile(
@@ -359,10 +374,11 @@ class Win32SerialTransport(BaseSerialTransport):
 
     async def _open(self, path: os.PathLike) -> None:
         """Open the serial port."""
+        normalized_path = _normalize_windows_port_path(path)
         self._handle = await self._loop.run_in_executor(
             None,
             lambda: CreateFile(
-                path,
+                normalized_path,
                 GENERIC_READ | GENERIC_WRITE,
                 0,  # Exclusive access
                 None,
