@@ -261,24 +261,29 @@ jobs:
               [string[]]$Arguments
             )
 
-            $log = Join-Path $env:RUNNER_TEMP "setupc-$Name.log"
-            $argList = @("--silent", "--wait", "120", "--output", $log) + $Arguments
+            $outLog = Join-Path $env:RUNNER_TEMP "setupc-$Name.out.log"
+            $errLog = Join-Path $env:RUNNER_TEMP "setupc-$Name.err.log"
 
-            Write-Host "Running setupc [$Name]: $($argList -join ' ')"
-            $proc = Start-Process -FilePath $setupc -WorkingDirectory $driverDir -ArgumentList $argList -PassThru -NoNewWindow
+            Write-Host "Running setupc [$Name]: $($Arguments -join ' ')"
+            $proc = Start-Process `
+              -FilePath $setupc `
+              -WorkingDirectory $driverDir `
+              -ArgumentList $Arguments `
+              -PassThru `
+              -NoNewWindow `
+              -RedirectStandardOutput $outLog `
+              -RedirectStandardError $errLog
             if (-not $proc.WaitForExit(180000)) {
               Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
               Write-Host "setupc [$Name] timed out"
-              if (Test-Path $log) {
-                Get-Content $log -Tail 200
-              }
+              if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
+              if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
               Show-DriverDiagnostics
               throw "setupc [$Name] timed out"
             }
 
-            if (Test-Path $log) {
-              Get-Content $log -Tail 200
-            }
+            if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
+            if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
 
             if ($proc.ExitCode -ne 0) {
               Show-DriverDiagnostics
