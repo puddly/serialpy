@@ -31,6 +31,8 @@ dev = [
 [tool.setuptools.packages.find]
 exclude = ["tests", "tests.*"]
 
+[tool.setuptools_scm]
+
 [[tool.setuptools-rust.ext-modules]]
 target = "serialx._serialx_rust"
 path = "Cargo.toml"
