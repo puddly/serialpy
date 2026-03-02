@@ -189,10 +189,13 @@ jobs:
         shell: pwsh
         run: |
           $driverDir = Join-Path $PWD "tests/drivers/com0com"
-          $inf = Join-Path $driverDir "cncport.inf"
+          $inf = Join-Path $driverDir "com0com.inf"
           $setupc = Join-Path $driverDir "setupc.exe"
 
           pnputil /add-driver "$inf" /install
+          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) {
+            exit $LASTEXITCODE
+          }
 
           Push-Location $driverDir
           try {
