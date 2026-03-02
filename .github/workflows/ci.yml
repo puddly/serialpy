@@ -303,24 +303,7 @@ jobs:
           Push-Location $driverDir
           try {
             Invoke-Setupc -Name "install" -Arguments @("--no-update", "install", "-", "-")
-            Invoke-Setupc -Name "change-cnca0" -Arguments @("change", "CNCA0", "PortName=COM#")
-            Invoke-Setupc -Name "change-cncb0" -Arguments @("change", "CNCB0", "PortName=COM#")
-            $listOutput = Invoke-Setupc -Name "list" -Arguments @("list")
-
-            $leftMatch = [regex]::Match($listOutput, "CNCA0\s+PortName=(COM#|COM\d+)(?:,RealPortName=(COM\d+))?")
-            $rightMatch = [regex]::Match($listOutput, "CNCB0\s+PortName=(COM#|COM\d+)(?:,RealPortName=(COM\d+))?")
-            if (-not $leftMatch.Success -or -not $rightMatch.Success) {
-              throw "Unable to parse CNCA0/CNCB0 from setupc list output: $listOutput"
-            }
-
-            $leftPort = if ($leftMatch.Groups[2].Value) { $leftMatch.Groups[2].Value } else { $leftMatch.Groups[1].Value }
-            $rightPort = if ($rightMatch.Groups[2].Value) { $rightMatch.Groups[2].Value } else { $rightMatch.Groups[1].Value }
-            if ($leftPort -eq "COM#" -or $rightPort -eq "COM#") {
-              throw "setupc did not resolve real COM names: $listOutput"
-            }
-
-            "SERIALX_LEFT=\\.\$leftPort" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-            "SERIALX_RIGHT=\\.\$rightPort" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Invoke-Setupc -Name "list" -Arguments @("list")
           } finally {
             Pop-Location
             reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 0 /f
@@ -337,7 +320,7 @@ jobs:
       - name: Run tests
         shell: pwsh
         run: |
-          pytest --timeout=20 --cov=serialx tests --adapter-pair "$env:SERIALX_LEFT`:$env:SERIALX_RIGHT"
+          pytest --timeout=20 --cov=serialx tests --adapter-pair '\\.\CNCA0:\\.\CNCB0'
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
