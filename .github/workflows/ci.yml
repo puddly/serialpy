@@ -189,7 +189,7 @@ jobs:
         shell: pwsh
         run: |
           $driverDir = Join-Path $PWD "tests/drivers/com0com"
-          $inf = Join-Path $driverDir "com0com.inf"
+          $inf = Join-Path $driverDir "cncport.inf"
           $setupc = Join-Path $driverDir "setupc.exe"
           $setupApiLog = Join-Path $env:windir "INF\setupapi.dev.log"
 
@@ -202,6 +202,40 @@ jobs:
             pnputil /enum-drivers | Select-String -Pattern "Published Name|Original Name|Provider Name|com0com|cncport" -Context 0,1
             Write-Host "=== Connected devices (filtered) ==="
             pnputil /enum-devices /connected | Select-String -Pattern "com0com|CNCA|CNCB|COM1|COM2" -Context 0,1
+          }
+
+          function Invoke-PnPUtilAddDriver {
+            param(
+              [string]$InfPath
+            )
+
+            $outLog = Join-Path $env:RUNNER_TEMP "pnputil-add-driver.out.log"
+            $errLog = Join-Path $env:RUNNER_TEMP "pnputil-add-driver.err.log"
+
+            $proc = Start-Process `
+              -FilePath "pnputil.exe" `
+              -ArgumentList @("/add-driver", $InfPath, "/install") `
+              -PassThru `
+              -NoNewWindow `
+              -RedirectStandardOutput $outLog `
+              -RedirectStandardError $errLog
+
+            if (-not $proc.WaitForExit(180000)) {
+              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+              Write-Host "pnputil add-driver timed out"
+              if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
+              if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
+              Show-DriverDiagnostics
+              throw "pnputil add-driver timed out"
+            }
+
+            if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
+            if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
+
+            if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+              Show-DriverDiagnostics
+              throw "pnputil add-driver failed with exit code $($proc.ExitCode)"
+            }
           }
 
           function Invoke-Setupc {
@@ -235,10 +269,7 @@ jobs:
             }
           }
 
-          pnputil /add-driver "$inf" /install
-          if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) {
-            exit $LASTEXITCODE
-          }
+          Invoke-PnPUtilAddDriver -InfPath $inf
 
           reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 1 /f
 
