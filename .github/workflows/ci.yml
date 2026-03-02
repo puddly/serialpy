@@ -197,15 +197,17 @@ jobs:
             exit $LASTEXITCODE
           }
 
+          reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 1 /f
+
           Push-Location $driverDir
           try {
-            & $setupc install - -
-            & $setupc update
+            & $setupc --silent --no-update install - -
             & $setupc change CNCA0 PortName=COM1
             & $setupc change CNCB0 PortName=COM2
             & $setupc list
           } finally {
             Pop-Location
+            reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 0 /f
           }
       - name: Set up Python
         uses: actions/setup-python@v5
