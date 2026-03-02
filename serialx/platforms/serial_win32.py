@@ -94,21 +94,7 @@ WIN32_STOPBITS_MAP = {
 
 def _normalize_windows_port_path(path: os.PathLike | str) -> str:
     """Normalize a Windows serial device path for CreateFile."""
-    normalized_path = os.fspath(path)
-
-    # Keep already namespaced or UNC paths unchanged.
-    if (
-        normalized_path.startswith("\\\\.\\")
-        or normalized_path.startswith("\\\\?\\")
-        or normalized_path.startswith("\\\\")
-    ):
-        return normalized_path
-
-    # Bare device names (COM8, CNCA0, etc.) should be opened via the device namespace.
-    if "/" not in normalized_path and "\\" not in normalized_path:
-        return "\\\\.\\" + normalized_path
-
-    return normalized_path
+    return str(path)
 
 
 class Win32Serial(BaseSerial):
