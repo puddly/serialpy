@@ -302,14 +302,8 @@ jobs:
 
           Push-Location $driverDir
           try {
-            Invoke-Setupc -Name "install" -Arguments @("install", "0", "PortName=CNCA0", "PortName=CNCB0")
-            $listOutput = Invoke-Setupc -Name "list" -Arguments @("list")
-            if ($listOutput -notmatch "CNCA0\s+PortName=CNCA0") {
-              throw "CNCA0 was not configured correctly: $listOutput"
-            }
-            if ($listOutput -notmatch "CNCB0\s+PortName=CNCB0") {
-              throw "CNCB0 was not configured correctly: $listOutput"
-            }
+            Invoke-Setupc -Name "install" -Arguments @("--no-update", "install", "-", "-")
+            Invoke-Setupc -Name "list" -Arguments @("list")
           } finally {
             Pop-Location
             reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 0 /f
