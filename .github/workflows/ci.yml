@@ -218,7 +218,7 @@ jobs:
             Write-Host "=== Installed drivers (filtered) ==="
             pnputil /enum-drivers | Select-String -Pattern "Published Name|Original Name|Provider Name|com0com|cncport" -Context 0,1
             Write-Host "=== Connected devices (filtered) ==="
-            pnputil /enum-devices /connected | Select-String -Pattern "com0com|CNCA|CNCB|COM1|COM2" -Context 0,1
+            pnputil /enum-devices /connected | Select-String -Pattern "com0com|CNCA|CNCB|COM11|COM12" -Context 0,1
           }
 
           function Invoke-PnPUtilAddDriver {
@@ -298,8 +298,8 @@ jobs:
           Push-Location $driverDir
           try {
             Invoke-Setupc -Name "install" -Arguments @("--no-update", "install", "-", "-")
-            Invoke-Setupc -Name "change-cnca0" -Arguments @("change", "CNCA0", "PortName=COM1")
-            Invoke-Setupc -Name "change-cncb0" -Arguments @("change", "CNCB0", "PortName=COM2")
+            Invoke-Setupc -Name "change-cnca0" -Arguments @("change", "CNCA0", "PortName=COM11")
+            Invoke-Setupc -Name "change-cncb0" -Arguments @("change", "CNCB0", "PortName=COM12")
             Invoke-Setupc -Name "list" -Arguments @("list")
           } finally {
             Pop-Location
@@ -317,7 +317,7 @@ jobs:
       - name: Run tests
         shell: pwsh
         run: |
-          pytest --timeout=20 --cov=serialx tests --adapter-pair '\\.\COM1:\\.\COM2'
+          pytest --timeout=20 --cov=serialx tests --adapter-pair '\\.\COM11:\\.\COM12'
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
