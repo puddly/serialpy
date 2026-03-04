@@ -34,6 +34,7 @@ from win32file import (
     PURGE_RXCLEAR,
     PURGE_TXABORT,
     PURGE_TXCLEAR,
+    CancelIo,
     ClearCommError,
     CloseHandle,
     CreateFile,
@@ -104,11 +105,8 @@ class Win32Serial(BaseSerial):
         """Initialize the Windows serial port."""
         super().__init__(*args, **kwargs)
         self._handle = handle
-
-        self._overlapped_read = OVERLAPPED()
-        self._overlapped_read.hEvent = CreateEvent(None, 1, 0, None)
-        self._overlapped_write = OVERLAPPED()
-        self._overlapped_write.hEvent = CreateEvent(None, 1, 0, None)
+        self._overlapped_read = None
+        self._overlapped_write = None
 
     def open(self) -> None:
         """Open the serial port."""
@@ -131,6 +129,11 @@ class Win32Serial(BaseSerial):
             )
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror, path) from e
+
+        self._overlapped_read = OVERLAPPED()
+        self._overlapped_read.hEvent = CreateEvent(None, 1, 0, None)
+        self._overlapped_write = OVERLAPPED()
+        self._overlapped_write.hEvent = CreateEvent(None, 1, 0, None)
 
         self._auto_close = True
 
@@ -215,18 +218,17 @@ class Win32Serial(BaseSerial):
         if self._handle is not None:
             # Windows has no way to automatically do this on close, we do it manually
             self.set_modem_pins(dtr=self._rtsdtr_on_close, rts=self._rtsdtr_on_close)
-
-        if self._handle is not None:
+            CancelIo(self._handle)
             CloseHandle(self._handle)
             self._handle = None
 
-        if self._overlapped_read.hEvent:
+        if self._overlapped_read is not None and self._overlapped_read.hEvent:
             CloseHandle(self._overlapped_read.hEvent)
-            self._overlapped_read.hEvent = None
+            self._overlapped_read = None
 
-        if self._overlapped_write.hEvent:
+        if self._overlapped_write is not None and self._overlapped_write.hEvent:
             CloseHandle(self._overlapped_write.hEvent)
-            self._overlapped_write.hEvent = None
+            self._overlapped_write = None
 
     def _get_modem_pins(self) -> ModemPins:
         """Get the current modem control bits."""
@@ -254,6 +256,7 @@ class Win32Serial(BaseSerial):
 
     def readinto(self, b: Buffer) -> int:
         """Read data into the provided bytearray."""
+        assert self._overlapped_read is not None
         ResetEvent(self._overlapped_read.hEvent)
 
         try:
@@ -279,6 +282,7 @@ class Win32Serial(BaseSerial):
 
     def write(self, data: Buffer) -> int:
         """Write data to the serial port synchronously."""
+        assert self._overlapped_write is not None
         ResetEvent(self._overlapped_write.hEvent)
 
         try:
