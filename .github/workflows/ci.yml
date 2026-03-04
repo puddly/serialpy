@@ -192,14 +192,13 @@ jobs:
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4
-      - uses: ilammy/msvc-dev-cmd@v1
       - name: Install com0com
         shell: pwsh
         working-directory: .github
         run: |
           Invoke-WebRequest https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/com0com.cer -OutFile com0com.cer
-          CertMgr.exe /add com0com.cer /s /r localMachine root
-          CertMgr.exe /add com0com.cer /s /r localMachine trustedpublisher
+          Import-Certificate -FilePath com0com.cer -CertStoreLocation Cert:\LocalMachine\Root
+          Import-Certificate -FilePath com0com.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
 
           Invoke-WebRequest https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/setup_com0com_W7_x64_signed.exe -OutFile setup_com0com_W7_x64_signed.exe
           .\setup_com0com_W7_x64_signed.exe /S
