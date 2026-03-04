@@ -15,11 +15,11 @@ jobs:
         shell: pwsh
         working-directory: .github
         run: |
-          Start-FileDownload https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/com0com.cer
+          Invoke-WebRequest https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/com0com.cer -OutFile com0com.cer
           CertMgr.exe /add com0com.cer /s /r localMachine root
           CertMgr.exe /add com0com.cer /s /r localMachine trustedpublisher
 
-          Start-FileDownload https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/setup_com0com_W7_x64_signed.exe
+          Invoke-WebRequest https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/setup_com0com_W7_x64_signed.exe -OutFile setup_com0com_W7_x64_signed.exe
           .\setup_com0com_W7_x64_signed.exe /S
       - name: Configure com0com
         shell: pwsh
