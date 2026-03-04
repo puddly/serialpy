@@ -401,47 +401,52 @@ class Win32SerialTransport(BaseSerialTransport):
         path = kwargs.pop("path")
         await self._open(path)
 
-        # Ensure buffer_burst_timeout is set to a small value to enable
-        # "Wait for first byte, then return on gap" behavior for ReadFile.
-        # If 0 (default), ReadFile with default timeouts might wait for full buffer.
-        original_burst_timeout = kwargs.get("buffer_burst_timeout", 0)
-        if original_burst_timeout == 0:
-            kwargs["buffer_burst_timeout"] = 0.01
+        try:
+            # Ensure buffer_burst_timeout is set to a small value to enable
+            # "Wait for first byte, then return on gap" behavior for ReadFile.
+            # If 0 (default), ReadFile with default timeouts might wait for full buffer.
+            original_burst_timeout = kwargs.get("buffer_burst_timeout", 0)
+            if original_burst_timeout == 0:
+                kwargs["buffer_burst_timeout"] = 0.01
 
-        self._serial = Win32Serial(
-            **kwargs,
-            path=path,
-            handle=self._handle,
-            # buffer_character_count is not used by Proactor transport
-            buffer_character_count=0,
-        )
-        self._extra["serial"] = self._serial
+            self._serial = Win32Serial(
+                **kwargs,
+                path=path,
+                handle=self._handle,
+                # buffer_character_count is not used by Proactor transport
+                buffer_character_count=0,
+            )
+            self._extra["serial"] = self._serial
 
-        await self._loop.run_in_executor(None, self._serial.configure_port)
+            await self._loop.run_in_executor(None, self._serial.configure_port)
 
-        # Use the internal _make_duplex_pipe_transport to create a true overlapping
-        # bidirectional transport on the single handle.
-        assert hasattr(self._loop, "_make_duplex_pipe_transport")
-        self._internal_transport = self._loop._make_duplex_pipe_transport(
-            # Proxy access to serial and protocol attributes through this instance
-            sock=_MethodProxy(
-                "sock",
-                {
-                    "fileno": self.serial_fileno,
-                    "close": self.serial_close,
-                    "shutdown": self.serial_shutdown,
-                },
-            ),
-            protocol=_MethodProxy(
-                "protocol",
-                {
-                    "connection_made": self.protocol_connection_made,
-                    "data_received": self.protocol_data_received,
-                    "connection_lost": self.protocol_connection_lost,
-                },
-            ),
-            extra=self._extra,
-        )
+            # Use the internal _make_duplex_pipe_transport to create a true overlapping
+            # bidirectional transport on the single handle.
+            assert hasattr(self._loop, "_make_duplex_pipe_transport")
+            self._internal_transport = self._loop._make_duplex_pipe_transport(
+                # Proxy access to serial and protocol attributes through this instance
+                sock=_MethodProxy(
+                    "sock",
+                    {
+                        "fileno": self.serial_fileno,
+                        "close": self.serial_close,
+                        "shutdown": self.serial_shutdown,
+                    },
+                ),
+                protocol=_MethodProxy(
+                    "protocol",
+                    {
+                        "connection_made": self.protocol_connection_made,
+                        "data_received": self.protocol_data_received,
+                        "connection_lost": self.protocol_connection_lost,
+                    },
+                ),
+                extra=self._extra,
+            )
+        except BaseException:
+            await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+            self._handle = None
+            raise
 
     def write(self, data):
         """Write data to the transport."""
