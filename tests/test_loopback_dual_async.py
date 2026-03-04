@@ -2,10 +2,17 @@
 
 import asyncio
 import os
+import sys
 
 import pytest
 
-from serialx import Parity, PinState, StopBits, create_serial_connection
+from serialx import (
+    BaseSerialTransport,
+    Parity,
+    PinState,
+    StopBits,
+    create_serial_connection,
+)
 from tests.common import async_create_dual_loopback, async_create_reader_writer
 
 
@@ -465,6 +472,7 @@ async def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
 
     class FastCloseProtocol(asyncio.Protocol):
         def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            assert isinstance(transport, BaseSerialTransport)
             transport.write(b"data that will be discarded on abort")
             transport.abort()
 
@@ -481,6 +489,7 @@ async def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
     await connection_lost_event.wait()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 async def test_deassert_on_open_async(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS deassertion on open."""
     async with async_create_reader_writer(adapter_pair[0], baudrate=115200) as (
@@ -520,6 +529,7 @@ async def test_deassert_on_open_async(adapter_pair: tuple[str, str]) -> None:
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 async def test_hang_up_on_close_async(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS hang up on close."""
     async with async_create_reader_writer(adapter_pair[0], baudrate=115200) as (
@@ -571,6 +581,7 @@ async def test_hang_up_on_close_async(adapter_pair: tuple[str, str]) -> None:
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [

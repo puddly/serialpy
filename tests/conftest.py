@@ -1,6 +1,10 @@
 """Pytest configuration for serialx tests."""
 
+import sys
+
 import pytest
+
+import serialx
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -85,3 +89,34 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             )
         else:
             pytest.skip("No adapter pairs configured via --adapter-pair")
+
+
+@pytest.fixture(autouse=True)
+@pytest.mark.skipif(sys.platform != "win32", reason="only applicable on Windows")
+def _purge_adapter_pair(request: pytest.FixtureRequest) -> None:
+    """Purge both sides of a com0com pair to prevent data leakage between tests.
+
+    com0com buffers data in its virtual cable even when the receiving port is
+    closed.  Previous tests that write without reading leave stale bytes that
+    pollute the next test.
+    """
+    if "adapter_pair" not in request.fixturenames:
+        return
+
+    from win32file import (  # noqa: PLC0415
+        PURGE_RXABORT,
+        PURGE_RXCLEAR,
+        PURGE_TXABORT,
+        PURGE_TXCLEAR,
+        PurgeComm,
+    )
+
+    pair = request.getfixturevalue("adapter_pair")
+    left, right = pair
+
+    for port in (left, right):
+        with serialx.Serial(port, baudrate=115200) as serial:
+            PurgeComm(
+                serial._handle,  # type: ignore[attr-defined]
+                PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR,
+            )

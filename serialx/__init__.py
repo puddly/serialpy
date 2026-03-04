@@ -9,6 +9,7 @@ from .async_serial import (
 )
 from .common import (
     BaseSerial,
+    BaseSerialTransport,
     ModemPins,
     Parity,
     PinState,
@@ -27,6 +28,7 @@ __all__ = [
     "Parity",
     "PinState",
     "BaseSerial",
+    "BaseSerialTransport",
     "Serial",
     "SerialPortInfo",
     "SerialStreamWriter",
