@@ -10,6 +10,7 @@ import fcntl
 import logging
 import os
 from pathlib import Path
+import select
 import sys
 import termios
 import time
@@ -464,6 +465,13 @@ class PosixSerial(BaseSerial):
 
         def readinto(self, b: Buffer) -> int:
             """Read bytes from serial port into buffer."""
+            assert self._fileno is not None
+
+            if self._timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], self._timeout)
+                if not ready:
+                    return 0
+
             n = os.readinto(self._fileno, b)
             LOGGER.debug("Read %d bytes", n)
 
@@ -474,6 +482,11 @@ class PosixSerial(BaseSerial):
         def readinto(self, b: Buffer) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
+
+            if self._timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], self._timeout)
+                if not ready:
+                    return 0
 
             m = memoryview(b).cast("B")
             size = len(m)

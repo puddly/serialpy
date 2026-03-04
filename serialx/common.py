@@ -130,6 +130,7 @@ class BaseSerial(io.RawIOBase):
         rtscts: bool = False,
         byte_size: int = 8,
         *,
+        timeout: float | None = None,
         buffer_character_count: int = 1,
         buffer_burst_timeout: float = 0.01,
         rtsdtr_on_open: PinState = PinState.HIGH,
@@ -153,6 +154,7 @@ class BaseSerial(io.RawIOBase):
         self._parity = parity
         self._byte_size = byte_size
         self._exclusive = exclusive
+        self._timeout = timeout
 
         self._rtsdtr_on_open = rtsdtr_on_open
         self._rtsdtr_on_close = rtsdtr_on_close
@@ -170,6 +172,17 @@ class BaseSerial(io.RawIOBase):
     def configure_port(self) -> None:
         """Configure the serial port settings."""
         raise NotImplementedError
+
+    @property
+    def timeout(self) -> float | None:
+        """Get the read timeout in seconds."""
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, value: float | None) -> None:
+        """Set the read timeout in seconds."""
+        self._timeout = value
+        self.configure_port()
 
     def get_modem_pins(self) -> ModemPins:
         """Get modem control bits, internal."""
