@@ -15,7 +15,7 @@ jobs:
         shell: pwsh
         run: |
           $driverDir = Join-Path $PWD "tests/drivers/com0com"
-          $inf = Join-Path $driverDir "cncport.inf"
+          $inf = Join-Path $driverDir "com0com.inf"
           $setupc = Join-Path $driverDir "setupc.exe"
           $setupApiLog = Join-Path $env:windir "INF\setupapi.dev.log"
 
