@@ -4,10 +4,8 @@ import asyncio
 from collections.abc import AsyncIterator, Iterator
 import contextlib
 import os
-import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 from typing import Any
@@ -18,15 +16,6 @@ import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
-
-if sys.platform == "win32":
-    COM0COM_SETUPC = shutil.which("setupc") or (
-        "C:\\Program Files (x86)\\com0com\\setupc.exe"
-        if os.path.exists("C:\\Program Files (x86)\\com0com\\setupc.exe")
-        else None
-    )
-else:
-    COM0COM_SETUPC = None
 
 
 @contextlib.contextmanager
@@ -85,99 +74,6 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 
         proc.terminate()
         await proc.wait()
-
-
-def _parse_com0com_install_output(output: str) -> tuple[int, str, str]:
-    """Parse setupc.exe install output to extract pair index and device names.
-
-    Example output lines:
-        CNCA1 PortName=-,EmuBR=yes,cts=rdtr
-        CNCB1 PortName=-,EmuBR=yes,cts=rdtr
-    """
-    port_pattern = re.compile(r"(CNC[AB])(\d+)\s+PortName=")
-    matches = port_pattern.findall(output)
-
-    assert len(matches) == 2, f"Expected 2 port matches, got {len(matches)}: {output!r}"
-
-    prefix_a, index_a = matches[0]
-    prefix_b, index_b = matches[1]
-    assert index_a == index_b
-
-    return int(index_a), f"{prefix_a}{index_a}", f"{prefix_b}{index_b}"
-
-
-@contextlib.contextmanager
-def create_com0com_pair() -> Iterator[tuple[str, str]]:
-    """Create a pair of virtual COM ports using com0com (synchronous)."""
-    assert COM0COM_SETUPC is not None
-    setupc_dir = os.path.dirname(COM0COM_SETUPC)
-
-    result = subprocess.run(
-        [
-            COM0COM_SETUPC,
-            "install",
-            "PortName=-,EmuBR=yes,cts=rdtr",
-            "PortName=-,EmuBR=yes,cts=rdtr",
-        ],
-        check=True,
-        cwd=setupc_dir,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0, (
-        f"setupc install failed: {result.stdout}\n{result.stderr}"
-    )
-
-    pair_index, left_port, right_port = _parse_com0com_install_output(result.stdout)
-
-    try:
-        yield (left_port, right_port)
-    finally:
-        subprocess.run(
-            [COM0COM_SETUPC, "remove", str(pair_index)],
-            check=True,
-            cwd=setupc_dir,
-            capture_output=True,
-        )
-
-
-@contextlib.asynccontextmanager
-async def async_create_com0com_pair() -> AsyncIterator[tuple[str, str]]:
-    """Create a pair of virtual COM ports using com0com (asynchronous)."""
-    assert COM0COM_SETUPC is not None
-    setupc_dir = os.path.dirname(COM0COM_SETUPC)
-
-    proc = await asyncio.create_subprocess_exec(
-        COM0COM_SETUPC,
-        "install",
-        "PortName=-,EmuBR=yes,cts=rdtr",
-        "PortName=-,EmuBR=yes,cts=rdtr",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=setupc_dir,
-    )
-
-    stdout, stderr = await proc.communicate()
-
-    assert proc.returncode == 0, (
-        f"setupc install failed: {stdout.decode()}\n{stderr.decode()}"
-    )
-
-    pair_index, left_port, right_port = _parse_com0com_install_output(stdout.decode())
-
-    try:
-        yield (left_port, right_port)
-    finally:
-        remove_proc = await asyncio.create_subprocess_exec(
-            COM0COM_SETUPC,
-            "remove",
-            str(pair_index),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=setupc_dir,
-        )
-        await remove_proc.communicate()
 
 
 @contextlib.asynccontextmanager

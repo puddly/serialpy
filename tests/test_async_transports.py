@@ -25,9 +25,7 @@ from serialx import (
 )
 from serialx.common import get_serial_classes
 from tests.common import (
-    COM0COM_SETUPC,
     SOCAT_BINARY,
-    async_create_com0com_pair,
     async_create_reader_writer,
     async_create_reader_writer_pair,
     async_create_socat_pair,
@@ -37,7 +35,7 @@ from tests.socket_relay import async_create_socket_pair
 LOGGER = logging.getLogger(__name__)
 
 
-@pytest.fixture(params=["socat", "com0com", "socket"])
+@pytest.fixture(params=["socat", "socket"])
 async def async_transport_pair(
     request: pytest.FixtureRequest,
 ) -> AsyncIterator[tuple[str, str]]:
@@ -48,11 +46,6 @@ async def async_transport_pair(
         if not SOCAT_BINARY:
             pytest.skip("socat binary is missing")
         async with async_create_socat_pair() as (left, right):
-            yield (left, right)
-    elif backend == "com0com":
-        if not COM0COM_SETUPC:
-            pytest.skip("com0com setupc.exe is missing")
-        async with async_create_com0com_pair() as (left, right):
             yield (left, right)
     elif backend == "socket":
         # Introduce a small delay to simulate network latency/backpressure
