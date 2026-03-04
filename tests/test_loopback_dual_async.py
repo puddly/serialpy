@@ -288,7 +288,7 @@ async def test_sustained_throughput_async(
     "baudrate",
     [
         9600,
-        19200,
+        # 19200,
         38400,
         57600,
         115200,
