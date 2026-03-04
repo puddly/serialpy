@@ -92,7 +92,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
 
 @pytest.fixture(autouse=True)
-@pytest.mark.skipif(sys.platform != "win32", reason="only applicable on Windows")
 def _purge_adapter_pair(request: pytest.FixtureRequest) -> None:
     """Purge both sides of a com0com pair to prevent data leakage between tests.
 
@@ -100,7 +99,7 @@ def _purge_adapter_pair(request: pytest.FixtureRequest) -> None:
     closed.  Previous tests that write without reading leave stale bytes that
     pollute the next test.
     """
-    if "adapter_pair" not in request.fixturenames:
+    if sys.platform != "win32" or "adapter_pair" not in request.fixturenames:
         return
 
     from win32file import (  # noqa: PLC0415

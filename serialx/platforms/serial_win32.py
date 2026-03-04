@@ -279,13 +279,15 @@ class Win32Serial(BaseSerial):
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set the modem control bits."""
-        if modem_pins.rts is not None:
-            func = SETRTS if modem_pins.rts else CLRRTS
-            EscapeCommFunction(self._handle, func)
+        if modem_pins.rts is not PinState.UNDEFINED:
+            EscapeCommFunction(
+                self._handle, (SETRTS if modem_pins.rts is PinState.HIGH else CLRRTS)
+            )
 
-        if modem_pins.dtr is not None:
-            func = SETDTR if modem_pins.dtr else CLRDTR
-            EscapeCommFunction(self._handle, func)
+        if modem_pins.dtr is not PinState.UNDEFINED:
+            EscapeCommFunction(
+                self._handle, (SETDTR if modem_pins.dtr is PinState.HIGH else CLRDTR)
+            )
 
     def flush(self) -> None:
         """Flush write buffers."""

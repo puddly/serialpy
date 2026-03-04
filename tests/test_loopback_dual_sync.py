@@ -465,6 +465,9 @@ def test_deprecated_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
         serial_left,
         serial_right,
     ):
+        serial_left.set_modem_pins(rts=False)
+        serial_right.set_modem_pins(rts=False)
+
         serial_left.dtr = True
         assert serial_right.get_modem_pins().cts is PinState.HIGH
 
@@ -485,6 +488,9 @@ def test_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
         serial_left,
         serial_right,
     ):
+        serial_left.set_modem_pins(rts=False)
+        serial_right.set_modem_pins(rts=False)
+
         serial_left.set_modem_pins(dtr=True)
         assert serial_right.get_modem_pins().cts is PinState.HIGH
 
