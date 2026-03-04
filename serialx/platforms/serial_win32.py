@@ -219,6 +219,7 @@ class Win32Serial(BaseSerial):
             # Clear any errors
             ClearCommError(self._handle)
         except pywintypes.error as e:
+            LOGGER.debug("Failed to configure port", exc_info=True)
             raise OSError(e.winerror, e.strerror) from e
 
     def fileno(self) -> int:
