@@ -26,9 +26,7 @@ jobs:
         shell: pwsh
         working-directory: C:\Program Files (x86)\com0com
         run: |
-          .\setupc.exe install PortName=COM8,EmuBR=yes PortName=COM9,EmuBR=yes
-          .\setupc.exe change CNCA0 cts=rdtr
-          .\setupc.exe change CNCB0 cts=rdtr
+          .\setupc.exe --wait 1 install PortName=COM8,EmuBR=yes,cts=rdtr PortName=COM9,EmuBR=yes,cts=rdtr
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
