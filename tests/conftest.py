@@ -1,6 +1,7 @@
 """Pytest configuration for serialx tests."""
 
 import sys
+import time
 
 import pytest
 
@@ -113,10 +114,15 @@ def _purge_adapter_pair(request: pytest.FixtureRequest) -> None:
     pair = request.getfixturevalue("adapter_pair")
     left, right = pair
 
+    # Drain any in-flight bytes from the emulated cable (EmuBR=yes simulates baudrates)
     with (
-        serialx.Serial(left, baudrate=115200) as serial_left,
-        serialx.Serial(right, baudrate=115200) as serial_right,
+        serialx.Serial(left, baudrate=10_000_000) as serial_left,
+        serialx.Serial(right, baudrate=10_000_000) as serial_right,
     ):
         flags = PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR
+        PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
+        PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]
+
+        time.sleep(0.05)
         PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
         PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]
