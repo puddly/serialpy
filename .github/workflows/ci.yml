@@ -166,6 +166,13 @@ jobs:
           python-version: "3.13"
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: rust-macos-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src/**') }}
+          restore-keys: |
+            rust-macos-
       - name: Install dependencies
         run: |
           pip install -e .[dev] pytest-cov
@@ -207,6 +214,13 @@ jobs:
           python-version: "3.13"
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: rust-windows-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src/**') }}
+          restore-keys: |
+            rust-windows-
       - name: Install dependencies
         run: |
           pip install -e .[dev] pytest-cov
