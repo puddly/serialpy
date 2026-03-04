@@ -11,112 +11,21 @@ jobs:
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4
-      - name: Install and configure com0com
+      - name: Install com0com
         shell: pwsh
+        working-directory: .github
         run: |
-          $driverDir = Join-Path $PWD "tests/drivers/com0com"
-          $inf = Join-Path $driverDir "com0com.inf"
-          $setupc = Join-Path $driverDir "setupc.exe"
-          $setupApiLog = Join-Path $env:windir "INF\setupapi.dev.log"
+          Start-FileDownload https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/com0com.cer
+          CertMgr.exe /add com0com.cer /s /r localMachine root
+          CertMgr.exe /add com0com.cer /s /r localMachine trustedpublisher
 
-          function Show-DriverDiagnostics {
-            Write-Host "=== setupapi.dev.log (tail) ==="
-            if (Test-Path $setupApiLog) {
-              Get-Content $setupApiLog -Tail 300
-            }
-            Write-Host "=== Installed drivers (filtered) ==="
-            pnputil /enum-drivers | Select-String -Pattern "Published Name|Original Name|Provider Name|com0com|cncport" -Context 0,1
-            Write-Host "=== Connected devices (filtered) ==="
-            pnputil /enum-devices /connected | Select-String -Pattern "com0com|CNCA|CNCB|COM\d+" -Context 0,1
-          }
-
-          function Invoke-PnPUtilAddDriver {
-            param(
-              [string]$InfPath
-            )
-
-            $outLog = Join-Path $env:RUNNER_TEMP "pnputil-add-driver.out.log"
-            $errLog = Join-Path $env:RUNNER_TEMP "pnputil-add-driver.err.log"
-
-            $proc = Start-Process `
-              -FilePath "pnputil.exe" `
-              -ArgumentList @("/add-driver", $InfPath, "/install") `
-              -PassThru `
-              -NoNewWindow `
-              -RedirectStandardOutput $outLog `
-              -RedirectStandardError $errLog
-
-            if (-not $proc.WaitForExit(180000)) {
-              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-              Write-Host "pnputil add-driver timed out"
-              if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
-              if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
-              Show-DriverDiagnostics
-              throw "pnputil add-driver timed out"
-            }
-
-            if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
-            if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
-
-            if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-              Show-DriverDiagnostics
-              throw "pnputil add-driver failed with exit code $($proc.ExitCode)"
-            }
-          }
-
-          function Invoke-Setupc {
-            param(
-              [string]$Name,
-              [string[]]$Arguments
-            )
-
-            $outLog = Join-Path $env:RUNNER_TEMP "setupc-$Name.out.log"
-            $errLog = Join-Path $env:RUNNER_TEMP "setupc-$Name.err.log"
-
-            Write-Host "Running setupc [$Name]: $($Arguments -join ' ')"
-            $proc = Start-Process `
-              -FilePath $setupc `
-              -WorkingDirectory $driverDir `
-              -ArgumentList $Arguments `
-              -PassThru `
-              -NoNewWindow `
-              -RedirectStandardOutput $outLog `
-              -RedirectStandardError $errLog
-            if (-not $proc.WaitForExit(180000)) {
-              Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-              Write-Host "setupc [$Name] timed out"
-              if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
-              if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
-              Show-DriverDiagnostics
-              throw "setupc [$Name] timed out"
-            }
-
-            if (Test-Path $outLog) { Get-Content $outLog -Tail 200 }
-            if (Test-Path $errLog) { Get-Content $errLog -Tail 200 }
-
-            if ($proc.ExitCode -ne 0) {
-              Show-DriverDiagnostics
-              throw "setupc [$Name] failed with exit code $($proc.ExitCode)"
-            }
-
-            if (Test-Path $outLog) {
-              return Get-Content $outLog -Raw
-            }
-            return ""
-          }
-
-          Invoke-PnPUtilAddDriver -InfPath $inf
-
-          reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 1 /f
-
-          Push-Location $driverDir
-          try {
-            Invoke-Setupc -Name "install" -Arguments @("--no-update", "install", "PortName=COM8", "PortName=COM9")
-            Invoke-Setupc -Name "list" -Arguments @("list")
-          } finally {
-            Pop-Location
-            reg add HKLM\Software\Policies\Microsoft\Windows\DeviceInstall\Settings /v SuppressNewHWUI /t REG_DWORD /d 0 /f
-          }
+          Start-FileDownload https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/setup_com0com_W7_x64_signed.exe
+          .\setup_com0com_W7_x64_signed.exe /S
+      - name: Configure com0com
+        shell: pwsh
+        working-directory: C:\Program Files (x86)\com0com
+        run: |
+          .\setupc.exe install PortName=COM8,EmuBR=yes PortName=COM9,EmuBR=yes
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
