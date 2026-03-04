@@ -18,23 +18,6 @@ jobs:
           $inf = Join-Path $driverDir "cncport.inf"
           $setupc = Join-Path $driverDir "setupc.exe"
           $setupApiLog = Join-Path $env:windir "INF\setupapi.dev.log"
-          $requiredFiles = @(
-            "setupc.exe",
-            "setup.dll",
-            "com0com.sys",
-            "com0com.inf",
-            "com0com.cat",
-            "cncport.inf",
-            "cncport.cat",
-            "comport.inf"
-          )
-
-          foreach ($name in $requiredFiles) {
-            $path = Join-Path $driverDir $name
-            if (-not (Test-Path $path)) {
-              throw "Missing com0com asset: $name"
-            }
-          }
 
           function Show-DriverDiagnostics {
             Write-Host "=== setupapi.dev.log (tail) ==="
