@@ -113,9 +113,10 @@ def _purge_adapter_pair(request: pytest.FixtureRequest) -> None:
     pair = request.getfixturevalue("adapter_pair")
     left, right = pair
 
-    for port in (left, right):
-        with serialx.Serial(port, baudrate=115200) as serial:
-            PurgeComm(
-                serial._handle,  # type: ignore[attr-defined]
-                PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR,
-            )
+    with (
+        serialx.Serial(left, baudrate=115200) as serial_left,
+        serialx.Serial(right, baudrate=115200) as serial_right,
+    ):
+        flags = PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR
+        PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
+        PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]
