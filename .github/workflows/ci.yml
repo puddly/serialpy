@@ -11,6 +11,7 @@ jobs:
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
       - name: Install com0com
         shell: pwsh
         working-directory: .github
