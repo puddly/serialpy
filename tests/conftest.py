@@ -1,7 +1,6 @@
 """Pytest configuration for serialx tests."""
 
 import sys
-import time
 
 import pytest
 
@@ -121,5 +120,3 @@ def _purge_adapter_pair(request: pytest.FixtureRequest) -> None:
         flags = PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR
         PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
         PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]
-
-    time.sleep(0.1)  # Small delay to ensure purge completes before next test
