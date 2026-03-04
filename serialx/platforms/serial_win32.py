@@ -29,7 +29,13 @@ from win32con import (
     SPACEPARITY,
     TWOSTOPBITS,
 )
-from win32event import INFINITE, CreateEvent, ResetEvent, WaitForSingleObject
+from win32event import (
+    INFINITE,
+    WAIT_TIMEOUT,
+    CreateEvent,
+    ResetEvent,
+    WaitForSingleObject,
+)
 from win32file import (
     OVERLAPPED,
     PURGE_RXABORT,
@@ -309,7 +315,17 @@ class Win32Serial(BaseSerial):
 
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
-            WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
+            timeout_ms = INFINITE
+            if self._timeout is not None:
+                timeout_ms = int(self._timeout * 1000)
+
+            res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
+
+            if res == WAIT_TIMEOUT:
+                CancelIo(self._handle)
+                # Wait for cancellation to complete to avoid data corruption or races
+                WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
+                return 0
 
         # Get the actual number of bytes read
         try:
