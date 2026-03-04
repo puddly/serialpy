@@ -98,6 +98,14 @@ def _normalize_windows_port_path(path: os.PathLike | str) -> str:
     return str(path)
 
 
+def _safe_close_handle(handle) -> None:
+    """Close a Win32 handle, suppressing and logging errors."""
+    try:
+        CloseHandle(handle)
+    except pywintypes.error:
+        LOGGER.debug("Failed to close handle %r", handle, exc_info=True)
+
+
 class Win32Serial(BaseSerial):
     """Windows serial port implementation using Win32 API."""
 
@@ -221,18 +229,24 @@ class Win32Serial(BaseSerial):
                 self.set_modem_pins(
                     dtr=self._rtsdtr_on_close, rts=self._rtsdtr_on_close
                 )
-            finally:
+            except OSError:
+                LOGGER.debug("Failed to set modem pins on close", exc_info=True)
+
+            try:
                 CancelIo(self._handle)
-                CloseHandle(self._handle)
-                self._handle = None
+            except pywintypes.error:
+                LOGGER.debug("Failed to cancel IO on close", exc_info=True)
+
+            _safe_close_handle(self._handle)
+            self._handle = None
 
         if self._overlapped_read is not None and self._overlapped_read.hEvent:
-            CloseHandle(self._overlapped_read.hEvent)
-            self._overlapped_read = None
+            _safe_close_handle(self._overlapped_read.hEvent)
+        self._overlapped_read = None
 
         if self._overlapped_write is not None and self._overlapped_write.hEvent:
-            CloseHandle(self._overlapped_write.hEvent)
-            self._overlapped_write = None
+            _safe_close_handle(self._overlapped_write.hEvent)
+        self._overlapped_write = None
 
     def _get_modem_pins(self) -> ModemPins:
         """Get the current modem control bits."""
