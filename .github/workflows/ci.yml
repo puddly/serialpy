@@ -128,7 +128,7 @@ jobs:
 
           Push-Location $driverDir
           try {
-            Invoke-Setupc -Name "install" -Arguments @("--no-update", "install", "-", "-")
+            Invoke-Setupc -Name "install" -Arguments @("--no-update", "install", "PortName=COM8", "PortName=COM9")
             Invoke-Setupc -Name "list" -Arguments @("list")
           } finally {
             Pop-Location
@@ -147,7 +147,7 @@ jobs:
         shell: pwsh
         run: |
           python -m serialx.tools.list_ports
-          pytest --timeout=20 --cov=serialx tests --adapter-pair 'CNCA0:CNCB0'
+          pytest --timeout=20 --cov=serialx tests --adapter-pair 'COM8:COM9'
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
