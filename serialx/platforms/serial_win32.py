@@ -210,7 +210,11 @@ class Win32Serial(BaseSerial):
 
             SetCommState(self._handle, dcb)
 
-            self.set_modem_pins(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
+            self.set_modem_pins(
+                dtr=self._rtsdtr_on_open,
+                # RTS cannot be manually set when hardware flow control is enabled
+                rts=None if self._rtscts else self._rtsdtr_on_open,
+            )
 
             # Clear any errors
             ClearCommError(self._handle)
@@ -227,7 +231,9 @@ class Win32Serial(BaseSerial):
             # Windows has no way to automatically do this on close, we do it manually
             try:
                 self.set_modem_pins(
-                    dtr=self._rtsdtr_on_close, rts=self._rtsdtr_on_close
+                    dtr=self._rtsdtr_on_close,
+                    # RTS cannot be manually set when hardware flow control is enabled
+                    rts=None if self._rtscts else self._rtsdtr_on_close,
                 )
             except OSError:
                 LOGGER.debug("Failed to set modem pins on close", exc_info=True)
