@@ -396,6 +396,14 @@ class Win32SerialTransport(BaseSerialTransport):
         """Forward connection_lost to the protocol."""
         pass
 
+    def protocol_pause_writing(self) -> None:
+        """Forward pause_writing to the protocol."""
+        self._protocol.pause_writing()
+
+    def protocol_resume_writing(self) -> None:
+        """Forward resume_writing to the protocol."""
+        self._protocol.resume_writing()
+
     async def _open(self, path: os.PathLike) -> None:
         """Open the serial port."""
         normalized_path = _normalize_windows_port_path(path)
@@ -455,6 +463,8 @@ class Win32SerialTransport(BaseSerialTransport):
                         "connection_made": self.protocol_connection_made,
                         "data_received": self.protocol_data_received,
                         "connection_lost": self.protocol_connection_lost,
+                        "pause_writing": self.protocol_pause_writing,
+                        "resume_writing": self.protocol_resume_writing,
                     },
                 ),
                 extra=self._extra,
@@ -463,6 +473,13 @@ class Win32SerialTransport(BaseSerialTransport):
             await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
             self._handle = None
             raise
+
+    def get_write_buffer_size(self) -> int:
+        """Return the current size of the write buffer."""
+        if self._internal_transport is None:
+            return 0
+
+        return self._internal_transport.get_write_buffer_size()
 
     def write(self, data):
         """Write data to the transport."""
