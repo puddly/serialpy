@@ -6,4 +6,4 @@ __all__ = ["comports"]
 
 if __name__ == "__main__":
     for port in comports():
-        print(port)
+        print(port)  # noqa: T201
