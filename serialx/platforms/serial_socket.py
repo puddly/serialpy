@@ -54,10 +54,14 @@ class SocketSerial(BaseSerial):
         """Open the socket connection."""
         assert self._host is not None
         assert self._port is not None
-        self._socket = socket.create_connection((self._host, self._port))
+        self._socket = socket.create_connection(
+            (self._host, self._port), timeout=self._timeout
+        )
 
     def configure_port(self) -> None:
         """Configure the serial port settings (no-op for sockets)."""
+        if self._socket is not None:
+            self._socket.settimeout(self._timeout)
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         pass
@@ -81,7 +85,10 @@ class SocketSerial(BaseSerial):
         assert self._socket is not None
 
         m = memoryview(b).cast("B")
-        return self._socket.recv_into(m)
+        try:
+            return self._socket.recv_into(m)
+        except TimeoutError:
+            return 0
 
     def close(self) -> None:
         """Close the socket."""
