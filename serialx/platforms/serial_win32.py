@@ -369,9 +369,19 @@ class Win32SerialTransport(BaseSerialTransport):
 
     def serial_close(self):
         """Close the serial port."""
-        assert self._serial is not None
-        self._loop.call_soon(self._protocol.connection_lost, None)
-        self._loop.run_in_executor(None, self._serial.close)
+
+        def _close_then_notify() -> None:
+            assert self._serial is not None
+            exc = None
+
+            try:
+                self._serial.close()
+            except Exception as e:
+                exc = e
+
+            self._loop.call_soon_threadsafe(self._protocol.connection_lost, exc)
+
+        self._loop.run_in_executor(None, _close_then_notify)
 
     def serial_shutdown(self, how) -> None:
         """Shutdown the serial connection."""
