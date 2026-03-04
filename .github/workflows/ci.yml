@@ -26,7 +26,7 @@ jobs:
         shell: pwsh
         working-directory: C:\Program Files (x86)\com0com
         run: |
-          .\setupc.exe --wait 1 install PortName=COM8,EmuBR=yes,cts=rdtr PortName=COM9,EmuBR=yes,cts=rdtr
+          .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rdtr PortName=-,EmuBR=yes,cts=rdtr
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -40,7 +40,7 @@ jobs:
         shell: pwsh
         run: |
           python -m serialx.tools.list_ports
-          pytest --timeout=20 --cov=serialx tests --adapter-pair 'COM8:COM9'
+          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0:CNCB0
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
