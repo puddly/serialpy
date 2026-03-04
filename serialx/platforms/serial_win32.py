@@ -217,10 +217,14 @@ class Win32Serial(BaseSerial):
         """Close the serial port and release all handles."""
         if self._handle is not None:
             # Windows has no way to automatically do this on close, we do it manually
-            self.set_modem_pins(dtr=self._rtsdtr_on_close, rts=self._rtsdtr_on_close)
-            CancelIo(self._handle)
-            CloseHandle(self._handle)
-            self._handle = None
+            try:
+                self.set_modem_pins(
+                    dtr=self._rtsdtr_on_close, rts=self._rtsdtr_on_close
+                )
+            finally:
+                CancelIo(self._handle)
+                CloseHandle(self._handle)
+                self._handle = None
 
         if self._overlapped_read is not None and self._overlapped_read.hEvent:
             CloseHandle(self._overlapped_read.hEvent)
