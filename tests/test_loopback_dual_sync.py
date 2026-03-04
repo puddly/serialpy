@@ -1,6 +1,7 @@
 """Test sync APIs with dual loopback hardware."""
 
 import os
+import sys
 
 import pytest
 
@@ -335,6 +336,9 @@ def test_exclusive_dual(adapter_pair: tuple[str, str]) -> None:
                 pass
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="com0com does not support shared access"
+)
 def test_exclusive_disabled_dual(adapter_pair: tuple[str, str]) -> None:
     """Test that exclusive setting is respected."""
     left_port, right_port = adapter_pair
@@ -446,9 +450,10 @@ def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
 
     message = b"Fast write and close test"
 
-    with Serial(adapter_pair[0], baudrate=300) as serial_left:
-        with Serial(adapter_pair[1], baudrate=300) as serial_right:
+    with Serial(adapter_pair[0], baudrate=115200) as serial_left:
+        with Serial(adapter_pair[1], baudrate=115200) as serial_right:
             serial_right.write(message)
+            serial_right.flush()
 
         assert serial_left.readexactly(len(message)) == message
 
@@ -460,6 +465,9 @@ def test_deprecated_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
         serial_left,
         serial_right,
     ):
+        serial_left.set_modem_pins(rts=False)
+        serial_right.set_modem_pins(rts=False)
+
         serial_left.dtr = True
         assert serial_right.get_modem_pins().cts is PinState.HIGH
 
@@ -480,6 +488,9 @@ def test_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
         serial_left,
         serial_right,
     ):
+        serial_left.set_modem_pins(rts=False)
+        serial_right.set_modem_pins(rts=False)
+
         serial_left.set_modem_pins(dtr=True)
         assert serial_right.get_modem_pins().cts is PinState.HIGH
 
@@ -493,6 +504,7 @@ def test_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
         assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 def test_deassert_on_open(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS deassertion on open."""
     left_port, right_port = adapter_pair
@@ -524,6 +536,7 @@ def test_deassert_on_open(adapter_pair: tuple[str, str]) -> None:
         assert serial_left.get_modem_pins().cts is PinState.HIGH
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 def test_hang_up_on_close(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS hang up on close."""
     left_port, right_port = adapter_pair
@@ -564,6 +577,7 @@ def test_hang_up_on_close(adapter_pair: tuple[str, str]) -> None:
         assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [

@@ -1,6 +1,11 @@
 """Pytest configuration for serialx tests."""
 
+import sys
+import time
+
 import pytest
+
+import serialx
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -85,3 +90,39 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             )
         else:
             pytest.skip("No adapter pairs configured via --adapter-pair")
+
+
+@pytest.fixture(autouse=True)
+def _purge_adapter_pair(request: pytest.FixtureRequest) -> None:
+    """Purge both sides of a com0com pair to prevent data leakage between tests.
+
+    com0com buffers data in its virtual cable even when the receiving port is
+    closed.  Previous tests that write without reading leave stale bytes that
+    pollute the next test.
+    """
+    if sys.platform != "win32" or "adapter_pair" not in request.fixturenames:
+        return
+
+    from win32file import (  # noqa: PLC0415
+        PURGE_RXABORT,
+        PURGE_RXCLEAR,
+        PURGE_TXABORT,
+        PURGE_TXCLEAR,
+        PurgeComm,
+    )
+
+    pair = request.getfixturevalue("adapter_pair")
+    left, right = pair
+
+    # Drain any in-flight bytes from the emulated cable (EmuBR=yes simulates baudrates)
+    with (
+        serialx.Serial(left, baudrate=10_000_000) as serial_left,
+        serialx.Serial(right, baudrate=10_000_000) as serial_right,
+    ):
+        flags = PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR
+        PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
+        PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]
+
+        time.sleep(0.05)
+        PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
+        PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]

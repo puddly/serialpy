@@ -90,6 +90,7 @@ async def test_async_linux_race_condition_connect_close() -> None:
             self.connection_made_calls = 0
 
         def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            assert isinstance(transport, PosixSerialTransport)
             self.connection_made_calls += 1
 
     loop = asyncio.get_running_loop()

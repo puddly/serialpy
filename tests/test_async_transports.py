@@ -15,6 +15,7 @@ else:
 import pytest
 
 from serialx import (
+    BaseSerialTransport,
     ModemPins,
     Parity,
     PinState,
@@ -22,7 +23,7 @@ from serialx import (
     StopBits,
     create_serial_connection,
 )
-from serialx.common import BaseSerialTransport, get_serial_classes
+from serialx.common import get_serial_classes
 from tests.common import (
     SOCAT_BINARY,
     async_create_reader_writer,
@@ -615,6 +616,7 @@ async def test_async_transport_close_before_connect_completes(
             self.connection_lost_future = asyncio.get_running_loop().create_future()
 
         def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            assert isinstance(transport, BaseSerialTransport)
             self.connection_made_calls += 1
 
         def connection_lost(self, exc: Exception | None) -> None:
