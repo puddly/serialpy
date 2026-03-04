@@ -446,9 +446,10 @@ def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
 
     message = b"Fast write and close test"
 
-    with Serial(adapter_pair[0], baudrate=300) as serial_left:
-        with Serial(adapter_pair[1], baudrate=300) as serial_right:
+    with Serial(adapter_pair[0], baudrate=115200) as serial_left:
+        with Serial(adapter_pair[1], baudrate=115200) as serial_right:
             serial_right.write(message)
+            serial_right.flush()
 
         assert serial_left.readexactly(len(message)) == message
 

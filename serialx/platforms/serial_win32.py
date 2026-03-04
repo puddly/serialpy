@@ -14,6 +14,8 @@ from win32con import (
     EVENPARITY,
     FILE_ATTRIBUTE_NORMAL,
     FILE_FLAG_OVERLAPPED,
+    FILE_SHARE_READ,
+    FILE_SHARE_WRITE,
     GENERIC_READ,
     GENERIC_WRITE,
     MARKPARITY,
@@ -95,7 +97,13 @@ WIN32_STOPBITS_MAP = {
 
 def _normalize_windows_port_path(path: os.PathLike | str) -> str:
     """Normalize a Windows serial device path for CreateFile."""
-    return str(path)
+    path = str(path)
+
+    # COM ports >= 10 require the \\.\  prefix for CreateFile
+    if not path.startswith("\\\\.\\"):
+        path = "\\\\.\\" + path
+
+    return path
 
 
 def _safe_close_handle(handle) -> None:
@@ -125,11 +133,13 @@ class Win32Serial(BaseSerial):
 
         path = _normalize_windows_port_path(self._path)
 
+        share_mode = 0 if self._exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
+
         try:
             self._handle = CreateFile(
                 path,
                 GENERIC_READ | GENERIC_WRITE,
-                0,  # Exclusive access
+                share_mode,
                 None,
                 OPEN_EXISTING,
                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
@@ -358,13 +368,8 @@ class Win32SerialTransport(BaseSerialTransport):
     def serial_close(self):
         """Close the serial port."""
         assert self._serial is not None
-        self._loop.run_in_executor(None, self._close_serial)
-
-    def _close_serial(self) -> None:
-        """Close the serial connection, internal."""
-        assert self._serial is not None
-        self._serial.close()
-        self._loop.call_soon_threadsafe(self._protocol.connection_lost, None)
+        self._loop.call_soon(self._protocol.connection_lost, None)
+        self._loop.run_in_executor(None, self._serial.close)
 
     def serial_shutdown(self, how) -> None:
         """Shutdown the serial connection."""
@@ -470,6 +475,12 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
+
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        self._closing = True
+        if self._internal_transport is not None:
+            self._internal_transport.abort()
 
     def pause_reading(self):
         """Pause reading from the transport."""
