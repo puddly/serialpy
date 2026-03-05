@@ -561,8 +561,8 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
-    if serial_pair.backend == "socket":
-        pytest.skip("Socket transport delegates backpressure to TCP transport")
+    if serial_pair.backend in ("socket", "com0com"):
+        pytest.skip("Only socat and real adapters reliably trigger backpressure")
 
     output_pause_count = 0
     output_resume_count = 0
@@ -639,8 +639,8 @@ async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> Non
     3. Timing failures from writer not being added when buffering data
     Source: https://github.com/home-assistant-libs/pyserial-asyncio-fast/pull/36
     """
-    if serial_pair.backend == "socket":
-        pytest.skip("Socket transport delegates backpressure to TCP transport")
+    if serial_pair.backend in ("socket", "com0com"):
+        pytest.skip("Only socat and real adapters reliably trigger backpressure")
 
     TEXT = b"Hello, World!"
     COUNT = 8 * 1024

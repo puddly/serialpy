@@ -1,6 +1,7 @@
 """Pytest configuration for serialx tests."""
 
 from collections.abc import Generator
+import re
 import sys
 import time
 
@@ -9,6 +10,8 @@ import pytest
 import serialx
 from tests.common import SOCAT_BINARY, SerialPair, create_socat_pair
 from tests.socket_relay import create_socket_pair
+
+COM0COM_RE = re.compile(r"^CNC[A-Z]\d+$", re.IGNORECASE)
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -56,9 +59,14 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         params.append(pytest.param(("socket",), id="socket"))
 
         for left, right in _get_adapter_pairs(metafunc.config):
+            if COM0COM_RE.match(left) or COM0COM_RE.match(right):
+                backend = "com0com"
+            else:
+                backend = "adapter"
+
             params.append(
                 pytest.param(
-                    ("adapter", left, right),
+                    (backend, left, right),
                     marks=[pytest.mark.xdist_group(name=f"pair:{left}:{right}")],
                     id=f"{left}:{right}",
                 )
@@ -98,8 +106,8 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     elif backend == "socket":
         with create_socket_pair() as (left, right):
             yield SerialPair(left, right, "socket")
-    elif backend == "adapter":
-        yield SerialPair(backend_info[1], backend_info[2], "adapter")
+    elif backend in ("adapter", "com0com"):
+        yield SerialPair(backend_info[1], backend_info[2], backend)
 
 
 @pytest.fixture(autouse=True)
@@ -117,7 +125,7 @@ def _purge_com0com(request: pytest.FixtureRequest) -> None:
         return
 
     candidate: SerialPair = request.getfixturevalue("serial_pair")
-    if candidate.backend != "adapter":
+    if candidate.backend != "com0com":
         return
 
     from win32file import (  # noqa: PLC0415
