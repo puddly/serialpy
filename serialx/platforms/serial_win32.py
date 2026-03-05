@@ -315,11 +315,7 @@ class Win32Serial(BaseSerial):
         try:
             rc, _ = ReadFile(self._handle, b, self._overlapped_read)
         except pywintypes.error as e:
-            if e.winerror != ERROR_IO_PENDING:
-                raise OSError(e.winerror, e.strerror) from e
-
-            # Might not be reached if ReadFile returns result instead of raising
-            rc = ERROR_IO_PENDING
+            raise OSError(e.winerror, e.strerror) from e
 
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
@@ -351,11 +347,7 @@ class Win32Serial(BaseSerial):
         try:
             err, n = WriteFile(self._handle, data, self._overlapped_write)
         except pywintypes.error as e:
-            if e.winerror != ERROR_IO_PENDING:
-                raise OSError(e.winerror, e.strerror) from e
-
-            # Might not be reached if WriteFile returns result instead of raising
-            err = ERROR_IO_PENDING
+            raise OSError(e.winerror, e.strerror) from e
 
         if err == ERROR_IO_PENDING:
             # IO is pending, wait for it
