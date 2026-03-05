@@ -11,7 +11,7 @@ import pytest
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
 from serialx.common import BaseSerial
-from tests.common import SerialPair, create_dual_loopback, measure_time
+from tests.common import SerialPair, measure_time
 
 LOGGER = logging.getLogger(__name__)
 
@@ -512,9 +512,9 @@ def test_dtr_cts(adapter_pair: tuple[str, str]) -> None:
     """Test that DTR on one side controls CTS on the other."""
     left_port, right_port = adapter_pair
 
-    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
-        serial_left,
-        serial_right,
+    with (
+        Serial(left_port, baudrate=115200) as serial_left,
+        Serial(right_port, baudrate=115200) as serial_right,
     ):
         serial_left.set_modem_pins(rts=False)
         serial_right.set_modem_pins(rts=False)
@@ -536,9 +536,9 @@ def test_deprecated_dtr_cts(adapter_pair: tuple[str, str]) -> None:
     """Test DTR/CTS cross-port behavior via deprecated property aliases."""
     left_port, right_port = adapter_pair
 
-    with create_dual_loopback(left_port, right_port, baudrate=115200) as (
-        serial_left,
-        serial_right,
+    with (
+        Serial(left_port, baudrate=115200) as serial_left,
+        Serial(right_port, baudrate=115200) as serial_right,
     ):
         serial_left.set_modem_pins(rts=False)
         serial_right.set_modem_pins(rts=False)
