@@ -1,7 +1,7 @@
 """Shared test utilities and fixtures."""
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
 import os
 import shutil
@@ -197,3 +197,21 @@ def create_dual_loopback(
         serialx.Serial(right_port, **kwargs) as serial_right,
     ):
         yield (serial_left, serial_right)
+
+
+@contextlib.contextmanager
+def measure_time() -> Iterator[Callable[[], float]]:
+    """Measure elapsed time in a context."""
+    start = time.monotonic()
+    end = None
+
+    def get_result() -> float:
+        if end is None:
+            raise RuntimeError("Context has not exited yet")
+
+        return end - start
+
+    try:
+        yield get_result
+    finally:
+        end = time.monotonic()
