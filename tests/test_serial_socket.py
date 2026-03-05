@@ -4,6 +4,7 @@ import pytest
 
 from serialx import serial_for_url
 from serialx.platforms.serial_socket import SocketSerial
+from tests.common import measure_time
 from tests.socket_relay import create_socket_pair
 
 
@@ -37,3 +38,15 @@ def test_socket_invalid_uri() -> None:
 
     with pytest.raises(ValueError, match="expected both host and port"):
         SocketSerial(path="socket://:1234", baudrate=115200)
+
+
+def test_socket_connect_timeout() -> None:
+    """Test that connect_timeout is respected by SocketSerial."""
+    url = "socket://192.0.2.1:1234"
+
+    with measure_time() as elapsed:
+        with pytest.raises((OSError, TimeoutError)):
+            with serial_for_url(url, baudrate=115200, connect_timeout=0.2):
+                pass
+
+    assert elapsed() < 1.0
