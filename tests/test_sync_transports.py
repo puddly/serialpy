@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
+from serialx import ModemPins, Parity, PinState, Serial, StopBits
 from serialx.common import BaseSerial
 from tests.common import SerialPair, measure_time
 
@@ -22,8 +22,8 @@ def serial_opened_pair(
 ) -> Iterator[tuple[BaseSerial, BaseSerial]]:
     """Yield a connected pair of opened Serial objects with default settings."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         yield left, right
 
@@ -34,8 +34,8 @@ def serial_opened_pair(
 def test_sync_all_bytes(serial_pair: SerialPair) -> None:
     """Test that all bytes 0-255 can be transmitted."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         data = bytes(range(256))
         left.write(data)
@@ -45,8 +45,8 @@ def test_sync_all_bytes(serial_pair: SerialPair) -> None:
 def test_sync_segmented_binary_data(serial_pair: SerialPair) -> None:
     """Test binary data sent in segments."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         segment_size = 16
         data = bytes(range(256))
@@ -61,8 +61,8 @@ def test_sync_segmented_binary_data(serial_pair: SerialPair) -> None:
 def test_sync_binary_payload_sizes(serial_pair: SerialPair, size: int) -> None:
     """Test various binary payload sizes."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         data = bytes([i % 256 for i in range(size)])
         left.write(data)
@@ -72,8 +72,8 @@ def test_sync_binary_payload_sizes(serial_pair: SerialPair, size: int) -> None:
 def test_sync_null_bytes(serial_pair: SerialPair) -> None:
     """Test that null bytes (0x00) can be transmitted."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         null_data = b"\x00" * 64
         left.write(null_data)
@@ -83,8 +83,8 @@ def test_sync_null_bytes(serial_pair: SerialPair) -> None:
 def test_sync_overlapping_read_write(serial_pair: SerialPair) -> None:
     """Test that read and write can overlap, data is buffered."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         data = bytes(range(256))
         read = b""
@@ -119,8 +119,8 @@ def test_sync_random_large(
 ) -> None:
     """Test random read/write at various speeds."""
     with (
-        serial_for_url(serial_pair.left, baudrate=baudrate) as left,
-        serial_for_url(serial_pair.right, baudrate=baudrate) as right,
+        Serial.from_url(serial_pair.left, baudrate=baudrate) as left,
+        Serial.from_url(serial_pair.right, baudrate=baudrate) as right,
     ):
         data = os.urandom(chunk_size)
         left.write(data)
@@ -133,8 +133,8 @@ def test_sync_repeated_write_read_cycles(
 ) -> None:
     """Test repeated write/read cycles."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         data = bytes(range(256))
 
@@ -146,8 +146,8 @@ def test_sync_repeated_write_read_cycles(
 def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
     """Test multiple writes followed by a single read."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         chunk = bytes(range(256))
         iterations = 4
@@ -162,8 +162,8 @@ def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
     with (
-        serial_for_url(serial_pair.left, baudrate=921600) as left,
-        serial_for_url(serial_pair.right, baudrate=921600) as right,
+        Serial.from_url(serial_pair.left, baudrate=921600) as left,
+        Serial.from_url(serial_pair.right, baudrate=921600) as right,
     ):
         data = bytes([i % 256 for i in range(payload_size)])
         left.write(data)
@@ -173,8 +173,8 @@ def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
 def test_sync_rapid_small_writes(serial_pair: SerialPair) -> None:
     """Test rapid succession of small writes."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         iterations = 256
         received = bytearray()
@@ -194,8 +194,8 @@ def test_sync_sustained_throughput(
 ) -> None:
     """Test sustained data throughput at various baudrates."""
     with (
-        serial_for_url(serial_pair.left, baudrate=baudrate) as left,
-        serial_for_url(serial_pair.right, baudrate=baudrate) as right,
+        Serial.from_url(serial_pair.left, baudrate=baudrate) as left,
+        Serial.from_url(serial_pair.right, baudrate=baudrate) as right,
     ):
         chunk = os.urandom(1024)
         for _ in range(iterations):
@@ -211,7 +211,7 @@ def test_sync_sustained_throughput(
 )
 def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
-    with serial_for_url(serial_pair.left, baudrate=baudrate) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=baudrate) as serial:
         assert serial.baudrate == baudrate
         serial.write(b"test")
 
@@ -221,7 +221,7 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
 )
 def test_sync_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    with serial_for_url(serial_pair.left, baudrate=115200, parity=parity) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200, parity=parity) as serial:
         assert serial.parity == parity
         serial.write(b"test")
 
@@ -243,7 +243,9 @@ def test_sync_valid_stopbits(
     expected: StopBits,
 ) -> None:
     """Test that valid stopbits settings are accepted."""
-    with serial_for_url(serial_pair.left, baudrate=115200, stopbits=stopbits) as serial:
+    with Serial.from_url(
+        serial_pair.left, baudrate=115200, stopbits=stopbits
+    ) as serial:
         assert serial.stopbits == expected
         serial.write(b"test")
 
@@ -251,7 +253,7 @@ def test_sync_valid_stopbits(
 @pytest.mark.parametrize("byte_size", [5, 6, 7, 8])
 def test_sync_valid_byte_size(serial_pair: SerialPair, byte_size: int) -> None:
     """Test that valid byte sizes are accepted."""
-    with serial_for_url(
+    with Serial.from_url(
         serial_pair.left, baudrate=115200, byte_size=byte_size
     ) as serial:
         serial.write(b"test")
@@ -260,7 +262,7 @@ def test_sync_valid_byte_size(serial_pair: SerialPair, byte_size: int) -> None:
 @pytest.mark.parametrize("xonxoff", [True, False])
 def test_sync_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
     """Test that xonxoff setting is accepted."""
-    with serial_for_url(serial_pair.left, baudrate=115200, xonxoff=xonxoff) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200, xonxoff=xonxoff) as serial:
         serial.write(b"test")
 
 
@@ -268,25 +270,25 @@ def test_sync_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
 def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
     # Open both sides: on com0com, opening right asserts DTR which raises CTS on left
-    with serial_for_url(serial_pair.right, baudrate=115200):
-        with serial_for_url(serial_pair.left, baudrate=115200, rtscts=rtscts) as left:
+    with Serial.from_url(serial_pair.right, baudrate=115200):
+        with Serial.from_url(serial_pair.left, baudrate=115200, rtscts=rtscts) as left:
             left.write(b"test")
 
 
 def test_sync_exclusive(serial_pair: SerialPair) -> None:
     """Test that exclusive setting is respected."""
-    with serial_for_url(serial_pair.left, baudrate=115200, exclusive=True) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True) as serial:
         assert serial.exclusive is True
 
         if serial_pair.backend == "socket":
             # Socket endpoints are not lockable tty devices
-            with serial_for_url(
+            with Serial.from_url(
                 serial_pair.left, baudrate=115200, exclusive=True
             ) as serial2:
                 assert serial2.exclusive is True
         else:
             with pytest.raises(OSError):
-                with serial_for_url(serial_pair.left, baudrate=115200, exclusive=True):
+                with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True):
                     pass
 
 
@@ -295,10 +297,10 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
     if serial_pair.backend == "adapter" and sys.platform == "win32":
         pytest.skip("com0com does not support shared access")
 
-    with serial_for_url(serial_pair.left, baudrate=115200, exclusive=False) as serial1:
+    with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=False) as serial1:
         assert serial1.exclusive is False
 
-        with serial_for_url(
+        with Serial.from_url(
             serial_pair.left, baudrate=115200, exclusive=False
         ) as serial2:
             assert serial2.exclusive is False
@@ -310,8 +312,8 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
 
 def test_sync_context_manager_multiple_times(serial_pair: SerialPair) -> None:
     """Test that context manager can be used multiple times."""
-    serial_left = serial_for_url(serial_pair.left, baudrate=115200)
-    serial_right = serial_for_url(serial_pair.right, baudrate=115200)
+    serial_left = Serial.from_url(serial_pair.left, baudrate=115200)
+    serial_right = Serial.from_url(serial_pair.right, baudrate=115200)
 
     with serial_left, serial_right:
         serial_left.write(b"test1")
@@ -324,8 +326,8 @@ def test_sync_context_manager_multiple_times(serial_pair: SerialPair) -> None:
 
 def test_sync_open_close_cycles(serial_pair: SerialPair) -> None:
     """Test multiple open/close cycles."""
-    serial_left = serial_for_url(serial_pair.left, baudrate=115200)
-    serial_right = serial_for_url(serial_pair.right, baudrate=115200)
+    serial_left = Serial.from_url(serial_pair.left, baudrate=115200)
+    serial_right = Serial.from_url(serial_pair.right, baudrate=115200)
 
     for i in range(1, 4):
         serial_left.open()
@@ -342,8 +344,8 @@ def test_sync_open_close_cycles(serial_pair: SerialPair) -> None:
 def test_sync_flush_after_write(serial_pair: SerialPair) -> None:
     """Test flushing after write operation."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         left.flush()
 
@@ -357,8 +359,8 @@ def test_sync_flush_after_write(serial_pair: SerialPair) -> None:
 def test_sync_multiple_flush_calls(serial_pair: SerialPair) -> None:
     """Test multiple consecutive flush calls."""
     with (
-        serial_for_url(serial_pair.left, baudrate=115200) as left,
-        serial_for_url(serial_pair.right, baudrate=115200) as right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         data = b""
 
@@ -379,7 +381,7 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
     if serial_pair.backend == "socket":
         pytest.skip("Socket transport does not support modem pins")
 
-    with serial_for_url(serial_pair.left, baudrate=115200) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         modem_pins = serial.get_modem_pins()
         assert isinstance(modem_pins, ModemPins)
 
@@ -393,7 +395,7 @@ def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
     if serial_pair.backend in ("socket", "socat"):
         pytest.skip("Virtual backends do not reflect modem pin state")
 
-    with serial_for_url(serial_pair.left, baudrate=115200) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.set_modem_pins(dtr=True, rts=True)
         modem_pins = serial.get_modem_pins()
         assert modem_pins.dtr is PinState.HIGH
@@ -415,7 +417,7 @@ def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
     if serial_pair.backend in ("socket", "socat"):
         pytest.skip("Virtual backends do not reflect modem pin state")
 
-    with serial_for_url(serial_pair.left, baudrate=115200) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.dtr = True
         assert serial.dtr is True
 
@@ -428,7 +430,7 @@ def test_sync_deprecated_rts_property(serial_pair: SerialPair) -> None:
     if serial_pair.backend in ("socket", "socat"):
         pytest.skip("Virtual backends do not reflect modem pin state")
 
-    with serial_for_url(serial_pair.left, baudrate=115200) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.rts = True
         assert serial.rts is True
 
@@ -441,7 +443,7 @@ def test_sync_deprecated_rts_property(serial_pair: SerialPair) -> None:
 
 def test_sync_read_timeout(serial_pair: SerialPair) -> None:
     """Test that reading with a timeout returns 0 bytes after the timeout."""
-    with serial_for_url(serial_pair.left, baudrate=115200, read_timeout=0.1) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=115200, read_timeout=0.1) as serial:
         assert serial.read_timeout == 0.1
 
         with measure_time() as elapsed:
@@ -454,10 +456,10 @@ def test_sync_read_timeout(serial_pair: SerialPair) -> None:
 def test_sync_read_timeout_with_partial_data(serial_pair: SerialPair) -> None:
     """Test that reading with a timeout returns available data immediately."""
     with (
-        serial_for_url(
+        Serial.from_url(
             serial_pair.left, baudrate=115200, read_timeout=1.0
         ) as serial_left,
-        serial_for_url(
+        Serial.from_url(
             serial_pair.right, baudrate=115200, read_timeout=1.0
         ) as serial_right,
     ):
@@ -473,10 +475,10 @@ def test_sync_read_timeout_with_partial_data(serial_pair: SerialPair) -> None:
 def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
     """Test that readexactly(10) with only 5 bytes raises IncompleteReadError."""
     with (
-        serial_for_url(
+        Serial.from_url(
             serial_pair.left, baudrate=115200, read_timeout=0.5
         ) as serial_left,
-        serial_for_url(
+        Serial.from_url(
             serial_pair.right, baudrate=115200, read_timeout=0.5
         ) as serial_right,
     ):
@@ -495,7 +497,7 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
     if serial_pair.backend != "socat":
         pytest.skip("Write timeout buffer-full test requires socat PTY")
 
-    with serial_for_url(serial_pair.left, baudrate=9600, write_timeout=0.1) as serial:
+    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.1) as serial:
         data = b"x" * 1024
 
         with pytest.raises(TimeoutError):

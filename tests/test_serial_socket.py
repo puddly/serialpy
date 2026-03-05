@@ -2,7 +2,7 @@
 
 import pytest
 
-from serialx import serial_for_url
+from serialx import Serial
 from serialx.platforms.serial_socket import SocketSerial
 from tests.common import measure_time
 from tests.socket_relay import create_socket_pair
@@ -21,7 +21,7 @@ def test_socket_connect_timeout_property() -> None:
 def test_socket_effective_timeout_mismatched() -> None:
     """Test that mismatched read/write timeouts use min for socket timeout."""
     with create_socket_pair() as (left_url, _right_url):
-        serial = serial_for_url(
+        serial = Serial.from_url(
             left_url, baudrate=115200, read_timeout=2.0, write_timeout=1.0
         )
         assert isinstance(serial, SocketSerial)
@@ -46,7 +46,7 @@ def test_socket_connect_timeout() -> None:
 
     with measure_time() as elapsed:
         with pytest.raises((OSError, TimeoutError)):
-            with serial_for_url(url, baudrate=115200, connect_timeout=0.2):
+            with Serial.from_url(url, baudrate=115200, connect_timeout=0.2):
                 pass
 
     assert elapsed() < 1.0

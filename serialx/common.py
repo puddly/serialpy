@@ -162,6 +162,12 @@ class BaseSerial(io.RawIOBase):
 
         self._auto_close = False
 
+    @classmethod
+    def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
+        """Create the appropriate serial port subclass for the given URL."""
+        serial_cls, _ = get_serial_classes(url)
+        return serial_cls(url, *args, **kwargs)
+
     def open(self) -> None:
         """Open the serial port."""
         self._open()
