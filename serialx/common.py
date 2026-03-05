@@ -131,8 +131,6 @@ class BaseSerial(io.RawIOBase):
         byte_size: int = 8,
         *,
         timeout: float | None = None,
-        buffer_character_count: int = 1,
-        buffer_burst_timeout: float = 0.01,
         rtsdtr_on_open: PinState = PinState.HIGH,
         rtsdtr_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
@@ -159,8 +157,6 @@ class BaseSerial(io.RawIOBase):
         self._rtsdtr_on_open = rtsdtr_on_open
         self._rtsdtr_on_close = rtsdtr_on_close
 
-        self._buffer_character_count = buffer_character_count
-        self._buffer_burst_timeout = buffer_burst_timeout
         self._auto_close = False
 
     @abstractmethod

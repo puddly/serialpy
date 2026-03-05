@@ -123,12 +123,19 @@ def _safe_close_handle(handle) -> None:
 class Win32Serial(BaseSerial):
     """Windows serial port implementation using Win32 API."""
 
-    def __init__(self, *args, handle=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        handle: int | None = None,
+        inter_byte_timeout: float = 0.01,
+        **kwargs,
+    ):
         """Initialize the Windows serial port."""
         super().__init__(*args, **kwargs)
         self._handle = handle
-        self._overlapped_read = None
-        self._overlapped_write = None
+        self._inter_byte_timeout = inter_byte_timeout
+        self._overlapped_read: OVERLAPPED | None = None
+        self._overlapped_write: OVERLAPPED | None = None
 
     def open(self) -> None:
         """Open the serial port."""
@@ -164,8 +171,8 @@ class Win32Serial(BaseSerial):
     def configure_port(self) -> None:
         """Configure the serial port settings."""
         try:
-            interval = int(1000 * self._buffer_burst_timeout)
-            if interval <= 0 and self._buffer_burst_timeout > 0:
+            interval = int(1000 * self._inter_byte_timeout)
+            if interval <= 0 and self._inter_byte_timeout > 0:
                 interval = 1  # Minimum 1ms if burst timeout is set but small
 
             timeouts = (
@@ -241,6 +248,7 @@ class Win32Serial(BaseSerial):
 
     def fileno(self) -> int:
         """Return the file descriptor."""
+        assert self._handle is not None
         return int(self._handle)
 
     def close(self):
@@ -452,19 +460,17 @@ class Win32SerialTransport(BaseSerialTransport):
         await self._open(path)
 
         try:
-            # Ensure buffer_burst_timeout is set to a small value to enable
+            # Ensure inter_byte_timeout is set to a small value to enable
             # "Wait for first byte, then return on gap" behavior for ReadFile.
             # If 0 (default), ReadFile with default timeouts might wait for full buffer.
-            original_burst_timeout = kwargs.get("buffer_burst_timeout", 0)
-            if original_burst_timeout == 0:
-                kwargs["buffer_burst_timeout"] = 0.01
+            original_inter_byte_timeout = kwargs.get("inter_byte_timeout", 0)
+            if original_inter_byte_timeout == 0:
+                kwargs["inter_byte_timeout"] = 0.01
 
             self._serial = Win32Serial(
                 **kwargs,
                 path=path,
                 handle=self._handle,
-                # buffer_character_count is not used by Proactor transport
-                buffer_character_count=0,
             )
             self._extra["serial"] = self._serial
 

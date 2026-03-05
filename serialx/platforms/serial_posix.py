@@ -136,12 +136,16 @@ class PosixSerial(BaseSerial):
         *args,
         fileno: int | None = None,
         low_latency: bool = True,
+        inter_byte_timeout: float = 0.01,
+        min_read_size: int = 1,
         **kwargs,
     ):
         """Initialize POSIX serial port."""
         super().__init__(*args, **kwargs)
         self._fileno: int | None = fileno
         self._low_latency: bool = low_latency
+        self._inter_byte_timeout = inter_byte_timeout
+        self._min_read_size = min_read_size
 
     def open(self) -> None:
         """Open the serial port."""
@@ -297,17 +301,17 @@ class PosixSerial(BaseSerial):
 
         # Only emit reads if VMIN characters have been read, after no more data comes in
         # for VTIME seconds
-        vmin = self._buffer_character_count
-        vtime = int(self._buffer_burst_timeout * 10)
+        vmin = self._min_read_size
+        vtime = int(self._inter_byte_timeout * 10)
 
         if not 0 <= vmin <= 255:
             raise ValueError(
-                f"VMIN must be in range 0-255 (buffer_character_count={self._buffer_character_count})"
+                f"VMIN must be in range 0-255 (min_read_size={self._min_read_size})"
             )
 
         if not 0 <= vtime <= 255:
             raise ValueError(
-                f"VTIME must be in range 0-255 (buffer_burst_timeout={self._buffer_burst_timeout})"
+                f"VTIME must be in range 0-255 (inter_byte_timeout={self._inter_byte_timeout})"
             )
 
         try:
@@ -522,8 +526,8 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
             # `DescriptorTransport` opened the port
             fileno=self._fileno,
             # Nonblocking mode
-            buffer_character_count=0,
-            buffer_burst_timeout=0,
+            min_read_size=0,
+            inter_byte_timeout=0,
         )
         self._extra["serial"] = self._serial
 
