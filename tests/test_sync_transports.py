@@ -1,5 +1,6 @@
 """Sync transport tests."""
 
+from asyncio import IncompleteReadError
 from collections.abc import Iterator
 import logging
 import os
@@ -480,6 +481,26 @@ def test_sync_read_timeout_with_partial_data(
         assert result == data
         # Should have taken much less than 1.0 seconds
         assert elapsed() < 0.2
+
+
+def test_sync_readexactly_partial_timeout(
+    sync_transport_pair: tuple[str, str],
+) -> None:
+    """Test that readexactly(10) with only 5 bytes raises IncompleteReadError."""
+    left_path, right_path = sync_transport_pair
+
+    with (
+        serial_for_url(left_path, baudrate=115200, read_timeout=0.5) as serial_left,
+        serial_for_url(right_path, baudrate=115200, read_timeout=0.5) as serial_right,
+    ):
+        serial_left.write(b"hello")
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError) as exc_info:
+                serial_right.readexactly(10)
+
+        assert exc_info.value.partial == b"hello"
+        assert 0.5 <= elapsed() < 1.0
 
 
 def test_socket_connect_timeout() -> None:

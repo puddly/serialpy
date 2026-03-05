@@ -1,12 +1,13 @@
 """Test sync APIs with dual loopback hardware."""
 
+from asyncio import IncompleteReadError
 import os
 import sys
 
 import pytest
 
 from serialx import Parity, PinState, Serial, StopBits
-from tests.common import create_dual_loopback
+from tests.common import create_dual_loopback, measure_time
 
 
 def test_all_bytes_dual(adapter_pair: tuple[str, str]) -> None:
@@ -437,6 +438,61 @@ def test_multiple_flush_calls_dual(adapter_pair: tuple[str, str]) -> None:
 
         result = serial_right.readexactly(len(data))
         assert result == data
+
+
+def test_read_timeout_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that reading with a timeout returns 0 bytes after the timeout."""
+    left_port, _right_port = adapter_pair
+
+    with Serial(left_port, baudrate=115200, read_timeout=0.2) as serial:
+        assert serial.read_timeout == 0.2
+
+        with measure_time() as elapsed:
+            result = serial.read(10)
+
+        assert len(result) == 0
+        assert elapsed() >= 0.15
+
+
+def test_read_timeout_with_data_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that reading with a timeout returns available data immediately."""
+    left_port, right_port = adapter_pair
+
+    with create_dual_loopback(
+        left_port, right_port, baudrate=115200, read_timeout=2.0
+    ) as (
+        serial_left,
+        serial_right,
+    ):
+        data = b"hello"
+        serial_left.write(data)
+
+        with measure_time() as elapsed:
+            result = serial_right.readexactly(len(data))
+
+        assert result == data
+        assert elapsed() < 1.0
+
+
+def test_readexactly_partial_timeout_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that readexactly(10) with only 5 bytes raises IncompleteReadError."""
+    left_port, right_port = adapter_pair
+
+    with create_dual_loopback(
+        left_port, right_port, baudrate=115200, read_timeout=0.5
+    ) as (
+        serial_left,
+        serial_right,
+    ):
+        serial_left.write(b"hello")
+        serial_left.flush()
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError) as exc_info:
+                serial_right.readexactly(10)
+
+        assert exc_info.value.partial == b"hello"
+        assert 0.5 <= elapsed() < 1.0
 
 
 def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
