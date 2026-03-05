@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -16,6 +16,14 @@ import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
+
+
+class SerialPair(NamedTuple):
+    """A connected pair of serial port paths with backend metadata."""
+
+    left: str
+    right: str
+    backend: str  # "socat", "socket", or "adapter"
 
 
 @contextlib.contextmanager

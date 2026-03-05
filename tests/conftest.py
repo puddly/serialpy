@@ -3,21 +3,12 @@
 from collections.abc import Generator
 import sys
 import time
-from typing import NamedTuple
 
 import pytest
 
 import serialx
-from tests.common import SOCAT_BINARY, create_socat_pair
+from tests.common import SOCAT_BINARY, SerialPair, create_socat_pair
 from tests.socket_relay import create_socket_pair
-
-
-class SerialPair(NamedTuple):
-    """A connected pair of serial port paths with backend metadata."""
-
-    left: str
-    right: str
-    backend: str  # "socat", "socket", or "adapter"
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -31,22 +22,11 @@ def pytest_configure(config: pytest.Config) -> None:
 def pytest_addoption(parser: pytest.Parser) -> None:
     """Add custom command line options for serial adapter configuration."""
     parser.addoption(
-        "--loopback-adapter",
-        action="append",
-        default=[],
-        help="Serial loopback adapter device path (can be specified multiple times)",
-    )
-    parser.addoption(
         "--adapter-pair",
         action="append",
         default=[],
         help="Pair of serial adapters in format LEFT:RIGHT (can be specified multiple times)",
     )
-
-
-def _get_loopback_adapters(config: pytest.Config) -> list[str]:
-    """Get list of loopback adapters from config."""
-    return config.getoption("--loopback-adapter")
 
 
 def _get_adapter_pairs(config: pytest.Config) -> list[tuple[str, str]]:
@@ -85,21 +65,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             )
 
         metafunc.parametrize("serial_pair", params, indirect=True)
-
-    if "loopback_adapter" in metafunc.fixturenames:
-        adapters = _get_loopback_adapters(metafunc.config)
-
-        metafunc.parametrize(
-            "loopback_adapter",
-            [
-                pytest.param(
-                    adapter,
-                    marks=[pytest.mark.xdist_group(name=f"adapter:{adapter}")],
-                    id=f"{adapter}",
-                )
-                for adapter in adapters
-            ],
-        )
 
     if "adapter_pair" in metafunc.fixturenames:
         pairs = _get_adapter_pairs(metafunc.config)
