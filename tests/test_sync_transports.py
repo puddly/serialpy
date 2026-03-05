@@ -378,9 +378,6 @@ def test_sync_multiple_flush_calls(serial_pair: SerialPair) -> None:
 
 def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
     """Test reading modem control bits."""
-    if serial_pair.backend == "socket":
-        pytest.skip("Socket transport does not support modem pins")
-
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         modem_pins = serial.get_modem_pins()
         assert isinstance(modem_pins, ModemPins)
@@ -495,8 +492,8 @@ def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
 
 def test_sync_write_timeout(serial_pair: SerialPair) -> None:
     """Test that write timeout works when buffer is full."""
-    if serial_pair.backend != "socat":
-        pytest.skip("Write timeout buffer-full test requires socat PTY")
+    if serial_pair.backend == "socket":
+        pytest.skip("Sockets do not have limited buffer capacity")
 
     with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.1) as serial:
         data = b"x" * 1024
@@ -563,9 +560,6 @@ def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
 
 def test_fast_open_close(serial_pair: SerialPair) -> None:
     """Test quickly opening and closing a port."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
-
     message = b"Fast write and close test"
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
@@ -686,9 +680,6 @@ def test_deassert_on_open_with_rtscts(
             assert left.get_modem_pins().cts is expected_state
 
 
-@pytest.mark.skipif(
-    sys.platform != "win32", reason="CTS flow control test requires com0com"
-)
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
     if serial_pair.backend != "adapter":

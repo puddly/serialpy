@@ -478,14 +478,8 @@ async def test_async_invalid_uri() -> None:
         )
 
 
-# --- Modem pins ---
-
-
 async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
     """Test reading modem control bits."""
-    if serial_pair.backend == "socket":
-        pytest.skip("Socket transport does not support modem pins")
-
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         _,
         writer,
@@ -691,9 +685,6 @@ async def test_async_backpressure_writer_removal() -> None:
 
 async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
     """Test quickly opening and closing a port doesn't crash."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
-
     connection_lost_event = asyncio.Event()
 
     class FastCloseProtocol(asyncio.Protocol):
