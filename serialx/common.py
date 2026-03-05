@@ -186,6 +186,15 @@ class BaseSerial(io.RawIOBase):
         """Configure the serial port settings (platform-specific)."""
         raise NotImplementedError
 
+    def close(self) -> None:
+        """Close the serial port."""
+        self._close()
+
+    @abstractmethod
+    def _close(self) -> None:
+        """Close the serial port, internal."""
+        raise NotImplementedError
+
     @property
     def read_timeout(self) -> float | None:
         """Get the read timeout in seconds."""

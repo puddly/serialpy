@@ -450,7 +450,7 @@ class PosixSerial(BaseSerial):
         LOGGER.debug("Flushing file descriptor %r", self._fileno)
         termios.tcdrain(self._fileno)
 
-    def close(self) -> None:
+    def _close(self) -> None:
         """Close the serial port."""
         if self._fileno is not None:
             if self._exclusive:

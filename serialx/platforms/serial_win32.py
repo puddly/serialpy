@@ -251,7 +251,7 @@ class Win32Serial(BaseSerial):
         assert self._handle is not None
         return int(self._handle)
 
-    def close(self):
+    def _close(self):
         """Close the serial port and release all handles."""
         if self._handle is not None:
             # Windows has no way to automatically do this on close, we do it manually

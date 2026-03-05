@@ -104,7 +104,7 @@ class SocketSerial(BaseSerial):
         except TimeoutError:
             return 0
 
-    def close(self) -> None:
+    def _close(self) -> None:
         """Close the socket."""
         if self._socket is not None:
             self._socket.close()
