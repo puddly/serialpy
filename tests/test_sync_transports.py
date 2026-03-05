@@ -294,8 +294,8 @@ def test_sync_exclusive(serial_pair: SerialPair) -> None:
 
 def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
     """Test that non-exclusive mode allows multiple opens."""
-    if serial_pair.backend == "adapter" and sys.platform == "win32":
-        pytest.skip("com0com does not support shared access")
+    if sys.platform == "win32":
+        pytest.skip("Windows does not support shared access")
 
     with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=False) as serial1:
         assert serial1.exclusive is False
@@ -390,10 +390,9 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
+@pytest.mark.skip_backends("socket", "socat")
 def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
-    if serial_pair.backend in ("socket", "socat"):
-        pytest.skip("Virtual backends do not reflect modem pin state")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.set_modem_pins(dtr=True, rts=True)
@@ -415,10 +414,9 @@ def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
+@pytest.mark.skip_backends("socket", "socat")
 def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
     """Test DTR property (deprecated alias)."""
-    if serial_pair.backend in ("socket", "socat"):
-        pytest.skip("Virtual backends do not reflect modem pin state")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.dtr = True
@@ -431,10 +429,9 @@ def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
+@pytest.mark.skip_backends("socket", "socat")
 def test_sync_deprecated_rts_property(serial_pair: SerialPair) -> None:
     """Test RTS property (deprecated alias)."""
-    if serial_pair.backend in ("socket", "socat"):
-        pytest.skip("Virtual backends do not reflect modem pin state")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.rts = True
@@ -490,10 +487,9 @@ def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
         assert 0.5 <= elapsed() < 1.0
 
 
+@pytest.mark.skip_backends("socket")
 def test_sync_write_timeout(serial_pair: SerialPair) -> None:
     """Test that write timeout works when buffer is full."""
-    if serial_pair.backend == "socket":
-        pytest.skip("Sockets do not have limited buffer capacity")
 
     with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.1) as serial:
         data = b"x" * 1024
@@ -508,10 +504,9 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
 # and verify cross-port behavior that virtual backends can't emulate.
 
 
+@pytest.mark.require_backends("adapter")
 def test_dtr_cts(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls CTS on the other."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
@@ -533,10 +528,9 @@ def test_dtr_cts(serial_pair: SerialPair) -> None:
         assert left.get_modem_pins().cts is PinState.LOW
 
 
+@pytest.mark.require_backends("adapter")
 def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
     """Test DTR/CTS cross-port behavior via deprecated property aliases."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
@@ -571,10 +565,9 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
+@pytest.mark.require_backends("adapter")
 def test_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
@@ -601,10 +594,9 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
+@pytest.mark.require_backends("adapter")
 def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
@@ -640,6 +632,7 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
+@pytest.mark.require_backends("adapter")
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -656,8 +649,6 @@ def test_deassert_on_open_with_rtscts(
     expected_state: PinState,
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
@@ -680,10 +671,9 @@ def test_deassert_on_open_with_rtscts(
             assert left.get_modem_pins().cts is expected_state
 
 
+@pytest.mark.require_backends("adapter")
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     with Serial.from_url(serial_pair.right, baudrate=9600) as right:
         right.set_modem_pins(dtr=False)

@@ -20,6 +20,14 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "xdist_group(name): group tests for pytest-xdist parallel execution control",
     )
+    config.addinivalue_line(
+        "markers",
+        "skip_backends(*backends): skip test for the listed serial_pair backends",
+    )
+    config.addinivalue_line(
+        "markers",
+        "require_backends(*backends): only run test for the listed serial_pair backends",
+    )
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -99,6 +107,14 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     """
     backend_info = request.param
     backend = backend_info[0]
+
+    for marker in request.node.iter_markers("skip_backends"):
+        if backend in marker.args:
+            pytest.skip(f"Skipped for backend {backend!r}")
+
+    for marker in request.node.iter_markers("require_backends"):
+        if backend not in marker.args:
+            pytest.skip(f"Requires backend in {marker.args!r}, got {backend!r}")
 
     if backend == "socat":
         with create_socat_pair() as (left, right):

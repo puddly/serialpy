@@ -23,7 +23,7 @@ class SerialPair(NamedTuple):
 
     left: str
     right: str
-    backend: str  # "socat", "socket", or "adapter"
+    backend: str  # "socat", "socket", "adapter", or "com0com"
 
 
 class BridgedSocatPair(NamedTuple):

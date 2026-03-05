@@ -424,10 +424,13 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
         assert transport.get_write_buffer_size() == 0
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Only DescriptorTransport implements write buffer limits",
+)
+@pytest.mark.skip_backends("socket")
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
-    if sys.platform == "win32" or serial_pair.backend == "socket":
-        pytest.skip("Only DescriptorTransport implements write buffer limits")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         _,
@@ -529,10 +532,9 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
+@pytest.mark.skip_backends("socket", "socat")
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
-    if serial_pair.backend in ("socket", "socat"):
-        pytest.skip("Virtual backends do not reflect modem pin state")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         _,
@@ -559,10 +561,9 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
+@pytest.mark.skip_backends("socket", "com0com")
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
-    if serial_pair.backend in ("socket", "com0com"):
-        pytest.skip("Only socat and real adapters reliably trigger backpressure")
 
     output_pause_count = 0
     output_resume_count = 0
@@ -630,6 +631,7 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     await asyncio.gather(input_lost, output_lost)
 
 
+@pytest.mark.skip_backends("socket", "com0com")
 async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 
@@ -639,8 +641,6 @@ async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> Non
     3. Timing failures from writer not being added when buffering data
     Source: https://github.com/home-assistant-libs/pyserial-asyncio-fast/pull/36
     """
-    if serial_pair.backend in ("socket", "com0com"):
-        pytest.skip("Only socat and real adapters reliably trigger backpressure")
 
     TEXT = b"Hello, World!"
     COUNT = 8 * 1024
@@ -740,10 +740,9 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
+@pytest.mark.require_backends("adapter")
 async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
@@ -773,10 +772,9 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
+@pytest.mark.require_backends("adapter")
 async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
@@ -815,6 +813,7 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
+@pytest.mark.require_backends("adapter")
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -831,8 +830,6 @@ async def test_async_deassert_on_open_with_rtscts(
     expected_state: PinState,
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
-    if serial_pair.backend != "adapter":
-        pytest.skip("Requires physical adapter pair")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
