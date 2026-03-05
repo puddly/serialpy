@@ -393,6 +393,9 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
             assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
+)
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
     if serial_pair.backend in ("socket", "socat"):
