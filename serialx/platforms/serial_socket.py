@@ -61,18 +61,36 @@ class SocketSerial(BaseSerial):
         self._socket = socket.create_connection(
             (self._host, self._port), timeout=self._connect_timeout
         )
-        if self._timeout is not None:
-            self._socket.settimeout(self._timeout)
 
     @property
     def connect_timeout(self) -> float | None:
         """Get the connection timeout in seconds."""
         return self._connect_timeout
 
+    def _get_effective_socket_timeout(self) -> float | None:
+        """Calculate effective socket timeout as min of read and write timeouts."""
+        read_t = self._timeout
+        write_t = self._write_timeout
+
+        if read_t is None:
+            return write_t
+        if write_t is None:
+            return read_t
+
+        effective = min(read_t, write_t)
+        if read_t != write_t:
+            LOGGER.debug(
+                "SocketSerial using shared timeout %s (min of read=%s, write=%s)",
+                effective,
+                read_t,
+                write_t,
+            )
+        return effective
+
     def configure_port(self) -> None:
-        """Configure the serial port settings (no-op for sockets)."""
+        """Configure the serial port settings."""
         if self._socket is not None:
-            self._socket.settimeout(self._timeout)
+            self._socket.settimeout(self._get_effective_socket_timeout())
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         pass

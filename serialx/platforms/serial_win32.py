@@ -354,7 +354,18 @@ class Win32Serial(BaseSerial):
             if e.winerror != ERROR_IO_PENDING:
                 raise OSError(e.winerror, e.strerror) from e
 
-            WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
+            timeout_ms = INFINITE
+            if self._write_timeout is not None:
+                timeout_ms = int(self._write_timeout * 1000)
+
+            res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
+
+            if res == WAIT_TIMEOUT:
+                CancelIo(self._handle)
+                # Wait for cancellation to complete
+                WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
+                raise TimeoutError("Write timeout") from None
+
             n = GetOverlappedResult(self._handle, self._overlapped_write, True)
 
         return n

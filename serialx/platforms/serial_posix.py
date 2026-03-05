@@ -508,6 +508,12 @@ class PosixSerial(BaseSerial):
         """Write bytes to serial port."""
         LOGGER.debug("Writing %d bytes: %r", len(data), data)  # type: ignore[arg-type]
         assert self._fileno is not None
+
+        if self._write_timeout is not None:
+            _, ready, _ = select.select([], [self._fileno], [], self._write_timeout)
+            if not ready:
+                raise TimeoutError("Write timeout")
+
         return os.write(self._fileno, data)  # type: ignore[arg-type]
 
 

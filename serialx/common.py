@@ -131,6 +131,7 @@ class BaseSerial(io.RawIOBase):
         byte_size: int = 8,
         *,
         timeout: float | None = None,
+        write_timeout: float | None = None,
         rtsdtr_on_open: PinState = PinState.HIGH,
         rtsdtr_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
@@ -153,6 +154,7 @@ class BaseSerial(io.RawIOBase):
         self._byte_size = byte_size
         self._exclusive = exclusive
         self._timeout = timeout
+        self._write_timeout = write_timeout
 
         self._rtsdtr_on_open = rtsdtr_on_open
         self._rtsdtr_on_close = rtsdtr_on_close
@@ -173,6 +175,11 @@ class BaseSerial(io.RawIOBase):
     def timeout(self) -> float | None:
         """Get the read timeout in seconds."""
         return self._timeout
+
+    @property
+    def write_timeout(self) -> float | None:
+        """Get the write timeout in seconds."""
+        return self._write_timeout
 
     def get_modem_pins(self) -> ModemPins:
         """Get modem control bits, internal."""
