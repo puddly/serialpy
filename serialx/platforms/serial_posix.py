@@ -471,8 +471,8 @@ class PosixSerial(BaseSerial):
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
 
-            if self._timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], self._timeout)
+            if self._read_timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
                 if not ready:
                     return 0
 
@@ -487,8 +487,8 @@ class PosixSerial(BaseSerial):
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
 
-            if self._timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], self._timeout)
+            if self._read_timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
                 if not ready:
                     return 0
 

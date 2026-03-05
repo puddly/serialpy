@@ -153,7 +153,7 @@ class BaseSerial(io.RawIOBase):
         self._parity = parity
         self._byte_size = byte_size
         self._exclusive = exclusive
-        self._timeout = timeout
+        self._read_timeout = timeout
         self._write_timeout = write_timeout
 
         self._rtsdtr_on_open = rtsdtr_on_open
@@ -174,7 +174,7 @@ class BaseSerial(io.RawIOBase):
     @property
     def timeout(self) -> float | None:
         """Get the read timeout in seconds."""
-        return self._timeout
+        return self._read_timeout
 
     @property
     def write_timeout(self) -> float | None:

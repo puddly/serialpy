@@ -69,7 +69,7 @@ class SocketSerial(BaseSerial):
 
     def _get_effective_socket_timeout(self) -> float | None:
         """Calculate effective socket timeout as min of read and write timeouts."""
-        read_t = self._timeout
+        read_t = self._read_timeout
         write_t = self._write_timeout
 
         if read_t is None:

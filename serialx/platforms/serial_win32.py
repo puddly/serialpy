@@ -324,8 +324,8 @@ class Win32Serial(BaseSerial):
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
             timeout_ms = INFINITE
-            if self._timeout is not None:
-                timeout_ms = int(self._timeout * 1000)
+            if self._read_timeout is not None:
+                timeout_ms = int(self._read_timeout * 1000)
 
             res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
 
