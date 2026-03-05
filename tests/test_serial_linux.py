@@ -75,12 +75,12 @@ async def test_async_linux_race_condition_connect_close() -> None:
     resume_configuring = threading.Event()
 
     class SlowConfigureSerial(PosixSerial):
-        def configure_port(self) -> None:
+        def _configure_port(self) -> None:
             started_configuring.set()
             if not resume_configuring.wait(timeout=5.0):
                 raise RuntimeError("Timeout waiting for resume signal")
 
-            super().configure_port()
+            super()._configure_port()
 
     class TestTransport(PosixSerialTransport):
         _serial_cls = SlowConfigureSerial

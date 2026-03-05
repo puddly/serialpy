@@ -53,7 +53,7 @@ class SocketSerial(BaseSerial):
 
         self._socket: socket.socket | None = None
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the socket connection."""
         assert self._host is not None
         assert self._port is not None
@@ -86,7 +86,7 @@ class SocketSerial(BaseSerial):
 
         return effective
 
-    def configure_port(self) -> None:
+    def _configure_port(self) -> None:
         """Configure the serial port settings."""
         if self._socket is not None:
             self._socket.settimeout(self._get_effective_socket_timeout())

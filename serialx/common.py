@@ -161,14 +161,23 @@ class BaseSerial(io.RawIOBase):
 
         self._auto_close = False
 
-    @abstractmethod
     def open(self) -> None:
         """Open the serial port."""
+        self._open()
+        self._configure_port()
+
+    def configure_port(self) -> None:
+        """Configure the serial port settings."""
+        self._configure_port()
+
+    @abstractmethod
+    def _open(self) -> None:
+        """Open the serial port (platform-specific)."""
         raise NotImplementedError
 
     @abstractmethod
-    def configure_port(self) -> None:
-        """Configure the serial port settings."""
+    def _configure_port(self) -> None:
+        """Configure the serial port settings (platform-specific)."""
         raise NotImplementedError
 
     @property
@@ -315,13 +324,6 @@ class BaseSerial(io.RawIOBase):
     def __enter__(self) -> Self:
         """Enter context manager."""
         self.open()
-
-        try:
-            self.configure_port()
-        except BaseException:
-            self.close()
-            raise
-
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:

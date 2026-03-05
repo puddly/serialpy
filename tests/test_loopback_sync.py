@@ -308,21 +308,18 @@ def test_open_close_cycles_loopback(loopback_adapter: str) -> None:
 
     # Cycle 1
     serial.open()
-    serial.configure_port()
     serial.write(b"1")
     assert serial.readexactly(1) == b"1"
     serial.close()
 
     # Cycle 2
     serial.open()
-    serial.configure_port()
     serial.write(b"2")
     assert serial.readexactly(1) == b"2"
     serial.close()
 
     # Cycle 3
     serial.open()
-    serial.configure_port()
     serial.write(b"3")
     assert serial.readexactly(1) == b"3"
     serial.close()

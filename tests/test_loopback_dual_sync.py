@@ -379,9 +379,7 @@ def test_open_close_cycles_dual(adapter_pair: tuple[str, str]) -> None:
 
     # Cycle 1
     serial_left.open()
-    serial_left.configure_port()
     serial_right.open()
-    serial_right.configure_port()
     serial_left.write(b"1")
     assert serial_right.readexactly(1) == b"1"
     serial_left.close()
@@ -389,9 +387,7 @@ def test_open_close_cycles_dual(adapter_pair: tuple[str, str]) -> None:
 
     # Cycle 2
     serial_left.open()
-    serial_left.configure_port()
     serial_right.open()
-    serial_right.configure_port()
     serial_left.write(b"2")
     assert serial_right.readexactly(1) == b"2"
     serial_left.close()
@@ -399,9 +395,7 @@ def test_open_close_cycles_dual(adapter_pair: tuple[str, str]) -> None:
 
     # Cycle 3
     serial_left.open()
-    serial_left.configure_port()
     serial_right.open()
-    serial_right.configure_port()
     serial_left.write(b"3")
     assert serial_right.readexactly(1) == b"3"
     serial_left.close()

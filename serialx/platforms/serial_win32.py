@@ -137,7 +137,7 @@ class Win32Serial(BaseSerial):
         self._overlapped_read: OVERLAPPED | None = None
         self._overlapped_write: OVERLAPPED | None = None
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the serial port."""
         LOGGER.debug("Opening serial port %r", self._path)
 
@@ -168,7 +168,7 @@ class Win32Serial(BaseSerial):
 
         self._auto_close = True
 
-    def configure_port(self) -> None:
+    def _configure_port(self) -> None:
         """Configure the serial port settings."""
         try:
             interval = int(1000 * self._inter_byte_timeout)

@@ -147,7 +147,7 @@ class PosixSerial(BaseSerial):
         self._inter_byte_timeout = inter_byte_timeout
         self._min_read_size = min_read_size
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the serial port."""
         LOGGER.debug("Opening serial port %r", self._path)
 
@@ -226,7 +226,7 @@ class PosixSerial(BaseSerial):
         )
         fcntl.ioctl(self._fileno, TCSETS2, buffer)
 
-    def configure_port(self) -> None:  # noqa: C901
+    def _configure_port(self) -> None:  # noqa: C901
         """Configure the serial port settings."""
         LOGGER.debug("Configuring serial port %r", self._path)
 

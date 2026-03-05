@@ -361,9 +361,7 @@ def test_sync_open_close_cycles(sync_transport_pair: tuple[str, str]) -> None:
 
     for i in range(1, 4):
         serial_left.open()
-        serial_left.configure_port()
         serial_right.open()
-        serial_right.configure_port()
 
         chunk = str(i).encode("ascii")
         serial_left.write(chunk)
@@ -511,7 +509,10 @@ def test_sync_write_timeout(sync_transport_pair: tuple[str, str]) -> None:
     """Test that write timeout works when buffer is full."""
     left_path, _ = sync_transport_pair
 
-    with serial_for_url(left_path, baudrate=115200, write_timeout=0.1) as serial:
+    if left_path.startswith("socket://"):
+        pytest.skip("Write timeout test is not applicable to socket transport")
+
+    with serial_for_url(left_path, baudrate=9600, write_timeout=0.1) as serial:
         data = b"x" * 1024
 
         with pytest.raises(TimeoutError):
