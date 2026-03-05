@@ -1,5 +1,6 @@
 """Sync transport tests."""
 
+from asyncio import IncompleteReadError
 from collections.abc import Iterator
 import logging
 import os
@@ -8,7 +9,7 @@ import pytest
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
 from serialx.common import BaseSerial
-from tests.common import SOCAT_BINARY, create_socat_pair
+from tests.common import SOCAT_BINARY, create_socat_pair, measure_time
 from tests.socket_relay import create_socket_pair
 
 LOGGER = logging.getLogger(__name__)
@@ -360,9 +361,7 @@ def test_sync_open_close_cycles(sync_transport_pair: tuple[str, str]) -> None:
 
     for i in range(1, 4):
         serial_left.open()
-        serial_left.configure_port()
         serial_right.open()
-        serial_right.configure_port()
 
         chunk = str(i).encode("ascii")
         serial_left.write(chunk)
@@ -441,3 +440,97 @@ def test_sync_deprecated_rts_property(sync_transport_pair: tuple[str, str]) -> N
     with serial_for_url(left_path, baudrate=115200) as serial:
         serial.rts = True
         serial.rts = False
+
+
+def test_sync_read_timeout(sync_transport_pair: tuple[str, str]) -> None:
+    """Test that reading with a timeout returns 0 bytes after the timeout."""
+    left_path, _ = sync_transport_pair
+
+    with serial_for_url(left_path, baudrate=115200, read_timeout=0.1) as serial:
+        assert serial.read_timeout == 0.1
+
+        with measure_time() as elapsed:
+            # Try to read 10 bytes when no data is available
+            result = serial.read(10)
+
+        # Should return 0 bytes
+        assert len(result) == 0
+        # Should have taken at least 0.1 seconds (allowing for some OS jitter)
+        assert elapsed() >= 0.09
+
+
+def test_sync_read_timeout_with_partial_data(
+    sync_transport_pair: tuple[str, str],
+) -> None:
+    """Test that reading with a timeout returns available data immediately."""
+    left_path, right_path = sync_transport_pair
+
+    with (
+        serial_for_url(left_path, baudrate=115200, read_timeout=1.0) as serial_left,
+        serial_for_url(right_path, baudrate=115200, read_timeout=1.0) as serial_right,
+    ):
+        # Write 5 bytes from one side
+        data = b"hello"
+        serial_left.write(data)
+
+        with measure_time() as elapsed:
+            # Try to read 5 bytes (matching what we wrote)
+            result = serial_right.read(5)
+
+        # Should return 5 bytes immediately
+        assert result == data
+        # Should have taken much less than 1.0 seconds
+        assert elapsed() < 0.2
+
+
+def test_sync_readexactly_partial_timeout(
+    sync_transport_pair: tuple[str, str],
+) -> None:
+    """Test that readexactly(10) with only 5 bytes raises IncompleteReadError."""
+    left_path, right_path = sync_transport_pair
+
+    with (
+        serial_for_url(left_path, baudrate=115200, read_timeout=0.5) as serial_left,
+        serial_for_url(right_path, baudrate=115200, read_timeout=0.5) as serial_right,
+    ):
+        serial_left.write(b"hello")
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError) as exc_info:
+                serial_right.readexactly(10)
+
+        assert exc_info.value.partial == b"hello"
+        assert 0.5 <= elapsed() < 1.0
+
+
+def test_socket_connect_timeout() -> None:
+    """Test that connect_timeout is respected by SocketSerial."""
+    # We use a non-routable IP to trigger a timeout (TEST-NET-1)
+    # 192.0.2.1 is reserved for documentation and shouldn't be reachable
+    url = "socket://192.0.2.1:1234"
+
+    with measure_time() as elapsed:
+        with pytest.raises((OSError, TimeoutError)):
+            # connect_timeout is passed to SocketSerial constructor via kwargs
+            with serial_for_url(url, baudrate=115200, connect_timeout=0.2):
+                pass
+
+    # Should have timed out after ~0.2s
+    # Note: On some systems, "no route to host" might return instantly,
+    # so we primarily check that it didn't hang forever.
+    assert elapsed() < 1.0
+
+
+def test_sync_write_timeout(sync_transport_pair: tuple[str, str]) -> None:
+    """Test that write timeout works when buffer is full."""
+    left_path, _ = sync_transport_pair
+
+    if left_path.startswith("socket://"):
+        pytest.skip("Write timeout test is not applicable to socket transport")
+
+    with serial_for_url(left_path, baudrate=9600, write_timeout=0.1) as serial:
+        data = b"x" * 1024
+
+        with pytest.raises(TimeoutError):
+            for _ in range(1000):
+                serial.write(data)

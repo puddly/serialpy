@@ -1,12 +1,13 @@
 """Test sync APIs with dual loopback hardware."""
 
+from asyncio import IncompleteReadError
 import os
 import sys
 
 import pytest
 
 from serialx import Parity, PinState, Serial, StopBits
-from tests.common import create_dual_loopback
+from tests.common import create_dual_loopback, measure_time
 
 
 def test_all_bytes_dual(adapter_pair: tuple[str, str]) -> None:
@@ -320,8 +321,10 @@ def test_xonxoff_setting_dual(adapter_pair: tuple[str, str], xonxoff: bool) -> N
 def test_rtscts_setting_dual(adapter_pair: tuple[str, str], rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
     left_port, right_port = adapter_pair
-    with Serial(adapter_pair[0], baudrate=115200, rtscts=rtscts) as serial:
-        serial.write(b"test")
+    with Serial(adapter_pair[0], baudrate=115200, rtscts=rtscts) as serial_left:
+        with Serial(adapter_pair[1], baudrate=115200) as serial_right:
+            serial_right.set_modem_pins(dtr=True)
+            serial_left.write(b"test")
 
 
 def test_exclusive_dual(adapter_pair: tuple[str, str]) -> None:
@@ -379,9 +382,7 @@ def test_open_close_cycles_dual(adapter_pair: tuple[str, str]) -> None:
 
     # Cycle 1
     serial_left.open()
-    serial_left.configure_port()
     serial_right.open()
-    serial_right.configure_port()
     serial_left.write(b"1")
     assert serial_right.readexactly(1) == b"1"
     serial_left.close()
@@ -389,9 +390,7 @@ def test_open_close_cycles_dual(adapter_pair: tuple[str, str]) -> None:
 
     # Cycle 2
     serial_left.open()
-    serial_left.configure_port()
     serial_right.open()
-    serial_right.configure_port()
     serial_left.write(b"2")
     assert serial_right.readexactly(1) == b"2"
     serial_left.close()
@@ -399,9 +398,7 @@ def test_open_close_cycles_dual(adapter_pair: tuple[str, str]) -> None:
 
     # Cycle 3
     serial_left.open()
-    serial_left.configure_port()
     serial_right.open()
-    serial_right.configure_port()
     serial_left.write(b"3")
     assert serial_right.readexactly(1) == b"3"
     serial_left.close()
@@ -443,6 +440,61 @@ def test_multiple_flush_calls_dual(adapter_pair: tuple[str, str]) -> None:
 
         result = serial_right.readexactly(len(data))
         assert result == data
+
+
+def test_read_timeout_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that reading with a timeout returns 0 bytes after the timeout."""
+    left_port, _right_port = adapter_pair
+
+    with Serial(left_port, baudrate=115200, read_timeout=0.2) as serial:
+        assert serial.read_timeout == 0.2
+
+        with measure_time() as elapsed:
+            result = serial.read(10)
+
+        assert len(result) == 0
+        assert elapsed() >= 0.15
+
+
+def test_read_timeout_with_data_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that reading with a timeout returns available data immediately."""
+    left_port, right_port = adapter_pair
+
+    with create_dual_loopback(
+        left_port, right_port, baudrate=115200, read_timeout=2.0
+    ) as (
+        serial_left,
+        serial_right,
+    ):
+        data = b"hello"
+        serial_left.write(data)
+
+        with measure_time() as elapsed:
+            result = serial_right.readexactly(len(data))
+
+        assert result == data
+        assert elapsed() < 1.0
+
+
+def test_readexactly_partial_timeout_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that readexactly(10) with only 5 bytes raises IncompleteReadError."""
+    left_port, right_port = adapter_pair
+
+    with create_dual_loopback(
+        left_port, right_port, baudrate=115200, read_timeout=0.5
+    ) as (
+        serial_left,
+        serial_right,
+    ):
+        serial_left.write(b"hello")
+        serial_left.flush()
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError) as exc_info:
+                serial_right.readexactly(10)
+
+        assert exc_info.value.partial == b"hello"
+        assert 0.5 <= elapsed() < 1.0
 
 
 def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
@@ -502,6 +554,31 @@ def test_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
 
         serial_right.set_modem_pins(dtr=False)
         assert serial_left.get_modem_pins().cts is PinState.LOW
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="CTS flow control test requires com0com"
+)
+def test_write_timeout_cts_held_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that write timeout fires when CTS is deasserted (flow control hold)."""
+    left_port, right_port = adapter_pair
+
+    # Open right side first and deassert DTR so left's CTS goes low
+    with Serial(right_port, baudrate=9600) as serial_right:
+        serial_right.set_modem_pins(dtr=False)
+
+        with Serial(
+            left_port,
+            baudrate=9600,
+            rtscts=True,
+            write_timeout=0.5,
+        ) as serial_left:
+            with measure_time() as elapsed:
+                with pytest.raises(TimeoutError):
+                    # Write enough data to fill the tiny com0com buffer and block
+                    serial_left.write(b"x" * 1024)
+
+            assert 0.5 <= elapsed() < 1.5
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")

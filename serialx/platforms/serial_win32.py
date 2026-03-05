@@ -29,7 +29,13 @@ from win32con import (
     SPACEPARITY,
     TWOSTOPBITS,
 )
-from win32event import INFINITE, CreateEvent, ResetEvent, WaitForSingleObject
+from win32event import (
+    INFINITE,
+    WAIT_TIMEOUT,
+    CreateEvent,
+    ResetEvent,
+    WaitForSingleObject,
+)
 from win32file import (
     OVERLAPPED,
     PURGE_RXABORT,
@@ -117,14 +123,21 @@ def _safe_close_handle(handle) -> None:
 class Win32Serial(BaseSerial):
     """Windows serial port implementation using Win32 API."""
 
-    def __init__(self, *args, handle=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        handle: int | None = None,
+        inter_byte_timeout: float = 0.01,
+        **kwargs,
+    ):
         """Initialize the Windows serial port."""
         super().__init__(*args, **kwargs)
         self._handle = handle
-        self._overlapped_read = None
-        self._overlapped_write = None
+        self._inter_byte_timeout = inter_byte_timeout
+        self._overlapped_read: OVERLAPPED | None = None
+        self._overlapped_write: OVERLAPPED | None = None
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the serial port."""
         LOGGER.debug("Opening serial port %r", self._path)
 
@@ -155,11 +168,11 @@ class Win32Serial(BaseSerial):
 
         self._auto_close = True
 
-    def configure_port(self) -> None:
+    def _configure_port(self) -> None:
         """Configure the serial port settings."""
         try:
-            interval = int(1000 * self._buffer_burst_timeout)
-            if interval <= 0 and self._buffer_burst_timeout > 0:
+            interval = int(1000 * self._inter_byte_timeout)
+            if interval <= 0 and self._inter_byte_timeout > 0:
                 interval = 1  # Minimum 1ms if burst timeout is set but small
 
             timeouts = (
@@ -235,9 +248,10 @@ class Win32Serial(BaseSerial):
 
     def fileno(self) -> int:
         """Return the file descriptor."""
+        assert self._handle is not None
         return int(self._handle)
 
-    def close(self):
+    def _close(self):
         """Close the serial port and release all handles."""
         if self._handle is not None:
             # Windows has no way to automatically do this on close, we do it manually
@@ -301,15 +315,21 @@ class Win32Serial(BaseSerial):
         try:
             rc, _ = ReadFile(self._handle, b, self._overlapped_read)
         except pywintypes.error as e:
-            if e.winerror != ERROR_IO_PENDING:
-                raise OSError(e.winerror, e.strerror) from e
-
-            # Might not be reached if ReadFile returns result instead of raising
-            rc = ERROR_IO_PENDING
+            raise OSError(e.winerror, e.strerror) from e
 
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
-            WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
+            timeout_ms = INFINITE
+            if self._read_timeout is not None:
+                timeout_ms = int(self._read_timeout * 1000)
+
+            res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
+
+            if res == WAIT_TIMEOUT:
+                CancelIo(self._handle)
+                # Wait for cancellation to complete to avoid data corruption or races
+                WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
+                return 0
 
         # Get the actual number of bytes read
         try:
@@ -327,11 +347,27 @@ class Win32Serial(BaseSerial):
         try:
             err, n = WriteFile(self._handle, data, self._overlapped_write)
         except pywintypes.error as e:
-            if e.winerror != ERROR_IO_PENDING:
-                raise OSError(e.winerror, e.strerror) from e
+            raise OSError(e.winerror, e.strerror) from e
 
-            WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
+        if err == ERROR_IO_PENDING:
+            # IO is pending, wait for it
+            timeout_ms = INFINITE
+            if self._write_timeout is not None:
+                timeout_ms = int(self._write_timeout * 1000)
+
+            res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
+
+            if res == WAIT_TIMEOUT:
+                CancelIo(self._handle)
+                # Wait for cancellation to complete
+                WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
+                raise TimeoutError("Write timeout") from None
+
+        # Get the actual number of bytes written
+        try:
             n = GetOverlappedResult(self._handle, self._overlapped_write, True)
+        except pywintypes.error as e:
+            raise OSError(e.winerror, e.strerror) from e
 
         return n
 
@@ -436,19 +472,17 @@ class Win32SerialTransport(BaseSerialTransport):
         await self._open(path)
 
         try:
-            # Ensure buffer_burst_timeout is set to a small value to enable
+            # Ensure inter_byte_timeout is set to a small value to enable
             # "Wait for first byte, then return on gap" behavior for ReadFile.
             # If 0 (default), ReadFile with default timeouts might wait for full buffer.
-            original_burst_timeout = kwargs.get("buffer_burst_timeout", 0)
-            if original_burst_timeout == 0:
-                kwargs["buffer_burst_timeout"] = 0.01
+            original_inter_byte_timeout = kwargs.get("inter_byte_timeout", 0)
+            if original_inter_byte_timeout == 0:
+                kwargs["inter_byte_timeout"] = 0.01
 
             self._serial = Win32Serial(
                 **kwargs,
                 path=path,
                 handle=self._handle,
-                # buffer_character_count is not used by Proactor transport
-                buffer_character_count=0,
             )
             self._extra["serial"] = self._serial
 
