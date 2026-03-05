@@ -512,6 +512,9 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
 
 def test_dtr_cts(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls CTS on the other."""
+    if serial_pair.backend != "adapter":
+        pytest.skip("Requires physical adapter pair")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as serial_left,
         Serial.from_url(serial_pair.right, baudrate=115200) as serial_right,
@@ -534,6 +537,9 @@ def test_dtr_cts(serial_pair: SerialPair) -> None:
 
 def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
     """Test DTR/CTS cross-port behavior via deprecated property aliases."""
+    if serial_pair.backend != "adapter":
+        pytest.skip("Requires physical adapter pair")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as serial_left,
         Serial.from_url(serial_pair.right, baudrate=115200) as serial_right,
@@ -556,6 +562,9 @@ def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
 
 def test_fast_open_close(serial_pair: SerialPair) -> None:
     """Test quickly opening and closing a port."""
+    if serial_pair.backend != "adapter":
+        pytest.skip("Requires physical adapter pair")
+
     message = b"Fast write and close test"
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
@@ -569,6 +578,9 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 def test_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
+    if serial_pair.backend != "adapter":
+        pytest.skip("Requires physical adapter pair")
+
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
         with Serial.from_url(
             serial_pair.right,
@@ -596,6 +608,9 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
+    if serial_pair.backend != "adapter":
+        pytest.skip("Requires physical adapter pair")
+
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
         with Serial.from_url(
             serial_pair.right,
@@ -646,6 +661,9 @@ def test_deassert_on_open_with_rtscts(
     expected_state: PinState,
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
+    if serial_pair.backend != "adapter":
+        pytest.skip("Requires physical adapter pair")
+
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
         with Serial.from_url(
             serial_pair.right,
@@ -672,6 +690,9 @@ def test_deassert_on_open_with_rtscts(
 )
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
+    if serial_pair.backend != "adapter":
+        pytest.skip("Requires physical adapter pair")
+
     with Serial.from_url(serial_pair.right, baudrate=9600) as serial_right:
         serial_right.set_modem_pins(dtr=False)
         time.sleep(0.1)
