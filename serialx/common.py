@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 import asyncio
+from asyncio import IncompleteReadError
 import dataclasses
 from enum import Enum
 import io
@@ -196,7 +197,7 @@ class BaseSerial(io.RawIOBase):
         return self._write_timeout
 
     def get_modem_pins(self) -> ModemPins:
-        """Get modem control bits, internal."""
+        """Get modem control bits."""
         return self._get_modem_pins()
 
     def set_modem_pins(
@@ -213,7 +214,7 @@ class BaseSerial(io.RawIOBase):
         rng: PinState | bool | None = PinState.UNDEFINED,
         dsr: PinState | bool | None = PinState.UNDEFINED,
     ) -> None:
-        """Set modem control bits, internal."""
+        """Set modem control bits."""
         if modem_pins is None:
             modem_pins = ModemPins(
                 le=PinState.convert(le),
@@ -320,8 +321,9 @@ class BaseSerial(io.RawIOBase):
             remaining -= read
 
             if read == 0:
-                raise EOFError(
-                    f"Read only {n - remaining} bytes, expected {n} bytes: {buffer!r}"
+                # `IncompleteReadError` is a subclass of `EOFError`
+                raise IncompleteReadError(
+                    expected=n, partial=bytes(buffer[: n - remaining])
                 )
 
         return bytes(buffer)
