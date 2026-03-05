@@ -25,7 +25,6 @@ from tests.common import (
     async_create_reader_writer,
     async_create_reader_writer_pair,
 )
-from tests.socket_relay import async_create_socket_pair
 
 LOGGER = logging.getLogger(__name__)
 
@@ -524,79 +523,78 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
-async def test_async_backpressure_callbacks() -> None:
+async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
-    async with async_create_socket_pair(relay_read_delay=0.001) as (
-        left_path,
-        right_path,
-    ):
-        output_pause_count = 0
-        output_resume_count = 0
+    if serial_pair.backend == "socket":
+        pytest.skip("Socket transport delegates backpressure to TCP transport")
 
-        loop = asyncio.get_running_loop()
-        input_lost = loop.create_future()
-        output_lost = loop.create_future()
+    output_pause_count = 0
+    output_resume_count = 0
 
-        class Input(asyncio.Protocol):
-            def data_received(self, data: bytes) -> None:
-                return
+    loop = asyncio.get_running_loop()
+    input_lost = loop.create_future()
+    output_lost = loop.create_future()
 
-            def connection_lost(self, exc: Exception | None) -> None:
-                if not input_lost.done():
-                    input_lost.set_result(None)
+    class Input(asyncio.Protocol):
+        def data_received(self, data: bytes) -> None:
+            return
 
-        class Output(asyncio.Protocol):
-            _transport: BaseSerialTransport | None = None
+        def connection_lost(self, exc: Exception | None) -> None:
+            if not input_lost.done():
+                input_lost.set_result(None)
 
-            def connection_made(self, transport: asyncio.BaseTransport) -> None:
-                assert isinstance(transport, BaseSerialTransport)
-                self._transport = transport
+    class Output(asyncio.Protocol):
+        _transport: BaseSerialTransport | None = None
 
-            def pause_writing(self) -> None:
-                nonlocal output_pause_count
-                output_pause_count += 1
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            assert isinstance(transport, BaseSerialTransport)
+            self._transport = transport
 
-            def resume_writing(self) -> None:
-                nonlocal output_resume_count
-                output_resume_count += 1
+        def pause_writing(self) -> None:
+            nonlocal output_pause_count
+            output_pause_count += 1
 
-            def connection_lost(self, exc: Exception | None) -> None:
-                if not output_lost.done():
-                    output_lost.set_result(None)
+        def resume_writing(self) -> None:
+            nonlocal output_resume_count
+            output_resume_count += 1
 
-        in_transport, _ = await create_serial_connection(
-            loop, Input, left_path, baudrate=115200
-        )
-        out_transport, _ = await create_serial_connection(
-            loop, Output, right_path, baudrate=115200
-        )
-        await asyncio.sleep(0.1)
+        def connection_lost(self, exc: Exception | None) -> None:
+            if not output_lost.done():
+                output_lost.set_result(None)
 
-        payload = b"X" * 65536
-        for _ in range(64):
-            if out_transport.is_closing():
-                break
-            out_transport.write(payload)
-            await asyncio.sleep(0)
+    in_transport, _ = await create_serial_connection(
+        loop, Input, serial_pair.left, baudrate=115200
+    )
+    out_transport, _ = await create_serial_connection(
+        loop, Output, serial_pair.right, baudrate=115200
+    )
+    await asyncio.sleep(0.1)
 
-        try:
-            async with asyncio_timeout(10):
-                while out_transport.get_write_buffer_size() > 0:
-                    await asyncio.sleep(0.05)
-        except asyncio.TimeoutError:
-            pass
+    payload = b"X" * 65536
+    for _ in range(64):
+        if out_transport.is_closing():
+            break
+        out_transport.write(payload)
+        await asyncio.sleep(0)
 
-        await asyncio.sleep(0.1)
+    try:
+        async with asyncio_timeout(10):
+            while out_transport.get_write_buffer_size() > 0:
+                await asyncio.sleep(0.05)
+    except asyncio.TimeoutError:
+        pass
 
-        assert output_pause_count > 0
-        assert output_resume_count > 0
+    await asyncio.sleep(0.1)
 
-        out_transport.close()
-        in_transport.close()
-        await asyncio.gather(input_lost, output_lost)
+    assert output_pause_count > 0
+    assert output_resume_count > 0
+
+    out_transport.close()
+    in_transport.close()
+    await asyncio.gather(input_lost, output_lost)
 
 
-async def test_async_backpressure_writer_removal() -> None:
+async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 
     This test catches three issue categories:
@@ -605,77 +603,76 @@ async def test_async_backpressure_writer_removal() -> None:
     3. Timing failures from writer not being added when buffering data
     Source: https://github.com/home-assistant-libs/pyserial-asyncio-fast/pull/36
     """
-    async with async_create_socket_pair(relay_read_delay=0.001) as (
-        left_path,
-        right_path,
-    ):
-        TEXT = b"Hello, World!"
-        COUNT = 8 * 1024
-        output_resume_event = asyncio.Event()
-        data_received_count = 0
+    if serial_pair.backend == "socket":
+        pytest.skip("Socket transport delegates backpressure to TCP transport")
 
-        class Input(asyncio.Protocol):
-            _transport: BaseSerialTransport
+    TEXT = b"Hello, World!"
+    COUNT = 8 * 1024
+    output_resume_event = asyncio.Event()
+    data_received_count = 0
 
-            def connection_made(self, transport: asyncio.BaseTransport) -> None:
-                assert isinstance(transport, BaseSerialTransport)
-                self._transport = transport
+    class Input(asyncio.Protocol):
+        _transport: BaseSerialTransport
 
-            def data_received(self, data: bytes) -> None:
-                nonlocal data_received_count
-                data_received_count += len(data)
-                self._transport.write(data)
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            assert isinstance(transport, BaseSerialTransport)
+            self._transport = transport
 
-        class Output(asyncio.Protocol):
-            _transport: BaseSerialTransport
+        def data_received(self, data: bytes) -> None:
+            nonlocal data_received_count
+            data_received_count += len(data)
+            self._transport.write(data)
 
-            def connection_made(self, transport: asyncio.BaseTransport) -> None:
-                assert isinstance(transport, BaseSerialTransport)
-                self._transport = transport
-                output_resume_event.set()
+    class Output(asyncio.Protocol):
+        _transport: BaseSerialTransport
 
-            def pause_writing(self) -> None:
-                output_resume_event.clear()
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            assert isinstance(transport, BaseSerialTransport)
+            self._transport = transport
+            output_resume_event.set()
 
-            def resume_writing(self) -> None:
-                output_resume_event.set()
+        def pause_writing(self) -> None:
+            output_resume_event.clear()
 
-        loop = asyncio.get_running_loop()
+        def resume_writing(self) -> None:
+            output_resume_event.set()
 
-        in_transport, _ = await create_serial_connection(
-            loop, Input, left_path, baudrate=115200
-        )
-        out_transport, _ = await create_serial_connection(
-            loop, Output, right_path, baudrate=115200
-        )
+    loop = asyncio.get_running_loop()
 
-        await asyncio.sleep(0.1)
+    in_transport, _ = await create_serial_connection(
+        loop, Input, serial_pair.left, baudrate=115200
+    )
+    out_transport, _ = await create_serial_connection(
+        loop, Output, serial_pair.right, baudrate=115200
+    )
 
-        try:
-            for _ in range(COUNT):
-                try:
-                    async with asyncio_timeout(10):
-                        await output_resume_event.wait()
-                except asyncio.TimeoutError:
-                    if out_transport.is_closing():
-                        break
-                    raise
+    await asyncio.sleep(0.1)
 
-                out_transport.write(TEXT)
-
-            async with asyncio_timeout(10):
-                while out_transport.get_write_buffer_size() > 0:
-                    await asyncio.sleep(0.1)
-
-            for _ in range(50):
-                if data_received_count > 0:
+    try:
+        for _ in range(COUNT):
+            try:
+                async with asyncio_timeout(10):
+                    await output_resume_event.wait()
+            except asyncio.TimeoutError:
+                if out_transport.is_closing():
                     break
+                raise
+
+            out_transport.write(TEXT)
+
+        async with asyncio_timeout(10):
+            while out_transport.get_write_buffer_size() > 0:
                 await asyncio.sleep(0.1)
 
-            assert data_received_count > 0
-        finally:
-            out_transport.close()
-            in_transport.close()
+        for _ in range(50):
+            if data_received_count > 0:
+                break
+            await asyncio.sleep(0.1)
+
+        assert data_received_count > 0
+    finally:
+        out_transport.close()
+        in_transport.close()
 
 
 # --- Adapter-specific tests ---
