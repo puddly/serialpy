@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
 import socket
 import urllib.parse
 
@@ -20,32 +19,19 @@ class SocketSerial(BaseSerial):
 
     def __init__(
         self,
-        path: str | Path,
-        baudrate: int,
-        parity: Parity = Parity.NONE,
-        stopbits: StopBits | int | float = StopBits.ONE,
-        xonxoff: bool = False,
-        rtscts: bool = False,
-        byte_size: int = 8,
+        *args,
         # Socket-specific kwargs
         connect_timeout: float | None = None,
         **kwargs,
     ) -> None:
         """Initialize socket serial port."""
-        super().__init__(
-            path=path,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-            byte_size=byte_size,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
-        parsed = urllib.parse.urlparse(str(path))
+        parsed = urllib.parse.urlparse(str(self._path))
         if parsed.hostname is None or parsed.port is None:
-            raise ValueError(f"Invalid socket URI, expected both host and port: {path}")
+            raise ValueError(
+                f"Invalid socket URI, expected both host and port: {self._path}"
+            )
 
         self._host = parsed.hostname
         self._port = parsed.port
