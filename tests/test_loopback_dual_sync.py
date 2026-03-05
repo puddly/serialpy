@@ -321,8 +321,10 @@ def test_xonxoff_setting_dual(adapter_pair: tuple[str, str], xonxoff: bool) -> N
 def test_rtscts_setting_dual(adapter_pair: tuple[str, str], rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
     left_port, right_port = adapter_pair
-    with Serial(adapter_pair[0], baudrate=115200, rtscts=rtscts) as serial:
-        serial.write(b"test")
+    with Serial(adapter_pair[0], baudrate=115200, rtscts=rtscts) as serial_left:
+        with Serial(adapter_pair[1], baudrate=115200) as serial_right:
+            serial_right.set_modem_pins(dtr=True)
+            serial_left.write(b"test")
 
 
 def test_exclusive_dual(adapter_pair: tuple[str, str]) -> None:
@@ -552,6 +554,31 @@ def test_dtr_cts_dual(adapter_pair: tuple[str, str]) -> None:
 
         serial_right.set_modem_pins(dtr=False)
         assert serial_left.get_modem_pins().cts is PinState.LOW
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="CTS flow control test requires com0com"
+)
+def test_write_timeout_cts_held_dual(adapter_pair: tuple[str, str]) -> None:
+    """Test that write timeout fires when CTS is deasserted (flow control hold)."""
+    left_port, right_port = adapter_pair
+
+    # Open right side first and deassert DTR so left's CTS goes low
+    with Serial(right_port, baudrate=9600) as serial_right:
+        serial_right.set_modem_pins(dtr=False)
+
+        with Serial(
+            left_port,
+            baudrate=9600,
+            rtscts=True,
+            write_timeout=0.5,
+        ) as serial_left:
+            with measure_time() as elapsed:
+                with pytest.raises(TimeoutError):
+                    # Write enough data to fill the tiny com0com buffer and block
+                    serial_left.write(b"x" * 1024)
+
+            assert 0.5 <= elapsed() < 1.5
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")

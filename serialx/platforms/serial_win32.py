@@ -354,6 +354,11 @@ class Win32Serial(BaseSerial):
             if e.winerror != ERROR_IO_PENDING:
                 raise OSError(e.winerror, e.strerror) from e
 
+            # Might not be reached if WriteFile returns result instead of raising
+            err = ERROR_IO_PENDING
+
+        if err == ERROR_IO_PENDING:
+            # IO is pending, wait for it
             timeout_ms = INFINITE
             if self._write_timeout is not None:
                 timeout_ms = int(self._write_timeout * 1000)
@@ -366,7 +371,11 @@ class Win32Serial(BaseSerial):
                 WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
                 raise TimeoutError("Write timeout") from None
 
+        # Get the actual number of bytes written
+        try:
             n = GetOverlappedResult(self._handle, self._overlapped_write, True)
+        except pywintypes.error as e:
+            raise OSError(e.winerror, e.strerror) from e
 
         return n
 
