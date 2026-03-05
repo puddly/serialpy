@@ -26,6 +26,15 @@ class SerialPair(NamedTuple):
     backend: str  # "socat", "socket", or "adapter"
 
 
+class BridgedSocatPair(NamedTuple):
+    """A bridged socat pair where killing one side propagates EOF to the other."""
+
+    left: str
+    right: str
+    left_process: asyncio.subprocess.Process
+    right_process: asyncio.subprocess.Process
+
+
 @contextlib.contextmanager
 def create_socat_pair() -> Iterator[tuple[str, str]]:
     """Create a pair of virtual PTYs using socat (synchronous)."""
@@ -82,6 +91,66 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 
         proc.terminate()
         await proc.wait()
+
+
+@contextlib.asynccontextmanager
+async def async_create_bridged_socat_pair() -> AsyncIterator[BridgedSocatPair]:
+    """Create a pair of PTYs bridged via two socat processes over a Unix socket.
+
+    Unlike `async_create_socat_pair`, killing one socat process propagates
+    through the bridge and tears down the other side, triggering a real EOF.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        left_tty = os.path.join(tmpdir, "ttyLeft")
+        right_tty = os.path.join(tmpdir, "ttyRight")
+        sock_path = os.path.join(tmpdir, "bridge.sock")
+
+        listener = await asyncio.create_subprocess_exec(
+            "socat",
+            f"PTY,link={left_tty},raw,echo=0",
+            f"UNIX-LISTEN:{sock_path}",
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        # Wait for the socket to appear
+        for _ in range(100):
+            if os.path.exists(sock_path):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise RuntimeError("socat listener socket was not created in time")
+
+        connector = await asyncio.create_subprocess_exec(
+            "socat",
+            f"PTY,link={right_tty},raw,echo=0",
+            f"UNIX-CONNECT:{sock_path}",
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        # Wait for both PTYs to appear
+        for _ in range(100):
+            if os.path.exists(left_tty) and os.path.exists(right_tty):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise RuntimeError("socat PTYs were not created in time")
+
+        assert listener.returncode is None
+        assert connector.returncode is None
+
+        yield BridgedSocatPair(
+            left=left_tty,
+            right=right_tty,
+            left_process=listener,
+            right_process=connector,
+        )
+
+        if connector.returncode is None:
+            connector.terminate()
+            await connector.wait()
+        if listener.returncode is None:
+            listener.terminate()
+            await listener.wait()
 
 
 @contextlib.asynccontextmanager

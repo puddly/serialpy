@@ -21,7 +21,9 @@ from serialx import (
     create_serial_connection,
 )
 from tests.common import (
+    SOCAT_BINARY,
     SerialPair,
+    async_create_bridged_socat_pair,
     async_create_reader_writer,
     async_create_reader_writer_pair,
 )
@@ -462,6 +464,40 @@ async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> 
     ) as (_, writer_left, _, _):
         # resume without prior pause should be a no-op
         writer_left.transport.resume_reading()
+
+
+@pytest.mark.skipif(not SOCAT_BINARY, reason="socat binary is missing")
+async def test_async_peer_close_triggers_connection_lost() -> None:
+    """Test that killing one socat process triggers connection_lost on the other."""
+    async with async_create_bridged_socat_pair() as pair:
+        connection_lost_event = asyncio.Event()
+
+        class Receiver(asyncio.Protocol):
+            def connection_lost(self, exc: Exception | None) -> None:
+                connection_lost_event.set()
+
+        loop = asyncio.get_running_loop()
+
+        recv_transport, _ = await create_serial_connection(
+            loop, Receiver, pair.left, baudrate=115200
+        )
+        send_transport, _ = await create_serial_connection(
+            loop, asyncio.Protocol, pair.right, baudrate=115200
+        )
+
+        send_transport.write(b"goodbye")
+
+        # Kill the right-side socat process; this tears down the bridge
+        # and causes EOF on the left side
+        pair.right_process.terminate()
+        await pair.right_process.wait()
+
+        await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
+
+        send_transport.close()
+
+        if not recv_transport.is_closing():
+            recv_transport.close()
 
 
 async def test_async_invalid_uri() -> None:
