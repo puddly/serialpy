@@ -69,22 +69,21 @@ class SocketSerial(BaseSerial):
 
     def _get_effective_socket_timeout(self) -> float | None:
         """Calculate effective socket timeout as min of read and write timeouts."""
-        read_t = self._read_timeout
-        write_t = self._write_timeout
+        if self._read_timeout is None:
+            return self._write_timeout
 
-        if read_t is None:
-            return write_t
-        if write_t is None:
-            return read_t
+        if self._write_timeout is None:
+            return self._read_timeout
 
-        effective = min(read_t, write_t)
-        if read_t != write_t:
+        effective = min(self._read_timeout, self._write_timeout)
+
+        if self._read_timeout != self._write_timeout:
             LOGGER.debug(
-                "SocketSerial using shared timeout %s (min of read=%s, write=%s)",
-                effective,
-                read_t,
-                write_t,
+                "Serial over TCP accepts only a single timeout, taking the min of read=%s and write=%s",
+                self._read_timeout,
+                self._write_timeout,
             )
+
         return effective
 
     def configure_port(self) -> None:
