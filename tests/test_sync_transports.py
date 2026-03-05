@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 import logging
 import os
+import time
 
 import pytest
 
@@ -441,3 +442,66 @@ def test_sync_deprecated_rts_property(sync_transport_pair: tuple[str, str]) -> N
     with serial_for_url(left_path, baudrate=115200) as serial:
         serial.rts = True
         serial.rts = False
+
+
+def test_sync_read_timeout(sync_transport_pair: tuple[str, str]) -> None:
+    """Test that reading with a timeout returns 0 bytes after the timeout."""
+    left_path, _ = sync_transport_pair
+
+    with serial_for_url(left_path, baudrate=115200, timeout=0.1) as serial:
+        start_time = time.time()
+        # Try to read 10 bytes when no data is available
+        result = serial.read(10)
+        end_time = time.time()
+
+        # Should return 0 bytes
+        assert len(result) == 0
+        # Should have taken at least 0.1 seconds (allowing for some OS jitter)
+        assert end_time - start_time >= 0.09
+
+
+def test_sync_read_timeout_with_partial_data(
+    sync_transport_pair: tuple[str, str],
+) -> None:
+    """Test that reading with a timeout returns available data immediately."""
+    left_path, right_path = sync_transport_pair
+
+    with (
+        serial_for_url(left_path, baudrate=115200, timeout=1.0) as serial_left,
+        serial_for_url(right_path, baudrate=115200, timeout=1.0) as serial_right,
+    ):
+        # Write 5 bytes from one side
+        data = b"hello"
+        serial_left.write(data)
+
+        start_time = time.time()
+        # Try to read 5 bytes (matching what we wrote)
+        result = serial_right.read(5)
+        end_time = time.time()
+
+        # Should return 5 bytes immediately
+        assert result == data
+        # Should have taken much less than 1.0 seconds
+        assert end_time - start_time < 0.2
+
+
+def test_socket_connect_timeout() -> None:
+    """Test that connect_timeout is respected by SocketSerial."""
+    # We use a non-routable IP to trigger a timeout (TEST-NET-1)
+    # 192.0.2.1 is reserved for documentation and shouldn't be reachable
+    url = "socket://192.0.2.1:1234"
+
+    start_time = time.time()
+
+    with pytest.raises((OSError, TimeoutError)):
+        # connect_timeout is passed to SocketSerial constructor via kwargs
+        with serial_for_url(url, baudrate=115200, connect_timeout=0.2):
+            pass
+
+    end_time = time.time()
+
+    # Should have timed out after ~0.2s
+    # Note: On some systems, "no route to host" might return instantly,
+    # so we primarily check that it didn't hang forever.
+    duration = end_time - start_time
+    assert duration < 1.0

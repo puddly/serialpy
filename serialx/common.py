@@ -178,12 +178,6 @@ class BaseSerial(io.RawIOBase):
         """Get the read timeout in seconds."""
         return self._timeout
 
-    @timeout.setter
-    def timeout(self, value: float | None) -> None:
-        """Set the read timeout in seconds."""
-        self._timeout = value
-        self.configure_port()
-
     def get_modem_pins(self) -> ModemPins:
         """Get modem control bits, internal."""
         return self._get_modem_pins()

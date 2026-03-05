@@ -27,6 +27,8 @@ class SocketSerial(BaseSerial):
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
+        # Socket-specific kwargs
+        connect_timeout: float | None = None,
         **kwargs,
     ) -> None:
         """Initialize socket serial port."""
@@ -47,6 +49,7 @@ class SocketSerial(BaseSerial):
 
         self._host = parsed.hostname
         self._port = parsed.port
+        self._connect_timeout = connect_timeout
 
         self._socket: socket.socket | None = None
 
@@ -54,9 +57,17 @@ class SocketSerial(BaseSerial):
         """Open the socket connection."""
         assert self._host is not None
         assert self._port is not None
+
         self._socket = socket.create_connection(
-            (self._host, self._port), timeout=self._timeout
+            (self._host, self._port), timeout=self._connect_timeout
         )
+        if self._timeout is not None:
+            self._socket.settimeout(self._timeout)
+
+    @property
+    def connect_timeout(self) -> float | None:
+        """Get the connection timeout in seconds."""
+        return self._connect_timeout
 
     def configure_port(self) -> None:
         """Configure the serial port settings (no-op for sockets)."""
