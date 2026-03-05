@@ -113,16 +113,11 @@ def _purge_com0com(request: pytest.FixtureRequest) -> None:
     if sys.platform != "win32":
         return
 
-    pair = None
+    if "serial_pair" not in request.fixturenames:
+        return
 
-    if "serial_pair" in request.fixturenames:
-        candidate = request.getfixturevalue("serial_pair")
-        if candidate.backend == "adapter":
-            pair = candidate
-    elif "adapter_pair" in request.fixturenames:
-        pair = request.getfixturevalue("adapter_pair")
-
-    if pair is None:
+    candidate: SerialPair = request.getfixturevalue("serial_pair")
+    if candidate.backend != "adapter":
         return
 
     from win32file import (  # noqa: PLC0415
@@ -133,11 +128,9 @@ def _purge_com0com(request: pytest.FixtureRequest) -> None:
         PurgeComm,
     )
 
-    left, right = pair
-
     with (
-        serialx.Serial(left, baudrate=10_000_000) as serial_left,
-        serialx.Serial(right, baudrate=10_000_000) as serial_right,
+        serialx.Serial.from_url(candidate.left, baudrate=10_000_000) as serial_left,
+        serialx.Serial.from_url(candidate.right, baudrate=10_000_000) as serial_right,
     ):
         flags = PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR
         PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]

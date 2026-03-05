@@ -510,13 +510,11 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
 # and verify cross-port behavior that virtual backends can't emulate.
 
 
-def test_dtr_cts(adapter_pair: tuple[str, str]) -> None:
+def test_dtr_cts(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls CTS on the other."""
-    left_port, right_port = adapter_pair
-
     with (
-        Serial(left_port, baudrate=115200) as serial_left,
-        Serial(right_port, baudrate=115200) as serial_right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as serial_left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as serial_right,
     ):
         serial_left.set_modem_pins(rts=False)
         serial_right.set_modem_pins(rts=False)
@@ -534,13 +532,11 @@ def test_dtr_cts(adapter_pair: tuple[str, str]) -> None:
         assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
-def test_deprecated_dtr_cts(adapter_pair: tuple[str, str]) -> None:
+def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
     """Test DTR/CTS cross-port behavior via deprecated property aliases."""
-    left_port, right_port = adapter_pair
-
     with (
-        Serial(left_port, baudrate=115200) as serial_left,
-        Serial(right_port, baudrate=115200) as serial_right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as serial_left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as serial_right,
     ):
         serial_left.set_modem_pins(rts=False)
         serial_right.set_modem_pins(rts=False)
@@ -558,13 +554,12 @@ def test_deprecated_dtr_cts(adapter_pair: tuple[str, str]) -> None:
         assert serial_left.get_modem_pins().cts is PinState.LOW
 
 
-def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
+def test_fast_open_close(serial_pair: SerialPair) -> None:
     """Test quickly opening and closing a port."""
-    left_port, right_port = adapter_pair
     message = b"Fast write and close test"
 
-    with Serial(left_port, baudrate=115200) as serial_left:
-        with Serial(right_port, baudrate=115200) as serial_right:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
+        with Serial.from_url(serial_pair.right, baudrate=115200) as serial_right:
             serial_right.write(message)
             serial_right.flush()
 
@@ -572,13 +567,11 @@ def test_fast_open_close(adapter_pair: tuple[str, str]) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-def test_deassert_on_open(adapter_pair: tuple[str, str]) -> None:
+def test_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
-    left_port, right_port = adapter_pair
-
-    with Serial(left_port, baudrate=115200) as serial_left:
-        with Serial(
-            right_port,
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
+        with Serial.from_url(
+            serial_pair.right,
             baudrate=115200,
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
@@ -588,8 +581,8 @@ def test_deassert_on_open(adapter_pair: tuple[str, str]) -> None:
 
         assert serial_left.get_modem_pins().cts is PinState.HIGH
 
-        with Serial(
-            right_port,
+        with Serial.from_url(
+            serial_pair.right,
             baudrate=115200,
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
@@ -601,13 +594,11 @@ def test_deassert_on_open(adapter_pair: tuple[str, str]) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-def test_hang_up_on_close(adapter_pair: tuple[str, str]) -> None:
+def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
-    left_port, right_port = adapter_pair
-
-    with Serial(left_port, baudrate=115200) as serial_left:
-        with Serial(
-            right_port,
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
+        with Serial.from_url(
+            serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
@@ -617,8 +608,8 @@ def test_hang_up_on_close(adapter_pair: tuple[str, str]) -> None:
 
         assert serial_left.get_modem_pins().cts is PinState.HIGH
 
-        with Serial(
-            right_port,
+        with Serial.from_url(
+            serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
@@ -627,8 +618,8 @@ def test_hang_up_on_close(adapter_pair: tuple[str, str]) -> None:
 
         assert serial_left.get_modem_pins().cts is PinState.HIGH
 
-        with Serial(
-            right_port,
+        with Serial.from_url(
+            serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
@@ -649,17 +640,15 @@ def test_hang_up_on_close(adapter_pair: tuple[str, str]) -> None:
     ],
 )
 def test_deassert_on_open_with_rtscts(
-    adapter_pair: tuple[str, str],
+    serial_pair: SerialPair,
     rtscts: bool,
     rtsdtr_on_open: PinState,
     expected_state: PinState,
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
-    left_port, right_port = adapter_pair
-
-    with Serial(left_port, baudrate=115200) as serial_left:
-        with Serial(
-            right_port,
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
+        with Serial.from_url(
+            serial_pair.right,
             baudrate=115200,
             rtscts=False,
             rtsdtr_on_open=PinState.HIGH,
@@ -669,8 +658,8 @@ def test_deassert_on_open_with_rtscts(
 
         assert serial_left.get_modem_pins().cts is PinState.HIGH
 
-        with Serial(
-            right_port,
+        with Serial.from_url(
+            serial_pair.right,
             baudrate=115200,
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
@@ -681,16 +670,14 @@ def test_deassert_on_open_with_rtscts(
 @pytest.mark.skipif(
     sys.platform != "win32", reason="CTS flow control test requires com0com"
 )
-def test_write_timeout_cts_held(adapter_pair: tuple[str, str]) -> None:
+def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
-    left_port, right_port = adapter_pair
-
-    with Serial(right_port, baudrate=9600) as serial_right:
+    with Serial.from_url(serial_pair.right, baudrate=9600) as serial_right:
         serial_right.set_modem_pins(dtr=False)
         time.sleep(0.1)
 
-        with Serial(
-            left_port,
+        with Serial.from_url(
+            serial_pair.left,
             baudrate=9600,
             rtscts=True,
             write_timeout=0.5,
