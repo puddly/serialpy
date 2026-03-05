@@ -186,7 +186,7 @@ class BaseSerial(io.RawIOBase):
         raise NotImplementedError
 
     @property
-    def timeout(self) -> float | None:
+    def read_timeout(self) -> float | None:
         """Get the read timeout in seconds."""
         return self._read_timeout
 

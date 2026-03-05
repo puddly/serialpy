@@ -447,6 +447,8 @@ def test_sync_read_timeout(sync_transport_pair: tuple[str, str]) -> None:
     left_path, _ = sync_transport_pair
 
     with serial_for_url(left_path, baudrate=115200, read_timeout=0.1) as serial:
+        assert serial.read_timeout == 0.1
+
         start_time = time.time()
         # Try to read 10 bytes when no data is available
         result = serial.read(10)
