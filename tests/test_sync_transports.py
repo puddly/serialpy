@@ -312,33 +312,33 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
 
 def test_sync_context_manager_multiple_times(serial_pair: SerialPair) -> None:
     """Test that context manager can be used multiple times."""
-    serial_left = Serial.from_url(serial_pair.left, baudrate=115200)
-    serial_right = Serial.from_url(serial_pair.right, baudrate=115200)
+    left = Serial.from_url(serial_pair.left, baudrate=115200)
+    right = Serial.from_url(serial_pair.right, baudrate=115200)
 
-    with serial_left, serial_right:
-        serial_left.write(b"test1")
-        assert serial_right.readexactly(5) == b"test1"
+    with left, right:
+        left.write(b"test1")
+        assert right.readexactly(5) == b"test1"
 
-    with serial_left, serial_right:
-        serial_left.write(b"test2")
-        assert serial_right.readexactly(5) == b"test2"
+    with left, right:
+        left.write(b"test2")
+        assert right.readexactly(5) == b"test2"
 
 
 def test_sync_open_close_cycles(serial_pair: SerialPair) -> None:
     """Test multiple open/close cycles."""
-    serial_left = Serial.from_url(serial_pair.left, baudrate=115200)
-    serial_right = Serial.from_url(serial_pair.right, baudrate=115200)
+    left = Serial.from_url(serial_pair.left, baudrate=115200)
+    right = Serial.from_url(serial_pair.right, baudrate=115200)
 
     for i in range(1, 4):
-        serial_left.open()
-        serial_right.open()
+        left.open()
+        right.open()
 
         chunk = str(i).encode("ascii")
-        serial_left.write(chunk)
-        assert serial_right.readexactly(1) == chunk
+        left.write(chunk)
+        assert right.readexactly(1) == chunk
 
-        serial_left.close()
-        serial_right.close()
+        left.close()
+        right.close()
 
 
 def test_sync_flush_after_write(serial_pair: SerialPair) -> None:
@@ -456,17 +456,13 @@ def test_sync_read_timeout(serial_pair: SerialPair) -> None:
 def test_sync_read_timeout_with_partial_data(serial_pair: SerialPair) -> None:
     """Test that reading with a timeout returns available data immediately."""
     with (
-        Serial.from_url(
-            serial_pair.left, baudrate=115200, read_timeout=1.0
-        ) as serial_left,
-        Serial.from_url(
-            serial_pair.right, baudrate=115200, read_timeout=1.0
-        ) as serial_right,
+        Serial.from_url(serial_pair.left, baudrate=115200, read_timeout=1.0) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=1.0) as right,
     ):
-        serial_left.write(b"hello")
+        left.write(b"hello")
 
         with measure_time() as elapsed:
-            result = serial_right.read(5)
+            result = right.read(5)
 
         assert result == b"hello"
         assert elapsed() < 0.2
@@ -475,18 +471,14 @@ def test_sync_read_timeout_with_partial_data(serial_pair: SerialPair) -> None:
 def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
     """Test that readexactly(10) with only 5 bytes raises IncompleteReadError."""
     with (
-        Serial.from_url(
-            serial_pair.left, baudrate=115200, read_timeout=0.5
-        ) as serial_left,
-        Serial.from_url(
-            serial_pair.right, baudrate=115200, read_timeout=0.5
-        ) as serial_right,
+        Serial.from_url(serial_pair.left, baudrate=115200, read_timeout=0.5) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.5) as right,
     ):
-        serial_left.write(b"hello")
+        left.write(b"hello")
 
         with measure_time() as elapsed:
             with pytest.raises(IncompleteReadError) as exc_info:
-                serial_right.readexactly(10)
+                right.readexactly(10)
 
         assert exc_info.value.partial == b"hello"
         assert 0.5 <= elapsed() < 1.0
@@ -516,23 +508,23 @@ def test_dtr_cts(serial_pair: SerialPair) -> None:
         pytest.skip("Requires physical adapter pair")
 
     with (
-        Serial.from_url(serial_pair.left, baudrate=115200) as serial_left,
-        Serial.from_url(serial_pair.right, baudrate=115200) as serial_right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
-        serial_left.set_modem_pins(rts=False)
-        serial_right.set_modem_pins(rts=False)
+        left.set_modem_pins(rts=False)
+        right.set_modem_pins(rts=False)
 
-        serial_left.set_modem_pins(dtr=True)
-        assert serial_right.get_modem_pins().cts is PinState.HIGH
+        left.set_modem_pins(dtr=True)
+        assert right.get_modem_pins().cts is PinState.HIGH
 
-        serial_right.set_modem_pins(dtr=True)
-        assert serial_left.get_modem_pins().cts is PinState.HIGH
+        right.set_modem_pins(dtr=True)
+        assert left.get_modem_pins().cts is PinState.HIGH
 
-        serial_left.set_modem_pins(dtr=False)
-        assert serial_right.get_modem_pins().cts is PinState.LOW
+        left.set_modem_pins(dtr=False)
+        assert right.get_modem_pins().cts is PinState.LOW
 
-        serial_right.set_modem_pins(dtr=False)
-        assert serial_left.get_modem_pins().cts is PinState.LOW
+        right.set_modem_pins(dtr=False)
+        assert left.get_modem_pins().cts is PinState.LOW
 
 
 def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
@@ -541,23 +533,23 @@ def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
         pytest.skip("Requires physical adapter pair")
 
     with (
-        Serial.from_url(serial_pair.left, baudrate=115200) as serial_left,
-        Serial.from_url(serial_pair.right, baudrate=115200) as serial_right,
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
-        serial_left.set_modem_pins(rts=False)
-        serial_right.set_modem_pins(rts=False)
+        left.set_modem_pins(rts=False)
+        right.set_modem_pins(rts=False)
 
-        serial_left.dtr = True
-        assert serial_right.get_modem_pins().cts is PinState.HIGH
+        left.dtr = True
+        assert right.get_modem_pins().cts is PinState.HIGH
 
-        serial_right.dtr = True
-        assert serial_left.get_modem_pins().cts is PinState.HIGH
+        right.dtr = True
+        assert left.get_modem_pins().cts is PinState.HIGH
 
-        serial_left.dtr = False
-        assert serial_right.get_modem_pins().cts is PinState.LOW
+        left.dtr = False
+        assert right.get_modem_pins().cts is PinState.LOW
 
-        serial_right.dtr = False
-        assert serial_left.get_modem_pins().cts is PinState.LOW
+        right.dtr = False
+        assert left.get_modem_pins().cts is PinState.LOW
 
 
 def test_fast_open_close(serial_pair: SerialPair) -> None:
@@ -567,12 +559,12 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 
     message = b"Fast write and close test"
 
-    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
-        with Serial.from_url(serial_pair.right, baudrate=115200) as serial_right:
-            serial_right.write(message)
-            serial_right.flush()
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
+        with Serial.from_url(serial_pair.right, baudrate=115200) as right:
+            right.write(message)
+            right.flush()
 
-        assert serial_left.readexactly(len(message)) == message
+        assert left.readexactly(len(message)) == message
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
@@ -581,28 +573,28 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
     if serial_pair.backend != "adapter":
         pytest.skip("Requires physical adapter pair")
 
-    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
-        ) as serial_right:
-            serial_right.set_modem_pins(dtr=True)
-            assert serial_left.get_modem_pins().cts is PinState.HIGH
+        ) as right:
+            right.set_modem_pins(dtr=True)
+            assert left.get_modem_pins().cts is PinState.HIGH
 
-        assert serial_left.get_modem_pins().cts is PinState.HIGH
+        assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
-        ) as serial_right:
-            assert serial_left.get_modem_pins().cts is PinState.LOW
-            serial_right.set_modem_pins(dtr=True)
+        ) as right:
+            assert left.get_modem_pins().cts is PinState.LOW
+            right.set_modem_pins(dtr=True)
 
-        assert serial_left.get_modem_pins().cts is PinState.HIGH
+        assert left.get_modem_pins().cts is PinState.HIGH
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
@@ -611,37 +603,37 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     if serial_pair.backend != "adapter":
         pytest.skip("Requires physical adapter pair")
 
-    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
-        ) as serial_right:
-            serial_right.set_modem_pins(dtr=True)
-            assert serial_left.get_modem_pins().cts is PinState.HIGH
+        ) as right:
+            right.set_modem_pins(dtr=True)
+            assert left.get_modem_pins().cts is PinState.HIGH
 
-        assert serial_left.get_modem_pins().cts is PinState.HIGH
+        assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
-        ) as serial_right:
-            assert serial_left.get_modem_pins().cts is PinState.HIGH
+        ) as right:
+            assert left.get_modem_pins().cts is PinState.HIGH
 
-        assert serial_left.get_modem_pins().cts is PinState.HIGH
+        assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
-        ) as serial_right:
-            assert serial_left.get_modem_pins().cts is PinState.HIGH
+        ) as right:
+            assert left.get_modem_pins().cts is PinState.HIGH
 
-        assert serial_left.get_modem_pins().cts is PinState.LOW
+        assert left.get_modem_pins().cts is PinState.LOW
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
@@ -664,17 +656,17 @@ def test_deassert_on_open_with_rtscts(
     if serial_pair.backend != "adapter":
         pytest.skip("Requires physical adapter pair")
 
-    with Serial.from_url(serial_pair.left, baudrate=115200) as serial_left:
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
             rtscts=False,
             rtsdtr_on_open=PinState.HIGH,
-        ) as serial_right:
-            serial_right.set_modem_pins(dtr=True)
-            assert serial_left.get_modem_pins().cts is PinState.HIGH
+        ) as right:
+            right.set_modem_pins(dtr=True)
+            assert left.get_modem_pins().cts is PinState.HIGH
 
-        assert serial_left.get_modem_pins().cts is PinState.HIGH
+        assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
             serial_pair.right,
@@ -682,7 +674,7 @@ def test_deassert_on_open_with_rtscts(
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
         ):
-            assert serial_left.get_modem_pins().cts is expected_state
+            assert left.get_modem_pins().cts is expected_state
 
 
 @pytest.mark.skipif(
@@ -693,8 +685,8 @@ def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     if serial_pair.backend != "adapter":
         pytest.skip("Requires physical adapter pair")
 
-    with Serial.from_url(serial_pair.right, baudrate=9600) as serial_right:
-        serial_right.set_modem_pins(dtr=False)
+    with Serial.from_url(serial_pair.right, baudrate=9600) as right:
+        right.set_modem_pins(dtr=False)
         time.sleep(0.1)
 
         with Serial.from_url(
@@ -702,9 +694,9 @@ def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
             baudrate=9600,
             rtscts=True,
             write_timeout=0.5,
-        ) as serial_left:
+        ) as left:
             with measure_time() as elapsed:
                 with pytest.raises(TimeoutError):
-                    serial_left.write(b"x" * 1024)
+                    left.write(b"x" * 1024)
 
             assert 0.5 <= elapsed() < 1.5
