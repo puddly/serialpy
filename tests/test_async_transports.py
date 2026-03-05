@@ -361,6 +361,110 @@ async def test_async_pause_resume(serial_pair: SerialPair) -> None:
         assert (await reader_left.read(14)) == b"A long message"
 
 
+async def test_async_abort(serial_pair: SerialPair) -> None:
+    """Test aborting a transport discards buffered data and closes."""
+    connection_lost_event = asyncio.Event()
+
+    class AbortProtocol(asyncio.Protocol):
+        def connection_lost(self, exc: Exception | None) -> None:
+            connection_lost_event.set()
+
+    transport, _ = await create_serial_connection(
+        asyncio.get_running_loop(),
+        AbortProtocol,
+        serial_pair.left,
+        baudrate=115200,
+    )
+
+    transport.write(b"data that will be discarded on abort")
+    transport.abort()
+
+    await asyncio.wait_for(connection_lost_event.wait(), timeout=2.0)
+    assert transport.is_closing()
+
+
+async def test_async_write_bytearray(serial_pair: SerialPair) -> None:
+    """Test writing bytearray data."""
+    async with async_create_reader_writer_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (_, writer_left, reader_right, _):
+        data = bytearray(b"hello bytearray")
+        writer_left.write(data)
+        result = await reader_right.readexactly(len(data))
+        assert result == b"hello bytearray"
+
+
+async def test_async_write_empty(serial_pair: SerialPair) -> None:
+    """Test writing empty data is a no-op."""
+    async with async_create_reader_writer_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (_, writer_left, reader_right, _):
+        writer_left.write(b"")
+        writer_left.write(b"after_empty")
+        result = await reader_right.readexactly(len(b"after_empty"))
+        assert result == b"after_empty"
+
+
+async def test_async_transport_api(serial_pair: SerialPair) -> None:
+    """Test transport public API methods."""
+    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
+        _,
+        writer,
+    ):
+        transport = writer.transport
+
+        # get/set protocol
+        protocol = transport.get_protocol()
+        assert protocol is not None
+        transport.set_protocol(protocol)
+        assert transport.get_protocol() is protocol
+
+        # write buffer size starts at 0
+        assert transport.get_write_buffer_size() == 0
+
+
+async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
+    """Test get/set write buffer limits and can_write_eof."""
+    if sys.platform == "win32" or serial_pair.backend == "socket":
+        pytest.skip("Only DescriptorTransport implements write buffer limits")
+
+    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
+        _,
+        writer,
+    ):
+        transport = writer.transport
+
+        low, high = transport.get_write_buffer_limits()
+        assert low >= 0
+        assert high >= low
+
+        transport.set_write_buffer_limits(high=128 * 1024, low=32 * 1024)
+        assert transport.get_write_buffer_limits() == (32 * 1024, 128 * 1024)
+
+        assert transport.can_write_eof() is True
+
+
+async def test_async_flush(serial_pair: SerialPair) -> None:
+    """Test flushing async transport write buffers."""
+    async with async_create_reader_writer_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (_, writer_left, reader_right, _):
+        writer_left.write(b"flush test data")
+        await writer_left.transport.flush()
+
+        result = await reader_right.readexactly(len(b"flush test data"))
+        assert result == b"flush test data"
+
+
+async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
+    """Test that resume_reading when not paused is a no-op."""
+    async with async_create_reader_writer_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (_, writer_left, _, _):
+        # resume without prior pause should be a no-op
+        writer_left.transport.resume_reading()
+
+
 async def test_async_invalid_uri() -> None:
     """Test invalid URIs are rejected by public async API."""
     loop = asyncio.get_running_loop()

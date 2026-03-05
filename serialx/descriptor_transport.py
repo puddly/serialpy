@@ -285,14 +285,6 @@ class DescriptorTransport(asyncio.Transport):
             self._loop.remove_reader(self._fileno)
             self._maybe_background_close(None)
 
-    def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
-        """Set the protocol to use with this transport."""
-        self._protocol = protocol
-
-    def get_protocol(self) -> asyncio.Protocol:
-        """Get the protocol used by this transport."""
-        return self._protocol
-
     def close(self) -> None:
         """Close the transport."""
         LOGGER.debug("Closing at the request of the application")

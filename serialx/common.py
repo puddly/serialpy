@@ -379,6 +379,14 @@ class BaseSerialTransport(asyncio.Transport):
         """Return whether the transport is closing."""
         return self._closing
 
+    def get_protocol(self) -> asyncio.Protocol:
+        """Get the protocol used by this transport."""
+        return self._protocol
+
+    def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
+        """Set the protocol to use with this transport."""
+        self._protocol = protocol
+
     @property
     def serial(self) -> BaseSerial:
         """Get the serial port instance."""

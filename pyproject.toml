@@ -60,6 +60,12 @@ show_error_context = true
 source = ["serialx"]
 relative_files = true
 
+[tool.coverage.paths]
+source = [
+    "serialx/",
+    "serialx\\",
+]
+
 [tool.ruff]
 target-version = "py310"
 

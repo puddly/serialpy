@@ -234,6 +234,17 @@ class SocketSerialTransport(BaseSerialTransport):
         """Return whether the transport is closing."""
         return self._closing
 
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        if self._connection_lost_called:
+            return
+        self._closing = True
+
+        if self._tcp_transport is not None:
+            self._tcp_transport.abort()
+        else:
+            self._connection_lost(None)
+
     def close(self) -> None:
         """Close the transport."""
         if self._connection_lost_called:
