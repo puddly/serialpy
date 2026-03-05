@@ -164,7 +164,12 @@ class BaseSerial(io.RawIOBase):
     def open(self) -> None:
         """Open the serial port."""
         self._open()
-        self._configure_port()
+
+        try:
+            self._configure_port()
+        except BaseException:
+            self.close()
+            raise
 
     def configure_port(self) -> None:
         """Configure the serial port settings."""
