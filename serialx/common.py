@@ -130,7 +130,7 @@ class BaseSerial(io.RawIOBase):
         rtscts: bool = False,
         byte_size: int = 8,
         *,
-        timeout: float | None = None,
+        read_timeout: float | None = None,
         write_timeout: float | None = None,
         rtsdtr_on_open: PinState = PinState.HIGH,
         rtsdtr_on_close: PinState = PinState.LOW,
@@ -153,7 +153,7 @@ class BaseSerial(io.RawIOBase):
         self._parity = parity
         self._byte_size = byte_size
         self._exclusive = exclusive
-        self._read_timeout = timeout
+        self._read_timeout = read_timeout
         self._write_timeout = write_timeout
 
         self._rtsdtr_on_open = rtsdtr_on_open

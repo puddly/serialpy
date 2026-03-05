@@ -448,7 +448,7 @@ def test_sync_read_timeout(sync_transport_pair: tuple[str, str]) -> None:
     """Test that reading with a timeout returns 0 bytes after the timeout."""
     left_path, _ = sync_transport_pair
 
-    with serial_for_url(left_path, baudrate=115200, timeout=0.1) as serial:
+    with serial_for_url(left_path, baudrate=115200, read_timeout=0.1) as serial:
         start_time = time.time()
         # Try to read 10 bytes when no data is available
         result = serial.read(10)
@@ -467,8 +467,8 @@ def test_sync_read_timeout_with_partial_data(
     left_path, right_path = sync_transport_pair
 
     with (
-        serial_for_url(left_path, baudrate=115200, timeout=1.0) as serial_left,
-        serial_for_url(right_path, baudrate=115200, timeout=1.0) as serial_right,
+        serial_for_url(left_path, baudrate=115200, read_timeout=1.0) as serial_left,
+        serial_for_url(right_path, baudrate=115200, read_timeout=1.0) as serial_right,
     ):
         # Write 5 bytes from one side
         data = b"hello"
