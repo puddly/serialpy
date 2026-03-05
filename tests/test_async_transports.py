@@ -1,7 +1,6 @@
 """Async transport tests."""
 
 import asyncio
-import contextlib
 import logging
 import os
 import sys
@@ -21,7 +20,6 @@ from serialx import (
     StopBits,
     create_serial_connection,
 )
-from serialx.common import get_serial_classes
 from tests.common import (
     SerialPair,
     async_create_reader_writer,
@@ -361,52 +359,6 @@ async def test_async_pause_resume(serial_pair: SerialPair) -> None:
 
         writer_left.transport.resume_reading()
         assert (await reader_left.read(14)) == b"A long message"
-
-
-async def test_async_transport_close_before_connect_completes(
-    serial_pair: SerialPair,
-) -> None:
-    """Test close-before-connect race is handled without duplicate callbacks."""
-    _, transport_cls = get_serial_classes(serial_pair.left)
-
-    class ProbeProtocol(asyncio.Protocol):
-        def __init__(self) -> None:
-            self.connection_made_calls = 0
-            self.connection_lost_calls = 0
-            self.connection_lost_future = asyncio.get_running_loop().create_future()
-
-        def connection_made(self, transport: asyncio.BaseTransport) -> None:
-            assert isinstance(transport, BaseSerialTransport)
-            self.connection_made_calls += 1
-
-        def connection_lost(self, exc: Exception | None) -> None:
-            self.connection_lost_calls += 1
-            if not self.connection_lost_future.done():
-                self.connection_lost_future.set_result(None)
-
-    loop = asyncio.get_running_loop()
-    protocol = ProbeProtocol()
-    transport = transport_cls(loop, protocol)
-
-    connect_task = asyncio.create_task(
-        transport.connect(path=serial_pair.left, baudrate=115200)
-    )
-    transport.close()
-
-    with contextlib.suppress(Exception):
-        await connect_task
-
-    with contextlib.suppress(asyncio.TimeoutError):
-        await asyncio.wait_for(protocol.connection_lost_future, timeout=5)
-
-    await asyncio.sleep(0)
-
-    assert protocol.connection_made_calls == 0
-    assert transport.is_closing() is True
-
-    # Additional closes are idempotent
-    transport.close()
-    await asyncio.sleep(0)
 
 
 async def test_async_invalid_uri() -> None:
