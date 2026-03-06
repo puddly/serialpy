@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Buffer, Callable
 from enum import IntFlag
 import logging
+from pathlib import Path
 import urllib.parse
 
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
@@ -49,9 +50,28 @@ class ESPHomeSerial(BaseSerial):
     discouraged. Please use the async API.
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(
+        self,
+        path: str | Path,
+        baudrate: int,
+        parity: Parity = Parity.NONE,
+        stopbits: StopBits = StopBits.ONE,
+        xonxoff: bool = False,
+        rtscts: bool = False,
+        byte_size: int = 8,
+        **kwargs,
+    ) -> None:
         """Initialize ESPHome serial port."""
-        super().__init__(**kwargs)
+        super().__init__(
+            path=path,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            byte_size=byte_size,
+            **kwargs,
+        )
 
         parsed = urllib.parse.urlparse(str(self._path))
         params = urllib.parse.parse_qs(parsed.query)
