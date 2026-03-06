@@ -119,6 +119,10 @@ async def test_async_linux_race_condition_connect_close() -> None:
         with contextlib.suppress(Exception):
             await connect_task
 
+        # Wait for the transport to fully close before the socat pair is torn
+        # down, preventing fd reuse races with the socat pidfd.
+        await transport.wait_closed()
+
         # connection_made was never called
         assert protocol.connection_made_calls == 0
         assert transport.is_closing()

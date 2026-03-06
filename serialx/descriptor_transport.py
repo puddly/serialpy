@@ -55,6 +55,8 @@ class DescriptorTransport(asyncio.Transport):
         self._extra: dict[str, Any] = {}
 
         self._close_task: asyncio.Task[None] | None = None
+        self._connection_made: bool = False
+        self._closed_waiter: asyncio.Future[None] = loop.create_future()
 
     async def _open(self, path: os.PathLike) -> None:
         self._fileno = await self._loop.run_in_executor(
@@ -64,6 +66,7 @@ class DescriptorTransport(asyncio.Transport):
     async def _connect(self) -> None:
         assert self._fileno is not None
         self._loop.add_reader(self._fileno, self._read_ready)
+        self._connection_made = True
 
     def _read_ready(self) -> None:
         LOGGER.debug("Event loop woke up reader")
@@ -299,6 +302,10 @@ class DescriptorTransport(asyncio.Transport):
             self._closing = True
             self._maybe_background_close(None)
 
+    async def wait_closed(self) -> None:
+        """Wait until the transport is fully closed."""
+        await self._closed_waiter
+
     def __del__(self) -> None:
         """Clean up transport on deletion."""
         if getattr(self, "_fileno", None) is not None:
@@ -373,5 +380,8 @@ class DescriptorTransport(asyncio.Transport):
             self._protocol = None  # type: ignore[assignment]
             self._close_task = None
 
-            LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
-            protocol.connection_lost(exc)
+            if self._connection_made:
+                LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
+                protocol.connection_lost(exc)
+
+            self._closed_waiter.set_result(None)
