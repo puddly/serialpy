@@ -525,6 +525,20 @@ class Win32SerialTransport(BaseSerialTransport):
 
         return self._internal_transport.get_write_buffer_size()
 
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Return the write buffer limits."""
+        if self._internal_transport is None:
+            return (0, 0)
+
+        return self._internal_transport.get_write_buffer_limits()
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer limits."""
+        if self._internal_transport is None:
+            raise RuntimeError("Transport not connected")
+
+        self._internal_transport.set_write_buffer_limits(high=high, low=low)
+
     def write(self, data):
         """Write data to the transport."""
         if self._internal_transport is None:

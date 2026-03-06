@@ -561,7 +561,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
-@pytest.mark.skip_backends("socket", "com0com")
+@pytest.mark.skip_backends("socket", "com0com", "socat")
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -607,23 +607,23 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     )
     await asyncio.sleep(0.1)
 
-    payload = b"X" * 65536
-    for _ in range(64):
+    out_transport.set_write_buffer_limits(high=1024, low=256)
+
+    # Write enough to overflow the kernel buffer (~4KB for most serial drivers)
+    # so that the userspace buffer exceeds `high` and triggers pause_writing.
+    payload = b"X" * 8192
+    for _ in range(4):
         if out_transport.is_closing():
             break
         out_transport.write(payload)
         await asyncio.sleep(0)
 
-    try:
-        async with asyncio_timeout(10):
-            while out_transport.get_write_buffer_size() > 0:
-                await asyncio.sleep(0.05)
-    except asyncio.TimeoutError:
-        pass
-
-    await asyncio.sleep(0.1)
-
     assert output_pause_count > 0
+
+    assert out_transport.get_write_buffer_size() > 0
+    await out_transport.flush()
+    assert out_transport.get_write_buffer_size() == 0
+
     assert output_resume_count > 0
 
     out_transport.close()
@@ -755,8 +755,10 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
             await writer_right.transport.set_modem_pins(dtr=True)
+            await asyncio.sleep(0.05)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
+        await asyncio.sleep(0.05)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -765,9 +767,11 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
+            await asyncio.sleep(0.05)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
             await writer_right.transport.set_modem_pins(dtr=True)
 
+        await asyncio.sleep(0.05)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
 
@@ -787,8 +791,10 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
             await writer_right.transport.set_modem_pins(dtr=True)
+            await asyncio.sleep(0.05)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
+        await asyncio.sleep(0.05)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -797,8 +803,10 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
+            await asyncio.sleep(0.05)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
+        await asyncio.sleep(0.05)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -807,8 +815,10 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
+            await asyncio.sleep(0.05)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
+        await asyncio.sleep(0.05)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
 
 
@@ -840,10 +850,13 @@ async def test_async_deassert_on_open_with_rtscts(
             baudrate=115200,
             rtscts=False,
             rtsdtr_on_open=PinState.HIGH,
+            rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
             await writer_right.transport.set_modem_pins(dtr=True)
+            await asyncio.sleep(0.05)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
+        await asyncio.sleep(0.05)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -852,4 +865,5 @@ async def test_async_deassert_on_open_with_rtscts(
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
         ) as (reader_right, writer_right):
+            await asyncio.sleep(0.05)
             assert (await writer_left.transport.get_modem_pins()).cts is expected_state

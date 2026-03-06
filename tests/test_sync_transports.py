@@ -516,15 +516,19 @@ def test_dtr_cts(serial_pair: SerialPair) -> None:
         right.set_modem_pins(rts=False)
 
         left.set_modem_pins(dtr=True)
+        time.sleep(0.05)
         assert right.get_modem_pins().cts is PinState.HIGH
 
         right.set_modem_pins(dtr=True)
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         left.set_modem_pins(dtr=False)
+        time.sleep(0.05)
         assert right.get_modem_pins().cts is PinState.LOW
 
         right.set_modem_pins(dtr=False)
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.LOW
 
 
@@ -540,15 +544,19 @@ def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
         right.set_modem_pins(rts=False)
 
         left.dtr = True
+        time.sleep(0.05)
         assert right.get_modem_pins().cts is PinState.HIGH
 
         right.dtr = True
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         left.dtr = False
+        time.sleep(0.05)
         assert right.get_modem_pins().cts is PinState.LOW
 
         right.dtr = False
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.LOW
 
 
@@ -577,8 +585,11 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
         ) as right:
             right.set_modem_pins(dtr=True)
+            time.sleep(0.05)
             assert left.get_modem_pins().cts is PinState.HIGH
 
+        # rtsdtr_on_close=HIGH keeps DTR asserted
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -587,9 +598,13 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
         ) as right:
+            # rtsdtr_on_open=LOW deasserts DTR
+            time.sleep(0.05)
             assert left.get_modem_pins().cts is PinState.LOW
             right.set_modem_pins(dtr=True)
 
+        # rtsdtr_on_close=HIGH keeps DTR asserted
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.HIGH
 
 
@@ -606,8 +621,10 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.HIGH,
         ) as right:
             right.set_modem_pins(dtr=True)
+            time.sleep(0.05)
             assert left.get_modem_pins().cts is PinState.HIGH
 
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -616,8 +633,10 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as right:
+            time.sleep(0.05)
             assert left.get_modem_pins().cts is PinState.HIGH
 
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -626,8 +645,10 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
         ) as right:
+            time.sleep(0.05)
             assert left.get_modem_pins().cts is PinState.HIGH
 
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.LOW
 
 
@@ -656,10 +677,13 @@ def test_deassert_on_open_with_rtscts(
             baudrate=115200,
             rtscts=False,
             rtsdtr_on_open=PinState.HIGH,
+            rtsdtr_on_close=PinState.HIGH,
         ) as right:
             right.set_modem_pins(dtr=True)
+            time.sleep(0.05)
             assert left.get_modem_pins().cts is PinState.HIGH
 
+        time.sleep(0.05)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -668,6 +692,7 @@ def test_deassert_on_open_with_rtscts(
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
         ):
+            time.sleep(0.05)
             assert left.get_modem_pins().cts is expected_state
 
 
