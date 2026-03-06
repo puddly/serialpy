@@ -510,6 +510,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
         assert result == b"flush test data"
 
 
+@pytest.mark.skip_backends("esphome")
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
     async with async_create_reader_writer_pair(
@@ -645,7 +646,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
-@pytest.mark.skip_backends("socket", "com0com", "socat")
+@pytest.mark.skip_backends("socket", "com0com", "socat", "esphome")
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 

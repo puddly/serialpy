@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 import urllib.parse
 
+import aioesphomeapi
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
 
 from serialx import UnsupportedSetting
@@ -120,7 +121,7 @@ class ESPHomeSerial(BaseSerial):
         self._unsub = self._api.subscribe_serial_proxy_data(self._on_data)
 
     async def _async_open(self) -> None:
-        self._api = APIClient(
+        self._api = aioesphomeapi.APIClient(
             self._host,
             self._port,
             password=self._password,
