@@ -8,6 +8,8 @@ from .async_serial import (
     open_serial_connection,
 )
 from .common import (
+    BaseSerial,
+    BaseSerialTransport,
     ModemPins,
     Parity,
     PinState,
@@ -25,6 +27,8 @@ __all__ = [
     "ModemPins",
     "Parity",
     "PinState",
+    "BaseSerial",
+    "BaseSerialTransport",
     "Serial",
     "SerialPortInfo",
     "SerialStreamWriter",
@@ -44,3 +48,9 @@ def patch_pyserial():
 
 class SerialException(Exception):
     pass
+
+
+def serial_for_url(url, *args, **kwargs) -> BaseSerial:
+    """Create a serial port for the given URL."""
+    serial_cls, _serial_transport = get_serial_classes(url)
+    return serial_cls(url, *args, **kwargs)

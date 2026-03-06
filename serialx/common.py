@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 import asyncio
+from asyncio import IncompleteReadError
 import dataclasses
 from enum import Enum
 import io
@@ -130,8 +131,8 @@ class BaseSerial(io.RawIOBase):
         rtscts: bool = False,
         byte_size: int = 8,
         *,
-        buffer_character_count: int = 1,
-        buffer_burst_timeout: float = 0.01,
+        read_timeout: float | None = None,
+        write_timeout: float | None = None,
         rtsdtr_on_open: PinState = PinState.HIGH,
         rtsdtr_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
@@ -153,26 +154,65 @@ class BaseSerial(io.RawIOBase):
         self._parity = parity
         self._byte_size = byte_size
         self._exclusive = exclusive
+        self._read_timeout = read_timeout
+        self._write_timeout = write_timeout
 
         self._rtsdtr_on_open = rtsdtr_on_open
         self._rtsdtr_on_close = rtsdtr_on_close
 
-        self._buffer_character_count = buffer_character_count
-        self._buffer_burst_timeout = buffer_burst_timeout
         self._auto_close = False
 
-    @abstractmethod
+    @classmethod
+    def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
+        """Create the appropriate serial port subclass for the given URL."""
+        serial_cls, _ = get_serial_classes(url)
+        return serial_cls(url, *args, **kwargs)
+
     def open(self) -> None:
         """Open the serial port."""
+        self._open()
+
+        try:
+            self._configure_port()
+        except BaseException:
+            self.close()
+            raise
+
+    def configure_port(self) -> None:
+        """Configure the serial port settings."""
+        self._configure_port()
+
+    @abstractmethod
+    def _open(self) -> None:
+        """Open the serial port (platform-specific)."""
         raise NotImplementedError
 
     @abstractmethod
-    def configure_port(self) -> None:
-        """Configure the serial port settings."""
+    def _configure_port(self) -> None:
+        """Configure the serial port settings (platform-specific)."""
         raise NotImplementedError
 
+    def close(self) -> None:
+        """Close the serial port."""
+        self._close()
+
+    @abstractmethod
+    def _close(self) -> None:
+        """Close the serial port, internal."""
+        raise NotImplementedError
+
+    @property
+    def read_timeout(self) -> float | None:
+        """Get the read timeout in seconds."""
+        return self._read_timeout
+
+    @property
+    def write_timeout(self) -> float | None:
+        """Get the write timeout in seconds."""
+        return self._write_timeout
+
     def get_modem_pins(self) -> ModemPins:
-        """Get modem control bits, internal."""
+        """Get modem control bits."""
         return self._get_modem_pins()
 
     def set_modem_pins(
@@ -189,7 +229,7 @@ class BaseSerial(io.RawIOBase):
         rng: PinState | bool | None = PinState.UNDEFINED,
         dsr: PinState | bool | None = PinState.UNDEFINED,
     ) -> None:
-        """Set modem control bits, internal."""
+        """Set modem control bits."""
         if modem_pins is None:
             modem_pins = ModemPins(
                 le=PinState.convert(le),
@@ -296,8 +336,9 @@ class BaseSerial(io.RawIOBase):
             remaining -= read
 
             if read == 0:
-                raise EOFError(
-                    f"Read only {n - remaining} bytes, expected {n} bytes: {buffer!r}"
+                # `IncompleteReadError` is a subclass of `EOFError`
+                raise IncompleteReadError(
+                    expected=n, partial=bytes(buffer[: n - remaining])
                 )
 
         return bytes(buffer)
@@ -305,13 +346,6 @@ class BaseSerial(io.RawIOBase):
     def __enter__(self) -> Self:
         """Enter context manager."""
         self.open()
-
-        try:
-            self.configure_port()
-        except BaseException:
-            self.close()
-            raise
-
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -340,10 +374,40 @@ class BaseSerialTransport(asyncio.Transport):
 
         self._serial: BaseSerial | None = None
         self._closing: bool = False
+        self._closed_waiter: asyncio.Future[None] = loop.create_future()
 
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
         return self._closing
+
+    def _resolve_closed_waiter(self) -> None:
+        if not self._closed_waiter.done():
+            self._closed_waiter.set_result(None)
+
+    def _call_protocol_connection_lost(self, exc: Exception | None) -> None:
+        try:
+            self._protocol.connection_lost(exc)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except BaseException as protocol_exc:
+            self._loop.call_exception_handler(
+                {
+                    "message": "protocol.connection_lost() failed",
+                    "exception": protocol_exc,
+                    "transport": self,
+                    "protocol": self._protocol,
+                }
+            )
+        finally:
+            self._resolve_closed_waiter()
+
+    def get_protocol(self) -> asyncio.Protocol:
+        """Get the protocol used by this transport."""
+        return self._protocol
+
+    def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
+        """Set the protocol to use with this transport."""
+        self._protocol = protocol
 
     @property
     def serial(self) -> BaseSerial:
@@ -433,6 +497,10 @@ class BaseSerialTransport(asyncio.Transport):
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         raise NotImplementedError
+
+    async def wait_closed(self) -> None:
+        """Wait until transport is fully closed."""
+        await self._closed_waiter
 
 
 def get_serial_classes(

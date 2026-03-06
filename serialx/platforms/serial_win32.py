@@ -14,6 +14,8 @@ from win32con import (
     EVENPARITY,
     FILE_ATTRIBUTE_NORMAL,
     FILE_FLAG_OVERLAPPED,
+    FILE_SHARE_READ,
+    FILE_SHARE_WRITE,
     GENERIC_READ,
     GENERIC_WRITE,
     MARKPARITY,
@@ -27,13 +29,20 @@ from win32con import (
     SPACEPARITY,
     TWOSTOPBITS,
 )
-from win32event import INFINITE, CreateEvent, ResetEvent, WaitForSingleObject
+from win32event import (
+    INFINITE,
+    WAIT_TIMEOUT,
+    CreateEvent,
+    ResetEvent,
+    WaitForSingleObject,
+)
 from win32file import (
     OVERLAPPED,
     PURGE_RXABORT,
     PURGE_RXCLEAR,
     PURGE_TXABORT,
     PURGE_TXCLEAR,
+    CancelIo,
     ClearCommError,
     CloseHandle,
     CreateFile,
@@ -92,37 +101,58 @@ WIN32_STOPBITS_MAP = {
 }
 
 
+def _normalize_windows_port_path(path: os.PathLike | str) -> str:
+    """Normalize a Windows serial device path for CreateFile."""
+    path = str(path)
+
+    # COM ports >= 10 require the \\.\  prefix for CreateFile
+    if not path.startswith("\\\\.\\"):
+        path = "\\\\.\\" + path
+
+    return path
+
+
+def _safe_close_handle(handle) -> None:
+    """Close a Win32 handle, suppressing and logging errors."""
+    try:
+        CloseHandle(handle)
+    except pywintypes.error:
+        LOGGER.debug("Failed to close handle %r", handle, exc_info=True)
+
+
 class Win32Serial(BaseSerial):
     """Windows serial port implementation using Win32 API."""
 
-    def __init__(self, *args, handle=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        handle: int | None = None,
+        inter_byte_timeout: float = 0.01,
+        **kwargs,
+    ):
         """Initialize the Windows serial port."""
         super().__init__(*args, **kwargs)
         self._handle = handle
+        self._inter_byte_timeout = inter_byte_timeout
+        self._overlapped_read: OVERLAPPED | None = None
+        self._overlapped_write: OVERLAPPED | None = None
 
-        self._overlapped_read = OVERLAPPED()
-        self._overlapped_read.hEvent = CreateEvent(None, 1, 0, None)
-        self._overlapped_write = OVERLAPPED()
-        self._overlapped_write.hEvent = CreateEvent(None, 1, 0, None)
-
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the serial port."""
         LOGGER.debug("Opening serial port %r", self._path)
 
         if self._handle is not None:
             raise ValueError("Serial port is already open")
 
-        path = str(self._path)
+        path = _normalize_windows_port_path(self._path)
 
-        # COM9+ need to be opened with a \\.\ prefix
-        if path.upper().startswith("COM") and int(path[3:]) > 8:
-            path = "\\\\.\\" + path
+        share_mode = 0 if self._exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
 
         try:
             self._handle = CreateFile(
                 path,
                 GENERIC_READ | GENERIC_WRITE,
-                0,  # Exclusive access
+                share_mode,
                 None,
                 OPEN_EXISTING,
                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
@@ -131,13 +161,18 @@ class Win32Serial(BaseSerial):
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror, path) from e
 
+        self._overlapped_read = OVERLAPPED()
+        self._overlapped_read.hEvent = CreateEvent(None, 1, 0, None)
+        self._overlapped_write = OVERLAPPED()
+        self._overlapped_write.hEvent = CreateEvent(None, 1, 0, None)
+
         self._auto_close = True
 
-    def configure_port(self) -> None:
+    def _configure_port(self) -> None:
         """Configure the serial port settings."""
         try:
-            interval = int(1000 * self._buffer_burst_timeout)
-            if interval <= 0 and self._buffer_burst_timeout > 0:
+            interval = int(1000 * self._inter_byte_timeout)
+            if interval <= 0 and self._inter_byte_timeout > 0:
                 interval = 1  # Minimum 1ms if burst timeout is set but small
 
             timeouts = (
@@ -198,34 +233,53 @@ class Win32Serial(BaseSerial):
 
             SetCommState(self._handle, dcb)
 
-            self.set_modem_pins(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
+            # RTS cannot be manually set when hardware flow control is enabled
+            if not self._rtscts:
+                self.set_modem_pins(
+                    dtr=self._rtsdtr_on_open,
+                    rts=self._rtsdtr_on_open,
+                )
 
             # Clear any errors
             ClearCommError(self._handle)
         except pywintypes.error as e:
+            LOGGER.debug("Failed to configure port", exc_info=True)
             raise OSError(e.winerror, e.strerror) from e
 
     def fileno(self) -> int:
         """Return the file descriptor."""
+        assert self._handle is not None
         return int(self._handle)
 
-    def close(self):
+    def _close(self):
         """Close the serial port and release all handles."""
         if self._handle is not None:
             # Windows has no way to automatically do this on close, we do it manually
-            self.set_modem_pins(dtr=self._rtsdtr_on_close, rts=self._rtsdtr_on_close)
+            if not self._rtscts:
+                # RTS cannot be manually set when hardware flow control is enabled
+                try:
+                    self.set_modem_pins(
+                        dtr=self._rtsdtr_on_close,
+                        rts=self._rtsdtr_on_close,
+                    )
+                except OSError:
+                    LOGGER.debug("Failed to set modem pins on close", exc_info=True)
 
-        if self._handle is not None:
-            CloseHandle(self._handle)
+            try:
+                CancelIo(self._handle)
+            except pywintypes.error:
+                LOGGER.debug("Failed to cancel IO on close", exc_info=True)
+
+            _safe_close_handle(self._handle)
             self._handle = None
 
-        if self._overlapped_read.hEvent:
-            CloseHandle(self._overlapped_read.hEvent)
-            self._overlapped_read.hEvent = None
+        if self._overlapped_read is not None and self._overlapped_read.hEvent:
+            _safe_close_handle(self._overlapped_read.hEvent)
+        self._overlapped_read = None
 
-        if self._overlapped_write.hEvent:
-            CloseHandle(self._overlapped_write.hEvent)
-            self._overlapped_write.hEvent = None
+        if self._overlapped_write is not None and self._overlapped_write.hEvent:
+            _safe_close_handle(self._overlapped_write.hEvent)
+        self._overlapped_write = None
 
     def _get_modem_pins(self) -> ModemPins:
         """Get the current modem control bits."""
@@ -239,13 +293,15 @@ class Win32Serial(BaseSerial):
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set the modem control bits."""
-        if modem_pins.rts is not None:
-            func = SETRTS if modem_pins.rts else CLRRTS
-            EscapeCommFunction(self._handle, func)
+        if modem_pins.rts is not PinState.UNDEFINED:
+            EscapeCommFunction(
+                self._handle, (SETRTS if modem_pins.rts is PinState.HIGH else CLRRTS)
+            )
 
-        if modem_pins.dtr is not None:
-            func = SETDTR if modem_pins.dtr else CLRDTR
-            EscapeCommFunction(self._handle, func)
+        if modem_pins.dtr is not PinState.UNDEFINED:
+            EscapeCommFunction(
+                self._handle, (SETDTR if modem_pins.dtr is PinState.HIGH else CLRDTR)
+            )
 
     def flush(self) -> None:
         """Flush write buffers."""
@@ -253,20 +309,27 @@ class Win32Serial(BaseSerial):
 
     def readinto(self, b: Buffer) -> int:
         """Read data into the provided bytearray."""
+        assert self._overlapped_read is not None
         ResetEvent(self._overlapped_read.hEvent)
 
         try:
             rc, _ = ReadFile(self._handle, b, self._overlapped_read)
         except pywintypes.error as e:
-            if e.winerror != ERROR_IO_PENDING:
-                raise OSError(e.winerror, e.strerror) from e
-
-            # Might not be reached if ReadFile returns result instead of raising
-            rc = ERROR_IO_PENDING
+            raise OSError(e.winerror, e.strerror) from e
 
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
-            WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
+            timeout_ms = INFINITE
+            if self._read_timeout is not None:
+                timeout_ms = int(self._read_timeout * 1000)
+
+            res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
+
+            if res == WAIT_TIMEOUT:
+                CancelIo(self._handle)
+                # Wait for cancellation to complete to avoid data corruption or races
+                WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
+                return 0
 
         # Get the actual number of bytes read
         try:
@@ -278,16 +341,33 @@ class Win32Serial(BaseSerial):
 
     def write(self, data: Buffer) -> int:
         """Write data to the serial port synchronously."""
+        assert self._overlapped_write is not None
         ResetEvent(self._overlapped_write.hEvent)
 
         try:
             err, n = WriteFile(self._handle, data, self._overlapped_write)
         except pywintypes.error as e:
-            if e.winerror != ERROR_IO_PENDING:
-                raise OSError(e.winerror, e.strerror) from e
+            raise OSError(e.winerror, e.strerror) from e
 
-            WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
+        if err == ERROR_IO_PENDING:
+            # IO is pending, wait for it
+            timeout_ms = INFINITE
+            if self._write_timeout is not None:
+                timeout_ms = int(self._write_timeout * 1000)
+
+            res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
+
+            if res == WAIT_TIMEOUT:
+                CancelIo(self._handle)
+                # Wait for cancellation to complete
+                WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
+                raise TimeoutError("Write timeout") from None
+
+        # Get the actual number of bytes written
+        try:
             n = GetOverlappedResult(self._handle, self._overlapped_write, True)
+        except pywintypes.error as e:
+            raise OSError(e.winerror, e.strerror) from e
 
         return n
 
@@ -322,17 +402,23 @@ class Win32SerialTransport(BaseSerialTransport):
         self._handle: int | None = None
         self._internal_transport = None
         self._closing: bool = False
+        self._connect_in_progress: bool = False
 
     def serial_close(self):
         """Close the serial port."""
-        assert self._serial is not None
-        self._loop.run_in_executor(None, self._close_serial)
 
-    def _close_serial(self) -> None:
-        """Close the serial connection, internal."""
-        assert self._serial is not None
-        self._serial.close()
-        self._loop.call_soon_threadsafe(self._protocol.connection_lost, None)
+        def _close_then_notify() -> None:
+            assert self._serial is not None
+            exc = None
+
+            try:
+                self._serial.close()
+            except Exception as e:
+                exc = e
+
+            self._loop.call_soon_threadsafe(self._call_protocol_connection_lost, exc)
+
+        self._loop.run_in_executor(None, _close_then_notify)
 
     def serial_shutdown(self, how) -> None:
         """Shutdown the serial connection."""
@@ -355,14 +441,23 @@ class Win32SerialTransport(BaseSerialTransport):
 
     def protocol_connection_lost(self, exc: Exception | None) -> None:
         """Forward connection_lost to the protocol."""
-        pass
+        self._resolve_closed_waiter()
+
+    def protocol_pause_writing(self) -> None:
+        """Forward pause_writing to the protocol."""
+        self._protocol.pause_writing()
+
+    def protocol_resume_writing(self) -> None:
+        """Forward resume_writing to the protocol."""
+        self._protocol.resume_writing()
 
     async def _open(self, path: os.PathLike) -> None:
         """Open the serial port."""
+        normalized_path = _normalize_windows_port_path(path)
         self._handle = await self._loop.run_in_executor(
             None,
             lambda: CreateFile(
-                path,
+                normalized_path,
                 GENERIC_READ | GENERIC_WRITE,
                 0,  # Exclusive access
                 None,
@@ -374,50 +469,93 @@ class Win32SerialTransport(BaseSerialTransport):
 
     async def _connect(self, **kwargs) -> None:
         """Connect to the serial port."""
+        if self._closing:
+            self._resolve_closed_waiter()
+            return
+
+        self._connect_in_progress = True
         path = kwargs.pop("path")
         await self._open(path)
 
-        # Ensure buffer_burst_timeout is set to a small value to enable
-        # "Wait for first byte, then return on gap" behavior for ReadFile.
-        # If 0 (default), ReadFile with default timeouts might wait for full buffer.
-        original_burst_timeout = kwargs.get("buffer_burst_timeout", 0)
-        if original_burst_timeout == 0:
-            kwargs["buffer_burst_timeout"] = 0.01
+        try:
+            # Ensure inter_byte_timeout is set to a small value to enable
+            # "Wait for first byte, then return on gap" behavior for ReadFile.
+            # If 0 (default), ReadFile with default timeouts might wait for full buffer.
+            original_inter_byte_timeout = kwargs.get("inter_byte_timeout", 0)
+            if original_inter_byte_timeout == 0:
+                kwargs["inter_byte_timeout"] = 0.01
 
-        self._serial = Win32Serial(
-            **kwargs,
-            path=path,
-            handle=self._handle,
-            # buffer_character_count is not used by Proactor transport
-            buffer_character_count=0,
-        )
-        self._extra["serial"] = self._serial
+            self._serial = Win32Serial(
+                **kwargs,
+                path=path,
+                handle=self._handle,
+            )
+            self._extra["serial"] = self._serial
 
-        await self._loop.run_in_executor(None, self._serial.configure_port)
+            await self._loop.run_in_executor(None, self._serial.configure_port)
 
-        # Use the internal _make_duplex_pipe_transport to create a true overlapping
-        # bidirectional transport on the single handle.
-        assert hasattr(self._loop, "_make_duplex_pipe_transport")
-        self._internal_transport = self._loop._make_duplex_pipe_transport(
-            # Proxy access to serial and protocol attributes through this instance
-            sock=_MethodProxy(
-                "sock",
-                {
-                    "fileno": self.serial_fileno,
-                    "close": self.serial_close,
-                    "shutdown": self.serial_shutdown,
-                },
-            ),
-            protocol=_MethodProxy(
-                "protocol",
-                {
-                    "connection_made": self.protocol_connection_made,
-                    "data_received": self.protocol_data_received,
-                    "connection_lost": self.protocol_connection_lost,
-                },
-            ),
-            extra=self._extra,
-        )
+            if self._closing:
+                await self._loop.run_in_executor(None, self._serial.close)
+                self._serial = None
+                self._handle = None
+                self._resolve_closed_waiter()
+                return
+
+            # Use the internal _make_duplex_pipe_transport to create a true overlapping
+            # bidirectional transport on the single handle.
+            assert hasattr(self._loop, "_make_duplex_pipe_transport")
+            self._internal_transport = self._loop._make_duplex_pipe_transport(
+                # Proxy access to serial and protocol attributes through this instance
+                sock=_MethodProxy(
+                    "sock",
+                    {
+                        "fileno": self.serial_fileno,
+                        "close": self.serial_close,
+                        "shutdown": self.serial_shutdown,
+                    },
+                ),
+                protocol=_MethodProxy(
+                    "protocol",
+                    {
+                        "connection_made": self.protocol_connection_made,
+                        "data_received": self.protocol_data_received,
+                        "connection_lost": self.protocol_connection_lost,
+                        "pause_writing": self.protocol_pause_writing,
+                        "resume_writing": self.protocol_resume_writing,
+                    },
+                ),
+                extra=self._extra,
+            )
+            if self._closing:
+                self._internal_transport.close()
+        except BaseException:
+            await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+            self._serial = None
+            self._handle = None
+            raise
+        finally:
+            self._connect_in_progress = False
+
+    def get_write_buffer_size(self) -> int:
+        """Return the current size of the write buffer."""
+        if self._internal_transport is None:
+            return 0
+
+        return self._internal_transport.get_write_buffer_size()
+
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Return the write buffer limits."""
+        if self._internal_transport is None:
+            return (0, 0)
+
+        return self._internal_transport.get_write_buffer_limits()
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer limits."""
+        if self._internal_transport is None:
+            raise RuntimeError("Transport not connected")
+
+        self._internal_transport.set_write_buffer_limits(high=high, low=low)
 
     def write(self, data):
         """Write data to the transport."""
@@ -432,6 +570,16 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
+        elif not self._connect_in_progress:
+            self._resolve_closed_waiter()
+
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        self._closing = True
+        if self._internal_transport is not None:
+            self._internal_transport.abort()
+        elif not self._connect_in_progress:
+            self._resolve_closed_waiter()
 
     def pause_reading(self):
         """Pause reading from the transport."""
@@ -448,10 +596,6 @@ class Win32SerialTransport(BaseSerialTransport):
         self._protocol = protocol
         if self._internal_transport is not None:
             self._internal_transport.set_protocol(protocol)
-
-    def get_protocol(self) -> asyncio.Protocol:
-        """Return the current protocol."""
-        return self._protocol
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""

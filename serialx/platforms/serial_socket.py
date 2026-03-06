@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
 import socket
 import urllib.parse
 
@@ -20,44 +19,63 @@ class SocketSerial(BaseSerial):
 
     def __init__(
         self,
-        path: str | Path,
-        baudrate: int,
-        parity: Parity = Parity.NONE,
-        stopbits: StopBits | int | float = StopBits.ONE,
-        xonxoff: bool = False,
-        rtscts: bool = False,
-        byte_size: int = 8,
+        *args,
+        # Socket-specific kwargs
+        connect_timeout: float | None = None,
         **kwargs,
     ) -> None:
         """Initialize socket serial port."""
-        super().__init__(
-            path=path,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-            byte_size=byte_size,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
-        parsed = urllib.parse.urlparse(str(path))
+        parsed = urllib.parse.urlparse(str(self._path))
         if parsed.hostname is None or parsed.port is None:
-            raise ValueError(f"Invalid socket URI, expected both host and port: {path}")
+            raise ValueError(
+                f"Invalid socket URI, expected both host and port: {self._path}"
+            )
 
         self._host = parsed.hostname
         self._port = parsed.port
+        self._connect_timeout = connect_timeout
 
         self._socket: socket.socket | None = None
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the socket connection."""
         assert self._host is not None
         assert self._port is not None
-        self._socket = socket.create_connection((self._host, self._port))
 
-    def configure_port(self) -> None:
-        """Configure the serial port settings (no-op for sockets)."""
+        self._socket = socket.create_connection(
+            (self._host, self._port), timeout=self._connect_timeout
+        )
+
+    @property
+    def connect_timeout(self) -> float | None:
+        """Get the connection timeout in seconds."""
+        return self._connect_timeout
+
+    def _get_effective_socket_timeout(self) -> float | None:
+        """Calculate effective socket timeout as min of read and write timeouts."""
+        if self._read_timeout is None:
+            return self._write_timeout
+
+        if self._write_timeout is None:
+            return self._read_timeout
+
+        effective = min(self._read_timeout, self._write_timeout)
+
+        if self._read_timeout != self._write_timeout:
+            LOGGER.debug(
+                "Serial over TCP accepts only a single timeout, taking the min of read=%s and write=%s",
+                self._read_timeout,
+                self._write_timeout,
+            )
+
+        return effective
+
+    def _configure_port(self) -> None:
+        """Configure the serial port settings."""
+        if self._socket is not None:
+            self._socket.settimeout(self._get_effective_socket_timeout())
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         pass
@@ -81,9 +99,12 @@ class SocketSerial(BaseSerial):
         assert self._socket is not None
 
         m = memoryview(b).cast("B")
-        return self._socket.recv_into(m)
+        try:
+            return self._socket.recv_into(m)
+        except TimeoutError:
+            return 0
 
-    def close(self) -> None:
+    def _close(self) -> None:
         """Close the socket."""
         if self._socket is not None:
             self._socket.close()
@@ -184,7 +205,7 @@ class SocketSerialTransport(BaseSerialTransport):
         self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
-        self._protocol.connection_lost(exc)
+        self._call_protocol_connection_lost(exc)
 
     def _tcp_connection_lost(self) -> None:
         """Track the underlying TCP transport's connection_lost callback."""
@@ -212,6 +233,17 @@ class SocketSerialTransport(BaseSerialTransport):
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
         return self._closing
+
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        if self._connection_lost_called:
+            return
+        self._closing = True
+
+        if self._tcp_transport is not None:
+            self._tcp_transport.abort()
+        else:
+            self._connection_lost(None)
 
     def close(self) -> None:
         """Close the transport."""

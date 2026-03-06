@@ -10,6 +10,7 @@ import fcntl
 import logging
 import os
 from pathlib import Path
+import select
 import sys
 import termios
 import time
@@ -21,15 +22,7 @@ else:
 
 from typing_extensions import Buffer
 
-from ..common import (
-    BaseSerial,
-    BaseSerialTransport,
-    ModemPins,
-    Parity,
-    PinState,
-    SerialPortInfo,
-    StopBits,
-)
+from ..common import BaseSerial, ModemPins, Parity, PinState, SerialPortInfo, StopBits
 from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -135,14 +128,18 @@ class PosixSerial(BaseSerial):
         *args,
         fileno: int | None = None,
         low_latency: bool = True,
+        inter_byte_timeout: float = 0.01,
+        min_read_size: int = 1,
         **kwargs,
     ):
         """Initialize POSIX serial port."""
         super().__init__(*args, **kwargs)
         self._fileno: int | None = fileno
         self._low_latency: bool = low_latency
+        self._inter_byte_timeout = inter_byte_timeout
+        self._min_read_size = min_read_size
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the serial port."""
         LOGGER.debug("Opening serial port %r", self._path)
 
@@ -221,7 +218,7 @@ class PosixSerial(BaseSerial):
         )
         fcntl.ioctl(self._fileno, TCSETS2, buffer)
 
-    def configure_port(self) -> None:  # noqa: C901
+    def _configure_port(self) -> None:  # noqa: C901
         """Configure the serial port settings."""
         LOGGER.debug("Configuring serial port %r", self._path)
 
@@ -296,17 +293,17 @@ class PosixSerial(BaseSerial):
 
         # Only emit reads if VMIN characters have been read, after no more data comes in
         # for VTIME seconds
-        vmin = self._buffer_character_count
-        vtime = int(self._buffer_burst_timeout * 10)
+        vmin = self._min_read_size
+        vtime = int(self._inter_byte_timeout * 10)
 
         if not 0 <= vmin <= 255:
             raise ValueError(
-                f"VMIN must be in range 0-255 (buffer_character_count={self._buffer_character_count})"
+                f"VMIN must be in range 0-255 (min_read_size={self._min_read_size})"
             )
 
         if not 0 <= vtime <= 255:
             raise ValueError(
-                f"VTIME must be in range 0-255 (buffer_burst_timeout={self._buffer_burst_timeout})"
+                f"VTIME must be in range 0-255 (inter_byte_timeout={self._inter_byte_timeout})"
             )
 
         try:
@@ -445,7 +442,7 @@ class PosixSerial(BaseSerial):
         LOGGER.debug("Flushing file descriptor %r", self._fileno)
         termios.tcdrain(self._fileno)
 
-    def close(self) -> None:
+    def _close(self) -> None:
         """Close the serial port."""
         if self._fileno is not None:
             if self._exclusive:
@@ -464,6 +461,13 @@ class PosixSerial(BaseSerial):
 
         def readinto(self, b: Buffer) -> int:
             """Read bytes from serial port into buffer."""
+            assert self._fileno is not None
+
+            if self._read_timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
+                if not ready:
+                    return 0
+
             n = os.readinto(self._fileno, b)
             LOGGER.debug("Read %d bytes", n)
 
@@ -474,6 +478,11 @@ class PosixSerial(BaseSerial):
         def readinto(self, b: Buffer) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
+
+            if self._read_timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
+                if not ready:
+                    return 0
 
             m = memoryview(b).cast("B")
             size = len(m)
@@ -491,10 +500,16 @@ class PosixSerial(BaseSerial):
         """Write bytes to serial port."""
         LOGGER.debug("Writing %d bytes: %r", len(data), data)  # type: ignore[arg-type]
         assert self._fileno is not None
+
+        if self._write_timeout is not None:
+            _, ready, _ = select.select([], [self._fileno], [], self._write_timeout)
+            if not ready:
+                raise TimeoutError("Write timeout")
+
         return os.write(self._fileno, data)  # type: ignore[arg-type]
 
 
-class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
+class PosixSerialTransport(DescriptorTransport):
     """POSIX serial port transport using asyncio."""
 
     _serial_cls = PosixSerial
@@ -509,15 +524,21 @@ class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
             # `DescriptorTransport` opened the port
             fileno=self._fileno,
             # Nonblocking mode
-            buffer_character_count=0,
-            buffer_burst_timeout=0,
+            min_read_size=0,
+            inter_byte_timeout=0,
         )
         self._extra["serial"] = self._serial
 
         await asyncio.sleep(AFTER_OPEN_DELAY)
 
         await self._loop.run_in_executor(None, self._serial.configure_port)
+
+        if self.is_closing():
+            # If we are closing, we should not call `connection_made`
+            return
+
         await super()._connect()
+
         self._protocol.connection_made(self)
 
     async def flush(self) -> None:
