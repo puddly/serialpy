@@ -134,6 +134,10 @@ jobs:
         run: |
           . venv/bin/activate
           pip install pytest-github-actions-annotate-failures
+      - name: Compile ESPHome host daemon fixture
+        run: |
+          . venv/bin/activate
+          esphome compile tests/esphome/host_daemon.yaml
       - name: Run pytest
         run: |
           . venv/bin/activate
