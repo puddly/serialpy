@@ -8,8 +8,9 @@ import errno
 import logging
 import os
 import typing
-from typing import Any
 import warnings
+
+from .common import BaseSerialTransport
 
 LOGGER = logging.getLogger(__name__)
 LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
@@ -38,7 +39,7 @@ def _safe_close(fd: int) -> None:
         LOGGER.debug("File descriptor %d is already closed")
 
 
-class DescriptorTransport(asyncio.Transport):
+class DescriptorTransport(BaseSerialTransport):
     """File descriptor transport using asyncio."""
 
     max_size = 256 * 1024  # max bytes we read in one event loop iteration
@@ -51,30 +52,28 @@ class DescriptorTransport(asyncio.Transport):
         extra: dict[str, typing.Any] | None = None,
     ) -> None:
         """Initialize the descriptor transport."""
+        super().__init__(loop, protocol)
         self._fileno: int | None = None
 
-        self._loop: asyncio.AbstractEventLoop = loop
         self._set_write_buffer_limits()
         self._protocol_paused = False
 
-        self._protocol = protocol
         self._buffer = bytearray()
         self._conn_lost_count = 0
-        self._closing = False
         self._paused = False
         self._empty_waiter: asyncio.Future | None = None
-        self._extra: dict[str, Any] = {}
+        if extra is not None:
+            self._extra.update(extra)
 
         self._close_task: asyncio.Task[None] | None = None
         self._connection_made: bool = False
-        self._closed_waiter: asyncio.Future[None] = loop.create_future()
 
     async def _open(self, path: os.PathLike) -> None:
         self._fileno = await self._loop.run_in_executor(
             None, os.open, path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
         )
 
-    async def _connect(self) -> None:
+    async def _connect(self, **_kwargs) -> None:
         assert self._fileno is not None
         self._loop.add_reader(self._fileno, self._read_ready)
         self._connection_made = True
@@ -313,10 +312,6 @@ class DescriptorTransport(asyncio.Transport):
             self._closing = True
             self._maybe_background_close(None)
 
-    async def wait_closed(self) -> None:
-        """Wait until the transport is fully closed."""
-        await self._closed_waiter
-
     def __del__(self) -> None:
         """Clean up transport on deletion."""
         if getattr(self, "_fileno", None) is not None:
@@ -371,10 +366,6 @@ class DescriptorTransport(asyncio.Transport):
 
         self._close_task = _create_background_task(self._call_connection_lost(exc))
         self._close_task.add_done_callback(self._on_close_task_done)
-
-    def _resolve_closed_waiter(self) -> None:
-        if not self._closed_waiter.done():
-            self._closed_waiter.set_result(None)
 
     def _on_close_task_done(self, task: asyncio.Task[None]) -> None:
         if self._close_task is task:

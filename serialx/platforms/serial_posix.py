@@ -22,15 +22,7 @@ else:
 
 from typing_extensions import Buffer
 
-from ..common import (
-    BaseSerial,
-    BaseSerialTransport,
-    ModemPins,
-    Parity,
-    PinState,
-    SerialPortInfo,
-    StopBits,
-)
+from ..common import BaseSerial, ModemPins, Parity, PinState, SerialPortInfo, StopBits
 from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -517,7 +509,7 @@ class PosixSerial(BaseSerial):
         return os.write(self._fileno, data)  # type: ignore[arg-type]
 
 
-class PosixSerialTransport(DescriptorTransport, BaseSerialTransport):
+class PosixSerialTransport(DescriptorTransport):
     """POSIX serial port transport using asyncio."""
 
     _serial_cls = PosixSerial

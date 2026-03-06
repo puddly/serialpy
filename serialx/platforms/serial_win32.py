@@ -415,7 +415,7 @@ class Win32SerialTransport(BaseSerialTransport):
             except Exception as e:
                 exc = e
 
-            self._loop.call_soon_threadsafe(self._protocol.connection_lost, exc)
+            self._loop.call_soon_threadsafe(self._call_protocol_connection_lost, exc)
 
         self._loop.run_in_executor(None, _close_then_notify)
 
@@ -440,7 +440,7 @@ class Win32SerialTransport(BaseSerialTransport):
 
     def protocol_connection_lost(self, exc: Exception | None) -> None:
         """Forward connection_lost to the protocol."""
-        pass
+        self._resolve_closed_waiter()
 
     def protocol_pause_writing(self) -> None:
         """Forward pause_writing to the protocol."""
@@ -552,12 +552,16 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
+        else:
+            self._resolve_closed_waiter()
 
     def abort(self) -> None:
         """Abort the transport immediately."""
         self._closing = True
         if self._internal_transport is not None:
             self._internal_transport.abort()
+        else:
+            self._resolve_closed_waiter()
 
     def pause_reading(self):
         """Pause reading from the transport."""

@@ -205,7 +205,7 @@ class SocketSerialTransport(BaseSerialTransport):
         self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
-        self._protocol.connection_lost(exc)
+        self._call_protocol_connection_lost(exc)
 
     def _tcp_connection_lost(self) -> None:
         """Track the underlying TCP transport's connection_lost callback."""
