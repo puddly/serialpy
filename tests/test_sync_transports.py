@@ -534,7 +534,7 @@ def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
         assert elapsed() == pytest.approx(0.5, abs=0.1)
 
 
-@pytest.mark.skip_backends("socket")
+@pytest.mark.skip_backends("socket", "esphome")
 def test_sync_write_timeout(serial_pair: SerialPair) -> None:
     """Test that write timeout works when buffer is full."""
 

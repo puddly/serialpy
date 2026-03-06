@@ -7,7 +7,13 @@ from collections.abc import Buffer, Callable
 from enum import IntFlag
 import logging
 from pathlib import Path
+import sys
 import urllib.parse
+
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as asyncio_timeout
+else:
+    from async_timeout import timeout as asyncio_timeout
 
 import aioesphomeapi
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
@@ -202,12 +208,18 @@ class ESPHomeSerial(BaseSerial):
 
     def readinto(self, b: Buffer) -> int:
         """Read bytes from serial port into buffer."""
-        return self._loop.run_until_complete(self._async_readinto(b))
+        try:
+            return self._loop.run_until_complete(
+                self._async_readinto(b, self._read_timeout)
+            )
+        except TimeoutError:
+            return 0
 
-    async def _async_readinto(self, b: Buffer) -> int:
-        while not self._read_buffer:
-            self._read_event.clear()
-            await self._read_event.wait()
+    async def _async_readinto(self, b: Buffer, timeout: float | None) -> int:
+        async with asyncio_timeout(timeout):
+            while not self._read_buffer:
+                self._read_event.clear()
+                await self._read_event.wait()
 
         m = memoryview(b).cast("B")
         n = min(len(m), len(self._read_buffer))
