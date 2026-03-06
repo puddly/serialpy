@@ -543,13 +543,6 @@ def get_serial_classes(
         )
 
         return ESPHomeSerial, ESPHomeSerialTransport
-    elif parsed_path.scheme == "esphomezigbee":
-        from .platforms.serial_esphome_zigbee import (  # noqa: PLC0415
-            ESPHomeZigbeeSerial,
-            ESPHomeZigbeeTransport,
-        )
-
-        return ESPHomeZigbeeSerial, ESPHomeZigbeeTransport
     else:
         from .platforms import Serial, SerialTransport  # noqa: PLC0415
 
