@@ -80,3 +80,4 @@ ENV/
 TI Z-Stack/
 
 zigpy-znp-*.*.*/
+.esphome/

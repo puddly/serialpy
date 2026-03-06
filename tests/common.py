@@ -3,8 +3,11 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
+import importlib.util
 import os
+from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
 import time
@@ -16,6 +19,19 @@ import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
+AIOESPHOMEAPI_AVAILABLE = importlib.util.find_spec("aioesphomeapi") is not None
+_SERIALX_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM = (
+    _SERIALX_ROOT
+    / "tests"
+    / "esphome"
+    / ".esphome"
+    / "build"
+    / "serialx-host-daemon"
+    / ".pioenvs"
+    / "serialx-host-daemon"
+    / "program"
+)
 
 
 class SerialPair(NamedTuple):
@@ -23,7 +39,7 @@ class SerialPair(NamedTuple):
 
     left: str
     right: str
-    backend: str  # "socat", "socket", "adapter", or "com0com"
+    backend: str  # "socat", "socket", "esphome", "adapter", or "com0com"
 
 
 class BridgedSocatPair(NamedTuple):
@@ -33,6 +49,83 @@ class BridgedSocatPair(NamedTuple):
     right: str
     left_process: asyncio.subprocess.Process
     right_process: asyncio.subprocess.Process
+
+
+def get_esphome_host_daemon_program() -> str | None:
+    """Get the compiled ESPHome host daemon program path, if available."""
+    if override := os.getenv("SERIALX_ESPHOME_DAEMON_PROGRAM"):
+        program_path = Path(override).expanduser()
+    else:
+        program_path = _DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM
+
+    if not program_path.exists():
+        return None
+    if not os.access(program_path, os.X_OK):
+        return None
+
+    return str(program_path)
+
+
+def _pick_free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _wait_for_esphome_listener(
+    process: subprocess.Popen[Any], port: int, timeout: float = 5.0
+) -> None:
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(
+                f"ESPHome host daemon exited before listening (code={process.returncode})"
+            )
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.1)
+            if sock.connect_ex(("127.0.0.1", port)) == 0:
+                return
+
+        time.sleep(0.01)
+
+    raise RuntimeError(
+        f"ESPHome host daemon did not start listening on 127.0.0.1:{port}"
+    )
+
+
+@contextlib.contextmanager
+def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
+    """Create an esphome:// pair backed by a socat PTY pair and host daemon."""
+    with create_socat_pair() as (left_tty, right_tty):
+        api_port = _pick_free_port()
+        env = os.environ.copy()
+        env["SERIALX_UART_LEFT"] = left_tty
+        env["SERIALX_UART_RIGHT"] = right_tty
+        env["SERIALX_API_PORT"] = str(api_port)
+
+        process = subprocess.Popen(  # noqa: S603
+            [program_path],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        try:
+            _wait_for_esphome_listener(process, api_port)
+            yield (
+                f"esphome://127.0.0.1:{api_port}/0",
+                f"esphome://127.0.0.1:{api_port}/1",
+            )
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
 
 
 @contextlib.contextmanager

@@ -29,6 +29,8 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
+    "aioesphomeapi",
+    "esphome",
 ]
 
 [tool.setuptools.packages.find]

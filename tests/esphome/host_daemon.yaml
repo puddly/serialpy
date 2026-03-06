@@ -1,0 +1,63 @@
+# ESPHome host daemon fixture for serialx serial-proxy integration tests.
+# This daemon exposes two serial_proxy instances backed by two UART ports.
+# Tests can connect two clients simultaneously:
+#   - esphome://127.0.0.1:6053/0  -> left serial proxy
+#   - esphome://127.0.0.1:6053/1  -> right serial proxy
+# The left/right UART paths should be the two connected halves of a virtual pair.
+
+substitutions:
+  node_name: serialx-host-daemon
+  api_port: "6053"
+  left_uart_port: "/tmp/serialx-esphome-left"
+  right_uart_port: "/tmp/serialx-esphome-right"
+
+esphome:
+  name: ${node_name}
+
+host:
+
+api:
+  port: ${api_port}
+
+logger:
+  level: INFO
+
+external_components:
+  - source:
+      type: local
+      path: external_components
+
+serialx_host_overrides:
+  left_uart_id: proxy_uart_left
+  right_uart_id: proxy_uart_right
+  left_uart_env: SERIALX_UART_LEFT
+  right_uart_env: SERIALX_UART_RIGHT
+  api_port_env: SERIALX_API_PORT
+
+uart:
+  - id: proxy_uart_left
+    port: ${left_uart_port}
+    baud_rate: 115200
+    data_bits: 8
+    parity: NONE
+    stop_bits: 1
+  - id: proxy_uart_right
+    port: ${right_uart_port}
+    baud_rate: 115200
+    data_bits: 8
+    parity: NONE
+    stop_bits: 1
+
+serial_proxy:
+  - id: serial_proxy_left
+    name: Serial Proxy Left
+    port_type: RS232
+    uart_id: proxy_uart_left
+    rts_pin: 1
+    dtr_pin: 2
+  - id: serial_proxy_right
+    name: Serial Proxy Right
+    port_type: RS232
+    uart_id: proxy_uart_right
+    rts_pin: 3
+    dtr_pin: 4
