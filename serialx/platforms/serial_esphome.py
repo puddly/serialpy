@@ -59,6 +59,8 @@ class ESPHomeSerial(BaseSerial):
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
+        *,
+        loop: asyncio.AbstractEventLoop | None = None,
         **kwargs,
     ) -> None:
         """Initialize ESPHome serial port."""
@@ -72,6 +74,7 @@ class ESPHomeSerial(BaseSerial):
             byte_size=byte_size,
             **kwargs,
         )
+        self._loop = asyncio.get_event_loop() if loop is None else loop
 
         parsed = urllib.parse.urlparse(str(self._path))
         params = urllib.parse.parse_qs(parsed.query)
@@ -93,6 +96,9 @@ class ESPHomeSerial(BaseSerial):
 
         self._last_line_state = LineStateFlag(0)
 
+    def _loop_factory(self) -> asyncio.AbstractEventLoop:
+        return self._loop
+
     def _on_data(self, msg: SerialProxyDataReceived) -> None:
         if msg.instance == self.instance:
             self._read_buffer.extend(msg.data)
@@ -100,7 +106,7 @@ class ESPHomeSerial(BaseSerial):
 
     def _open(self) -> None:
         """Open the serial port."""
-        asyncio.run(self._async_open())
+        self._loop.run_until_complete(self._async_open())
         assert self._api is not None
         self._subscribe_instance()
         self._unsub = self._api.subscribe_serial_proxy_data(self._on_data)
@@ -161,7 +167,7 @@ class ESPHomeSerial(BaseSerial):
         )
 
     def _get_modem_pins(self) -> ModemPins:
-        return asyncio.run(self._async_get_modem_pins())
+        return self._loop.run_until_complete(self._async_get_modem_pins())
 
     async def _async_get_modem_pins(self) -> ModemPins:
         assert self._api is not None
@@ -187,7 +193,7 @@ class ESPHomeSerial(BaseSerial):
 
     def readinto(self, b: Buffer) -> int:
         """Read bytes from serial port into buffer."""
-        return asyncio.run(self._async_readinto(b))
+        return self._loop.run_until_complete(self._async_readinto(b))
 
     async def _async_readinto(self, b: Buffer) -> int:
         while not self._read_buffer:
@@ -208,7 +214,7 @@ class ESPHomeSerial(BaseSerial):
 
         if self._api is not None:
             self._unsubscribe_instance()
-            asyncio.run(self._api.disconnect())
+            self._loop.run_until_complete(self._api.disconnect())
             self._api = None
 
 
@@ -226,7 +232,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._unsub: Callable[[], None] | None = None
 
     async def _connect(self, **kwargs) -> None:
-        self._serial = ESPHomeSerial(**kwargs)
+        self._serial = ESPHomeSerial(loop=self._loop, **kwargs)
 
         await self._serial._async_open()
         self._serial.configure_port()
