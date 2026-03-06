@@ -278,13 +278,19 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             api = self._serial._api
             self._serial._api = None
             self._loop.create_task(self._async_close(api))
+        else:
+            self._call_protocol_connection_lost(None)
+
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        self.close()
 
     async def _async_close(self, api: APIClient) -> None:
         """Close the API connection."""
         try:
             await api.disconnect()
         finally:
-            self._protocol.connection_lost(None)
+            self._call_protocol_connection_lost(None)
 
     async def flush(self) -> None:
         """Flush write buffers."""
