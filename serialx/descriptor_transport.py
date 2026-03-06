@@ -27,6 +27,17 @@ def _create_background_task(coro: Coroutine) -> asyncio.Task[None]:
     return task
 
 
+def _safe_close(fd: int) -> None:
+    """Close a file descriptor but do not error if it is already closed."""
+    try:
+        os.close(fd)
+    except OSError as exc:
+        if exc.errno != errno.EBADF:
+            raise
+
+        LOGGER.debug("File descriptor %d is already closed")
+
+
 class DescriptorTransport(asyncio.Transport):
     """File descriptor transport using asyncio."""
 
@@ -315,7 +326,7 @@ class DescriptorTransport(asyncio.Transport):
             if self._loop is not None:
                 self._loop.remove_reader(self._fileno)
 
-            os.close(self._fileno)
+            _safe_close(self._fileno)
 
     def _fatal_error(
         self,
@@ -401,7 +412,7 @@ class DescriptorTransport(asyncio.Transport):
                 # driver requires this: once the data is enqueued, even `os.close` blocks
                 # for the entire transmit duration.
                 LOGGER.debug("Closing file descriptor %s", fileno)
-                await loop.run_in_executor(None, os.close, fileno)
+                await loop.run_in_executor(None, _safe_close, fileno)
         finally:
             protocol = self._protocol
             self._loop = None  # type: ignore[assignment]
