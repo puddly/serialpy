@@ -484,7 +484,7 @@ def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
                 right.readexactly(10)
 
         assert exc_info.value.partial == b"hello"
-        assert 0.5 <= elapsed() < 1.0
+        assert elapsed() == pytest.approx(0.5, abs=0.1)
 
 
 @pytest.mark.skip_backends("socket")
@@ -714,4 +714,4 @@ def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
                 with pytest.raises(TimeoutError):
                     left.write(b"x" * 1024)
 
-            assert 0.5 <= elapsed() < 1.5
+            assert elapsed() == pytest.approx(0.5, abs=0.2)
