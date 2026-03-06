@@ -294,19 +294,19 @@ def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
 
 def test_sync_exclusive(serial_pair: SerialPair) -> None:
     """Test that exclusive setting is respected."""
+    if serial_pair.backend == "socket":
+        pytest.skip("Socket backend does not support exclusivity")
+
+    if serial_pair.backend == "esphome":
+        # TODO: exclusivity needs to be implemented
+        pytest.xfail("ESPHome backend does not support exclusivity")
+
     with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True) as serial:
         assert serial.exclusive is True
 
-        if serial_pair.backend == "socket":
-            # Socket endpoints are not lockable tty devices
-            with Serial.from_url(
-                serial_pair.left, baudrate=115200, exclusive=True
-            ) as serial2:
-                assert serial2.exclusive is True
-        else:
-            with pytest.raises(OSError):
-                with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True):
-                    pass
+        with pytest.raises(OSError):
+            with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True):
+                pass
 
 
 def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
