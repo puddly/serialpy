@@ -359,29 +359,68 @@ class DescriptorTransport(asyncio.Transport):
             return
 
         self._close_task = _create_background_task(self._call_connection_lost(exc))
+        self._close_task.add_done_callback(self._on_close_task_done)
+
+    def _resolve_closed_waiter(self) -> None:
+        if not self._closed_waiter.done():
+            self._closed_waiter.set_result(None)
+
+    def _on_close_task_done(self, task: asyncio.Task[None]) -> None:
+        if self._close_task is task:
+            self._close_task = None
+
+        if task.cancelled():
+            self._resolve_closed_waiter()
+            return
+
+        task_exc = task.exception()
+        if task_exc is not None:
+            if self._loop is not None:
+                self._loop.call_exception_handler(
+                    {
+                        "message": "Unhandled exception in background close task",
+                        "exception": task_exc,
+                        "transport": self,
+                        "protocol": self._protocol,
+                    }
+                )
+            self._resolve_closed_waiter()
 
     async def _call_connection_lost(self, exc: Exception | None) -> None:
         LOGGER.debug("Closing connection: %r", exc)
 
+        loop = self._loop
+        fileno = self._fileno
+
         try:
-            assert self._fileno is not None
-            self._loop.remove_reader(self._fileno)
+            if fileno is not None:
+                loop.remove_reader(fileno)
+                self._fileno = None
 
-            # For serial ports it would make sense to flush here BUT no modern serial
-            # driver requires this: once the data is enqueued, even `os.close` blocks
-            # for the entire transmit duration.
-            LOGGER.debug("Closing file descriptor %s", self._fileno)
-            await self._loop.run_in_executor(None, os.close, self._fileno)
-
-            self._fileno = None
+                # For serial ports it would make sense to flush here BUT no modern serial
+                # driver requires this: once the data is enqueued, even `os.close` blocks
+                # for the entire transmit duration.
+                LOGGER.debug("Closing file descriptor %s", fileno)
+                await loop.run_in_executor(None, os.close, fileno)
         finally:
             protocol = self._protocol
             self._loop = None  # type: ignore[assignment]
             self._protocol = None  # type: ignore[assignment]
-            self._close_task = None
 
             if self._connection_made:
                 LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
-                protocol.connection_lost(exc)
+                try:
+                    protocol.connection_lost(exc)
+                except (SystemExit, KeyboardInterrupt):
+                    raise
+                except BaseException as protocol_exc:
+                    loop.call_exception_handler(
+                        {
+                            "message": "protocol.connection_lost() failed",
+                            "exception": protocol_exc,
+                            "transport": self,
+                            "protocol": protocol,
+                        }
+                    )
 
-            self._closed_waiter.set_result(None)
+            self._resolve_closed_waiter()
