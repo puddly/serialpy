@@ -1,6 +1,7 @@
 """Async transport tests."""
 
 import asyncio
+import contextlib
 import logging
 import os
 import sys
@@ -19,6 +20,7 @@ from serialx import (
     PinState,
     StopBits,
     create_serial_connection,
+    get_serial_classes,
 )
 from tests.common import (
     SOCAT_BINARY,
@@ -381,7 +383,44 @@ async def test_async_abort(serial_pair: SerialPair) -> None:
     transport.abort()
 
     await asyncio.wait_for(connection_lost_event.wait(), timeout=2.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
     assert transport.is_closing()
+
+
+async def test_async_close_before_connect(serial_pair: SerialPair) -> None:
+    """Test close during connect does not crash and stays idempotent."""
+
+    class ProbeProtocol(asyncio.Protocol):
+        def __init__(self) -> None:
+            self.connection_made_calls = 0
+            self.connection_lost_calls = 0
+
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            self.connection_made_calls += 1
+
+        def connection_lost(self, exc: Exception | None) -> None:
+            self.connection_lost_calls += 1
+
+    loop = asyncio.get_running_loop()
+    _serial_cls, transport_cls = get_serial_classes(serial_pair.left)
+    protocol = ProbeProtocol()
+    transport = transport_cls(loop=loop, protocol=protocol)
+
+    connect_task = asyncio.create_task(
+        transport.connect(path=serial_pair.left, baudrate=115200)
+    )
+    await asyncio.sleep(0)
+    transport.close()
+    transport.close()
+
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(connect_task, timeout=2.0)
+
+    await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
+
+    assert transport.is_closing()
+    assert protocol.connection_made_calls <= 1
+    assert protocol.connection_lost_calls <= 1
 
 
 async def test_async_write_bytearray(serial_pair: SerialPair) -> None:
@@ -527,6 +566,40 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
             value = getattr(modem_pins, field)
             assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
+
+
+async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
+    """Test modem pin writes are accepted on all backends."""
+
+    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
+        _,
+        writer,
+    ):
+        await writer.transport.set_modem_pins(dtr=True, rts=True)
+        pins_high = await writer.transport.get_modem_pins()
+
+        await writer.transport.set_modem_pins(dtr=False, rts=False)
+        pins_low = await writer.transport.get_modem_pins()
+
+        for pins in (pins_high, pins_low):
+            assert isinstance(pins, ModemPins)
+            for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
+                value = getattr(pins, field)
+                assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
+
+        if (
+            pins_high.dtr is not PinState.UNDEFINED
+            and pins_low.dtr is not PinState.UNDEFINED
+        ):
+            assert pins_high.dtr is PinState.HIGH
+            assert pins_low.dtr is PinState.LOW
+
+        if (
+            pins_high.rts is not PinState.UNDEFINED
+            and pins_low.rts is not PinState.UNDEFINED
+        ):
+            assert pins_high.rts is PinState.HIGH
+            assert pins_low.rts is PinState.LOW
 
 
 @pytest.mark.skipif(

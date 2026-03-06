@@ -9,7 +9,7 @@ import time
 
 import pytest
 
-from serialx import ModemPins, Parity, PinState, Serial, StopBits
+from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
 from serialx.common import BaseSerial
 from tests.common import SerialPair, measure_time
 
@@ -38,6 +38,17 @@ def test_sync_all_bytes(serial_pair: SerialPair) -> None:
         Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
         data = bytes(range(256))
+        left.write(data)
+        assert right.readexactly(len(data)) == data
+
+
+def test_sync_serial_for_url_factory(serial_pair: SerialPair) -> None:
+    """Test the top-level serial_for_url factory on all backends."""
+    with (
+        serial_for_url(serial_pair.left, baudrate=115200) as left,
+        serial_for_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        data = b"serial_for_url"
         left.write(data)
         assert right.readexactly(len(data)) == data
 
@@ -385,6 +396,36 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
             value = getattr(modem_pins, field)
             assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
+
+
+def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
+    """Test modem pin writes are accepted on all backends."""
+    with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
+        serial.set_modem_pins(dtr=True, rts=True)
+        pins_high = serial.get_modem_pins()
+
+        serial.set_modem_pins(dtr=False, rts=False)
+        pins_low = serial.get_modem_pins()
+
+        for pins in (pins_high, pins_low):
+            assert isinstance(pins, ModemPins)
+            for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
+                value = getattr(pins, field)
+                assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
+
+        if (
+            pins_high.dtr is not PinState.UNDEFINED
+            and pins_low.dtr is not PinState.UNDEFINED
+        ):
+            assert pins_high.dtr is PinState.HIGH
+            assert pins_low.dtr is PinState.LOW
+
+        if (
+            pins_high.rts is not PinState.UNDEFINED
+            and pins_low.rts is not PinState.UNDEFINED
+        ):
+            assert pins_high.rts is PinState.HIGH
+            assert pins_low.rts is PinState.LOW
 
 
 @pytest.mark.skipif(
