@@ -11,6 +11,7 @@ import urllib.parse
 
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
 
+from serialx import UnsupportedSetting
 from serialx.common import (
     BaseSerial,
     BaseSerialTransport,
@@ -74,6 +75,13 @@ class ESPHomeSerial(BaseSerial):
             byte_size=byte_size,
             **kwargs,
         )
+
+        if self._parity not in PARITY_MAP:
+            raise UnsupportedSetting(f"Unsupported parity: {self._parity}")
+
+        if self._stopbits not in STOP_BITS_MAP:
+            raise UnsupportedSetting(f"Unsupported stop bits: {self._stopbits}")
+
         self._loop = asyncio.get_event_loop() if loop is None else loop
 
         parsed = urllib.parse.urlparse(str(self._path))
