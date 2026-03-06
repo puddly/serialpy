@@ -81,6 +81,7 @@ class ESPHomeSerial(BaseSerial):
         self._read_buffer = bytearray()
         self._read_event = asyncio.Event()
         self._unsub: Callable[[], None] | None = None
+        self._instance_subscribed = False
 
     def _on_data(self, msg: aioesphomeapi.SerialProxyDataReceived) -> None:
         if msg.instance == self.instance:
@@ -91,6 +92,7 @@ class ESPHomeSerial(BaseSerial):
         """Open the serial port."""
         asyncio.run(self._async_open())
         assert self.api is not None
+        self._subscribe_instance()
         self._unsub = self.api.subscribe_serial_proxy_data(self._on_data)
 
     async def _async_open(self) -> None:
@@ -101,6 +103,27 @@ class ESPHomeSerial(BaseSerial):
             noise_psk=self._noise_psk,
         )
         await self.api.connect(login=True)
+
+    def _subscribe_instance(self) -> None:
+        """Subscribe serial proxy streaming for this instance if supported."""
+        if self.api is None or self._instance_subscribed:
+            return
+        subscribe = getattr(self.api, "serial_proxy_subscribe", None)
+        if subscribe is None:
+            return
+        subscribe(self.instance)
+        self._instance_subscribed = True
+
+    def _unsubscribe_instance(self) -> None:
+        """Unsubscribe serial proxy streaming for this instance if supported."""
+        if self.api is None or not self._instance_subscribed:
+            return
+        unsubscribe = getattr(self.api, "serial_proxy_unsubscribe", None)
+        if unsubscribe is None:
+            self._instance_subscribed = False
+            return
+        unsubscribe(self.instance)
+        self._instance_subscribed = False
 
     def configure_port(self) -> None:
         """Configure the serial port settings."""
@@ -170,6 +193,7 @@ class ESPHomeSerial(BaseSerial):
             self._unsub = None
 
         if self.api is not None:
+            self._unsubscribe_instance()
             asyncio.run(self.api.disconnect())
             self.api = None
 
@@ -213,6 +237,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._serial.configure_port()
 
         assert self._serial.api is not None
+        self._serial._subscribe_instance()
         self._unsub = self._serial.api.subscribe_serial_proxy_data(self._on_data)
 
         self._protocol.connection_made(self)
@@ -240,6 +265,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._unsub = None
 
         if self._serial is not None and self._serial.api is not None:
+            self._serial._unsubscribe_instance()
             api = self._serial.api
             self._serial.api = None
             self._loop.create_task(self._async_close(api))
