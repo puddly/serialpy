@@ -402,6 +402,7 @@ class Win32SerialTransport(BaseSerialTransport):
         self._handle: int | None = None
         self._internal_transport = None
         self._closing: bool = False
+        self._connect_in_progress: bool = False
 
     def serial_close(self):
         """Close the serial port."""
@@ -468,6 +469,11 @@ class Win32SerialTransport(BaseSerialTransport):
 
     async def _connect(self, **kwargs) -> None:
         """Connect to the serial port."""
+        if self._closing:
+            self._resolve_closed_waiter()
+            return
+
+        self._connect_in_progress = True
         path = kwargs.pop("path")
         await self._open(path)
 
@@ -487,6 +493,13 @@ class Win32SerialTransport(BaseSerialTransport):
             self._extra["serial"] = self._serial
 
             await self._loop.run_in_executor(None, self._serial.configure_port)
+
+            if self._closing:
+                await self._loop.run_in_executor(None, self._serial.close)
+                self._serial = None
+                self._handle = None
+                self._resolve_closed_waiter()
+                return
 
             # Use the internal _make_duplex_pipe_transport to create a true overlapping
             # bidirectional transport on the single handle.
@@ -513,10 +526,15 @@ class Win32SerialTransport(BaseSerialTransport):
                 ),
                 extra=self._extra,
             )
+            if self._closing:
+                self._internal_transport.close()
         except BaseException:
             await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+            self._serial = None
             self._handle = None
             raise
+        finally:
+            self._connect_in_progress = False
 
     def get_write_buffer_size(self) -> int:
         """Return the current size of the write buffer."""
@@ -552,7 +570,7 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
-        else:
+        elif not self._connect_in_progress:
             self._resolve_closed_waiter()
 
     def abort(self) -> None:
@@ -560,7 +578,7 @@ class Win32SerialTransport(BaseSerialTransport):
         self._closing = True
         if self._internal_transport is not None:
             self._internal_transport.abort()
-        else:
+        elif not self._connect_in_progress:
             self._resolve_closed_waiter()
 
     def pause_reading(self):
