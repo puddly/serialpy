@@ -450,9 +450,29 @@ class BaseSerialTransport(asyncio.Transport):
         """Connect to serial port."""
         raise NotImplementedError
 
-    async def connect(self, **kwargs) -> None:
+    async def connect(
+        self,
+        *,
+        path: str,
+        baudrate: int,
+        parity: Parity = Parity.NONE,
+        stopbits: StopBits = StopBits.ONE,
+        xonxoff: bool = False,
+        rtscts: bool = False,
+        byte_size: int = 8,
+        **kwargs,
+    ) -> None:
         """Connect to serial port."""
-        return await self._connect(**kwargs)
+        return await self._connect(
+            path=path,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            byte_size=byte_size,
+            **kwargs,
+        )
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
