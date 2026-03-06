@@ -8,8 +8,9 @@ import errno
 import logging
 import os
 import typing
-from typing import Any
 import warnings
+
+from .common import BaseSerialTransport
 
 LOGGER = logging.getLogger(__name__)
 LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
@@ -27,7 +28,18 @@ def _create_background_task(coro: Coroutine) -> asyncio.Task[None]:
     return task
 
 
-class DescriptorTransport(asyncio.Transport):
+def _safe_close(fd: int) -> None:
+    """Close a file descriptor but do not error if it is already closed."""
+    try:
+        os.close(fd)
+    except OSError as exc:
+        if exc.errno != errno.EBADF:
+            raise
+
+        LOGGER.debug("File descriptor %d is already closed")
+
+
+class DescriptorTransport(BaseSerialTransport):
     """File descriptor transport using asyncio."""
 
     max_size = 256 * 1024  # max bytes we read in one event loop iteration
@@ -40,30 +52,31 @@ class DescriptorTransport(asyncio.Transport):
         extra: dict[str, typing.Any] | None = None,
     ) -> None:
         """Initialize the descriptor transport."""
+        super().__init__(loop, protocol)
         self._fileno: int | None = None
 
-        self._loop: asyncio.AbstractEventLoop = loop
         self._set_write_buffer_limits()
         self._protocol_paused = False
 
-        self._protocol = protocol
         self._buffer = bytearray()
         self._conn_lost_count = 0
-        self._closing = False
         self._paused = False
         self._empty_waiter: asyncio.Future | None = None
-        self._extra: dict[str, Any] = {}
+        if extra is not None:
+            self._extra.update(extra)
 
         self._close_task: asyncio.Task[None] | None = None
+        self._connection_made: bool = False
 
     async def _open(self, path: os.PathLike) -> None:
         self._fileno = await self._loop.run_in_executor(
             None, os.open, path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
         )
 
-    async def _connect(self) -> None:
+    async def _connect(self, **_kwargs) -> None:
         assert self._fileno is not None
         self._loop.add_reader(self._fileno, self._read_ready)
+        self._connection_made = True
 
     def _read_ready(self) -> None:
         LOGGER.debug("Event loop woke up reader")
@@ -285,14 +298,6 @@ class DescriptorTransport(asyncio.Transport):
             self._loop.remove_reader(self._fileno)
             self._maybe_background_close(None)
 
-    def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
-        """Set the protocol to use with this transport."""
-        self._protocol = protocol
-
-    def get_protocol(self) -> asyncio.Protocol:
-        """Get the protocol used by this transport."""
-        return self._protocol
-
     def close(self) -> None:
         """Close the transport."""
         LOGGER.debug("Closing at the request of the application")
@@ -316,7 +321,7 @@ class DescriptorTransport(asyncio.Transport):
             if self._loop is not None:
                 self._loop.remove_reader(self._fileno)
 
-            os.close(self._fileno)
+            _safe_close(self._fileno)
 
     def _fatal_error(
         self,
@@ -360,26 +365,64 @@ class DescriptorTransport(asyncio.Transport):
             return
 
         self._close_task = _create_background_task(self._call_connection_lost(exc))
+        self._close_task.add_done_callback(self._on_close_task_done)
+
+    def _on_close_task_done(self, task: asyncio.Task[None]) -> None:
+        if self._close_task is task:
+            self._close_task = None
+
+        if task.cancelled():
+            self._resolve_closed_waiter()
+            return
+
+        task_exc = task.exception()
+        if task_exc is not None:
+            if self._loop is not None:
+                self._loop.call_exception_handler(
+                    {
+                        "message": "Unhandled exception in background close task",
+                        "exception": task_exc,
+                        "transport": self,
+                        "protocol": self._protocol,
+                    }
+                )
+            self._resolve_closed_waiter()
 
     async def _call_connection_lost(self, exc: Exception | None) -> None:
         LOGGER.debug("Closing connection: %r", exc)
 
+        loop = self._loop
+        fileno = self._fileno
+
         try:
-            assert self._fileno is not None
-            self._loop.remove_reader(self._fileno)
+            if fileno is not None:
+                loop.remove_reader(fileno)
+                self._fileno = None
 
-            # For serial ports it would make sense to flush here BUT no modern serial
-            # driver requires this: once the data is enqueued, even `os.close` blocks
-            # for the entire transmit duration.
-            LOGGER.debug("Closing file descriptor %s", self._fileno)
-            await self._loop.run_in_executor(None, os.close, self._fileno)
-
-            self._fileno = None
+                # For serial ports it would make sense to flush here BUT no modern serial
+                # driver requires this: once the data is enqueued, even `os.close` blocks
+                # for the entire transmit duration.
+                LOGGER.debug("Closing file descriptor %s", fileno)
+                await loop.run_in_executor(None, _safe_close, fileno)
         finally:
             protocol = self._protocol
             self._loop = None  # type: ignore[assignment]
             self._protocol = None  # type: ignore[assignment]
-            self._close_task = None
 
-            LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
-            protocol.connection_lost(exc)
+            if self._connection_made:
+                LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
+                try:
+                    protocol.connection_lost(exc)
+                except (SystemExit, KeyboardInterrupt):
+                    raise
+                except BaseException as protocol_exc:
+                    loop.call_exception_handler(
+                        {
+                            "message": "protocol.connection_lost() failed",
+                            "exception": protocol_exc,
+                            "transport": self,
+                            "protocol": protocol,
+                        }
+                    )
+
+            self._resolve_closed_waiter()

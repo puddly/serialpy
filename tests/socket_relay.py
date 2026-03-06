@@ -199,7 +199,7 @@ class _SocketPairRelay:
         for conn in connections:
             self._close_socket(conn)
         for relay_thread in self.relay_threads:
-            relay_thread.join(timeout=1)
+            relay_thread.join()
         LOGGER.debug("stopped socket pair servers")
 
 

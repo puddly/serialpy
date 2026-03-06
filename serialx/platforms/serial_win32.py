@@ -402,6 +402,7 @@ class Win32SerialTransport(BaseSerialTransport):
         self._handle: int | None = None
         self._internal_transport = None
         self._closing: bool = False
+        self._connect_in_progress: bool = False
 
     def serial_close(self):
         """Close the serial port."""
@@ -415,7 +416,7 @@ class Win32SerialTransport(BaseSerialTransport):
             except Exception as e:
                 exc = e
 
-            self._loop.call_soon_threadsafe(self._protocol.connection_lost, exc)
+            self._loop.call_soon_threadsafe(self._call_protocol_connection_lost, exc)
 
         self._loop.run_in_executor(None, _close_then_notify)
 
@@ -440,7 +441,7 @@ class Win32SerialTransport(BaseSerialTransport):
 
     def protocol_connection_lost(self, exc: Exception | None) -> None:
         """Forward connection_lost to the protocol."""
-        pass
+        self._resolve_closed_waiter()
 
     def protocol_pause_writing(self) -> None:
         """Forward pause_writing to the protocol."""
@@ -468,6 +469,11 @@ class Win32SerialTransport(BaseSerialTransport):
 
     async def _connect(self, **kwargs) -> None:
         """Connect to the serial port."""
+        if self._closing:
+            self._resolve_closed_waiter()
+            return
+
+        self._connect_in_progress = True
         path = kwargs.pop("path")
         await self._open(path)
 
@@ -487,6 +493,13 @@ class Win32SerialTransport(BaseSerialTransport):
             self._extra["serial"] = self._serial
 
             await self._loop.run_in_executor(None, self._serial.configure_port)
+
+            if self._closing:
+                await self._loop.run_in_executor(None, self._serial.close)
+                self._serial = None
+                self._handle = None
+                self._resolve_closed_waiter()
+                return
 
             # Use the internal _make_duplex_pipe_transport to create a true overlapping
             # bidirectional transport on the single handle.
@@ -513,10 +526,15 @@ class Win32SerialTransport(BaseSerialTransport):
                 ),
                 extra=self._extra,
             )
+            if self._closing:
+                self._internal_transport.close()
         except BaseException:
             await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+            self._serial = None
             self._handle = None
             raise
+        finally:
+            self._connect_in_progress = False
 
     def get_write_buffer_size(self) -> int:
         """Return the current size of the write buffer."""
@@ -524,6 +542,20 @@ class Win32SerialTransport(BaseSerialTransport):
             return 0
 
         return self._internal_transport.get_write_buffer_size()
+
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Return the write buffer limits."""
+        if self._internal_transport is None:
+            return (0, 0)
+
+        return self._internal_transport.get_write_buffer_limits()
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer limits."""
+        if self._internal_transport is None:
+            raise RuntimeError("Transport not connected")
+
+        self._internal_transport.set_write_buffer_limits(high=high, low=low)
 
     def write(self, data):
         """Write data to the transport."""
@@ -538,12 +570,16 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
+        elif not self._connect_in_progress:
+            self._resolve_closed_waiter()
 
     def abort(self) -> None:
         """Abort the transport immediately."""
         self._closing = True
         if self._internal_transport is not None:
             self._internal_transport.abort()
+        elif not self._connect_in_progress:
+            self._resolve_closed_waiter()
 
     def pause_reading(self):
         """Pause reading from the transport."""
@@ -560,10 +596,6 @@ class Win32SerialTransport(BaseSerialTransport):
         self._protocol = protocol
         if self._internal_transport is not None:
             self._internal_transport.set_protocol(protocol)
-
-    def get_protocol(self) -> asyncio.Protocol:
-        """Return the current protocol."""
-        return self._protocol
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""

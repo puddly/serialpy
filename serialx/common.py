@@ -162,6 +162,12 @@ class BaseSerial(io.RawIOBase):
 
         self._auto_close = False
 
+    @classmethod
+    def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
+        """Create the appropriate serial port subclass for the given URL."""
+        serial_cls, _ = get_serial_classes(url)
+        return serial_cls(url, *args, **kwargs)
+
     def open(self) -> None:
         """Open the serial port."""
         self._open()
@@ -368,10 +374,40 @@ class BaseSerialTransport(asyncio.Transport):
 
         self._serial: BaseSerial | None = None
         self._closing: bool = False
+        self._closed_waiter: asyncio.Future[None] = loop.create_future()
 
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
         return self._closing
+
+    def _resolve_closed_waiter(self) -> None:
+        if not self._closed_waiter.done():
+            self._closed_waiter.set_result(None)
+
+    def _call_protocol_connection_lost(self, exc: Exception | None) -> None:
+        try:
+            self._protocol.connection_lost(exc)
+        except (SystemExit, KeyboardInterrupt):
+            raise
+        except BaseException as protocol_exc:
+            self._loop.call_exception_handler(
+                {
+                    "message": "protocol.connection_lost() failed",
+                    "exception": protocol_exc,
+                    "transport": self,
+                    "protocol": self._protocol,
+                }
+            )
+        finally:
+            self._resolve_closed_waiter()
+
+    def get_protocol(self) -> asyncio.Protocol:
+        """Get the protocol used by this transport."""
+        return self._protocol
+
+    def set_protocol(self, protocol: asyncio.Protocol) -> None:  # type: ignore[override]
+        """Set the protocol to use with this transport."""
+        self._protocol = protocol
 
     @property
     def serial(self) -> BaseSerial:
@@ -461,6 +497,10 @@ class BaseSerialTransport(asyncio.Transport):
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         raise NotImplementedError
+
+    async def wait_closed(self) -> None:
+        """Wait until transport is fully closed."""
+        await self._closed_waiter
 
 
 def get_serial_classes(

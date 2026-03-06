@@ -205,7 +205,7 @@ class SocketSerialTransport(BaseSerialTransport):
         self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
-        self._protocol.connection_lost(exc)
+        self._call_protocol_connection_lost(exc)
 
     def _tcp_connection_lost(self) -> None:
         """Track the underlying TCP transport's connection_lost callback."""
@@ -233,6 +233,17 @@ class SocketSerialTransport(BaseSerialTransport):
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
         return self._closing
+
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        if self._connection_lost_called:
+            return
+        self._closing = True
+
+        if self._tcp_transport is not None:
+            self._tcp_transport.abort()
+        else:
+            self._connection_lost(None)
 
     def close(self) -> None:
         """Close the transport."""

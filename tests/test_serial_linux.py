@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import errno
 import fcntl
+import os
 import threading
 from typing import Any
 from unittest.mock import ANY, call, patch
@@ -119,6 +120,66 @@ async def test_async_linux_race_condition_connect_close() -> None:
         with contextlib.suppress(Exception):
             await connect_task
 
+        # Wait for the transport to fully close before the socat pair is torn
+        # down, preventing fd reuse races with the socat pidfd.
+        await transport.wait_closed()
+
         # connection_made was never called
         assert protocol.connection_made_calls == 0
         assert transport.is_closing()
+
+
+async def test_async_linux_wait_closed_when_close_task_cancelled() -> None:
+    """wait_closed should resolve even if close task is cancelled before start."""
+    loop = asyncio.get_running_loop()
+    transport = PosixSerialTransport(loop, asyncio.Protocol())
+
+    async with async_create_socat_pair() as (left_path, _right_path):
+        await transport.connect(path=left_path, baudrate=115200)
+        transport.close()
+
+        close_task = transport._close_task
+        assert close_task is not None
+        close_task.cancel()
+        await asyncio.sleep(0)
+
+        await transport.wait_closed()
+
+        # Clean up if the fd wasn't closed
+        if transport._fileno is not None:
+            os.close(transport._fileno)
+
+
+async def test_async_linux_wait_closed_when_connection_lost_raises() -> None:
+    """wait_closed should resolve even if protocol.connection_lost raises."""
+
+    class RaisingProtocol(asyncio.Protocol):
+        def connection_lost(self, exc: Exception | None) -> None:
+            raise RuntimeError("boom")
+
+    loop = asyncio.get_running_loop()
+    transport = PosixSerialTransport(loop, RaisingProtocol())
+
+    async with async_create_socat_pair() as (left_path, _right_path):
+        await transport.connect(path=left_path, baudrate=115200)
+        transport.close()
+
+        await transport.wait_closed()
+        assert transport._fileno is None
+
+
+async def test_async_linux_close_clears_fileno_when_fd_already_closed() -> None:
+    """Close should clear fileno even if fd was externally closed."""
+    loop = asyncio.get_running_loop()
+    transport = PosixSerialTransport(loop, asyncio.Protocol())
+
+    async with async_create_socat_pair() as (left_path, _right_path):
+        await transport.connect(path=left_path, baudrate=115200)
+
+        assert transport._fileno is not None
+        os.close(transport._fileno)
+
+        transport.close()
+        await transport.wait_closed()
+
+        assert transport._fileno is None

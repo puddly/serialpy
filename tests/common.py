@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -16,6 +16,23 @@ import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
+
+
+class SerialPair(NamedTuple):
+    """A connected pair of serial port paths with backend metadata."""
+
+    left: str
+    right: str
+    backend: str  # "socat", "socket", "adapter", or "com0com"
+
+
+class BridgedSocatPair(NamedTuple):
+    """A bridged socat pair where killing one side propagates EOF to the other."""
+
+    left: str
+    right: str
+    left_process: asyncio.subprocess.Process
+    right_process: asyncio.subprocess.Process
 
 
 @contextlib.contextmanager
@@ -77,6 +94,66 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 
 
 @contextlib.asynccontextmanager
+async def async_create_bridged_socat_pair() -> AsyncIterator[BridgedSocatPair]:
+    """Create a pair of PTYs bridged via two socat processes over a Unix socket.
+
+    Unlike `async_create_socat_pair`, killing one socat process propagates
+    through the bridge and tears down the other side, triggering a real EOF.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        left_tty = os.path.join(tmpdir, "ttyLeft")
+        right_tty = os.path.join(tmpdir, "ttyRight")
+        sock_path = os.path.join(tmpdir, "bridge.sock")
+
+        listener = await asyncio.create_subprocess_exec(
+            "socat",
+            f"PTY,link={left_tty},raw,echo=0",
+            f"UNIX-LISTEN:{sock_path}",
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        # Wait for the socket to appear
+        for _ in range(100):
+            if os.path.exists(sock_path):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise RuntimeError("socat listener socket was not created in time")
+
+        connector = await asyncio.create_subprocess_exec(
+            "socat",
+            f"PTY,link={right_tty},raw,echo=0",
+            f"UNIX-CONNECT:{sock_path}",
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+        # Wait for both PTYs to appear
+        for _ in range(100):
+            if os.path.exists(left_tty) and os.path.exists(right_tty):
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise RuntimeError("socat PTYs were not created in time")
+
+        assert listener.returncode is None
+        assert connector.returncode is None
+
+        yield BridgedSocatPair(
+            left=left_tty,
+            right=right_tty,
+            left_process=listener,
+            right_process=connector,
+        )
+
+        if connector.returncode is None:
+            connector.terminate()
+            await connector.wait()
+        if listener.returncode is None:
+            listener.terminate()
+            await listener.wait()
+
+
+@contextlib.asynccontextmanager
 async def async_create_reader_writer(
     port: str | None,
     **kwargs: Any,
@@ -124,79 +201,6 @@ async def async_create_reader_writer_pair(
         writer_right.close()
         await writer_left.wait_closed()
         await writer_right.wait_closed()
-
-
-@contextlib.asynccontextmanager
-async def async_create_dual_loopback(
-    left_port: str,
-    right_port: str,
-    **kwargs: Any,
-) -> AsyncIterator[
-    tuple[
-        asyncio.StreamReader,
-        serialx.SerialStreamWriter[BaseSerialTransport],
-        asyncio.StreamReader,
-        serialx.SerialStreamWriter[BaseSerialTransport],
-    ]
-]:
-    """Create reader/writer pairs for dual loopback configuration.
-
-    Returns (reader_left, writer_left, reader_right, writer_right).
-    """
-    reader_left, writer_left = await serialx.open_serial_connection(left_port, **kwargs)
-    reader_right, writer_right = await serialx.open_serial_connection(
-        right_port, **kwargs
-    )
-
-    try:
-        yield (reader_left, writer_left, reader_right, writer_right)
-    finally:
-        writer_left.close()
-        writer_right.close()
-        await writer_left.wait_closed()
-        await writer_right.wait_closed()
-
-
-@contextlib.contextmanager
-def create_connected_pair(
-    **kwargs: Any,
-) -> Iterator[tuple[serialx.Serial, serialx.Serial]]:
-    """Create a connected pair of serial ports with socat."""
-    left_kwargs = {}
-    right_kwargs = {}
-    shared_kwargs = {}
-
-    for key, value in kwargs.items():
-        if key.startswith("left_"):
-            left_kwargs[key[5:]] = value
-        elif key.startswith("right_"):
-            right_kwargs[key[6:]] = value
-        else:
-            shared_kwargs[key] = value
-
-    with create_socat_pair() as (in_tty, out_tty):
-        with (
-            serialx.Serial(in_tty, **left_kwargs, **shared_kwargs) as left_serial,
-            serialx.Serial(out_tty, **right_kwargs, **shared_kwargs) as right_serial,
-        ):
-            yield (left_serial, right_serial)
-
-
-@contextlib.contextmanager
-def create_dual_loopback(
-    left_port: str,
-    right_port: str,
-    **kwargs: Any,
-) -> Iterator[tuple[serialx.Serial, serialx.Serial]]:
-    """Create a connected pair of serial ports with dual loopback hardware.
-
-    Returns (serial_left, serial_right).
-    """
-    with (
-        serialx.Serial(left_port, **kwargs) as serial_left,
-        serialx.Serial(right_port, **kwargs) as serial_right,
-    ):
-        yield (serial_left, serial_right)
 
 
 @contextlib.contextmanager
