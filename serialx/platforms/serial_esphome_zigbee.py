@@ -11,7 +11,7 @@ import urllib.parse
 from aioesphomeapi import APIClient
 from aioesphomeapi.model import ZigbeeProxyFrame, ZigbeeProxyRequestType
 
-from serialx.common import BaseSerial, BaseSerialTransport, Parity, StopBits
+from serialx.common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class ESPHomeZigbeeSerial(BaseSerial):
         self._read_buffer.extend(msg.data)
         self._read_event.set()
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the serial port."""
         asyncio.run(self._async_open())
         assert self.api is not None
@@ -85,15 +85,13 @@ class ESPHomeZigbeeSerial(BaseSerial):
         )
         await self.api.connect(login=True)
 
-    def configure_port(self) -> None:
+    def _configure_port(self) -> None:
         """Configure the serial port settings (no-op for Zigbee proxy)."""
 
     def _set_modem_pins(self, modem_pins) -> None:
         pass
 
     def _get_modem_pins(self):
-        from serialx.common import ModemPins
-
         return ModemPins()
 
     def flush(self) -> None:
@@ -121,7 +119,7 @@ class ESPHomeZigbeeSerial(BaseSerial):
         del self._read_buffer[:n]
         return n
 
-    def close(self) -> None:
+    def _close(self) -> None:
         """Close the serial port."""
         if self._unsub is not None:
             self._unsub()

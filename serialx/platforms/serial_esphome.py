@@ -88,7 +88,7 @@ class ESPHomeSerial(BaseSerial):
             self._read_buffer.extend(msg.data)
             self._read_event.set()
 
-    def open(self) -> None:
+    def _open(self) -> None:
         """Open the serial port."""
         asyncio.run(self._async_open())
         assert self.api is not None
@@ -108,24 +108,17 @@ class ESPHomeSerial(BaseSerial):
         """Subscribe serial proxy streaming for this instance if supported."""
         if self.api is None or self._instance_subscribed:
             return
-        subscribe = getattr(self.api, "serial_proxy_subscribe", None)
-        if subscribe is None:
-            return
-        subscribe(self.instance)
+        self.api.serial_proxy_subscribe(self.instance)
         self._instance_subscribed = True
 
     def _unsubscribe_instance(self) -> None:
         """Unsubscribe serial proxy streaming for this instance if supported."""
         if self.api is None or not self._instance_subscribed:
             return
-        unsubscribe = getattr(self.api, "serial_proxy_unsubscribe", None)
-        if unsubscribe is None:
-            self._instance_subscribed = False
-            return
-        unsubscribe(self.instance)
+        self.api.serial_proxy_unsubscribe(self.instance)
         self._instance_subscribed = False
 
-    def configure_port(self) -> None:
+    def _configure_port(self) -> None:
         """Configure the serial port settings."""
         assert self.api is not None
         self.api.serial_proxy_configure(
@@ -158,11 +151,8 @@ class ESPHomeSerial(BaseSerial):
 
     def flush(self) -> None:
         """Flush write buffers."""
-        asyncio.run(self._async_flush())
-
-    async def _async_flush(self) -> None:
         assert self.api is not None
-        await self.api.serial_proxy_flush(instance=self.instance)
+        self.api.serial_proxy_flush(instance=self.instance)
 
     def write(self, b: Buffer) -> int:
         """Write bytes to serial port."""
@@ -186,7 +176,7 @@ class ESPHomeSerial(BaseSerial):
         del self._read_buffer[:n]
         return n
 
-    def close(self) -> None:
+    def _close(self) -> None:
         """Close the serial port."""
         if self._unsub is not None:
             self._unsub()
@@ -279,7 +269,9 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     async def flush(self) -> None:
         """Flush write buffers."""
-        await self._serial._async_flush()
+        assert self._serial is not None
+        # TODO: this needs to block
+        self._serial.flush()
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
