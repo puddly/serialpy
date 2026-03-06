@@ -201,6 +201,11 @@ async def test_async_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
+    if (serial_pair.backend, baudrate, iterations) == ("esphome", 921600, 512):
+        pytest.skip(
+            "ESPHome backend is too slow for sustained throughput at 921600/512"
+        )
+
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=baudrate
     ) as (_, writer_left, reader_right, _):

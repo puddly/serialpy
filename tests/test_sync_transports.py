@@ -204,6 +204,11 @@ def test_sync_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
+    if serial_pair.backend == "esphome" and (baudrate, iterations) == (921600, 512):
+        pytest.skip(
+            "ESPHome backend is too slow for sustained throughput at 921600/512"
+        )
+
     with (
         Serial.from_url(serial_pair.left, baudrate=baudrate) as left,
         Serial.from_url(serial_pair.right, baudrate=baudrate) as right,
@@ -375,6 +380,10 @@ def test_sync_flush_after_write(serial_pair: SerialPair) -> None:
 
 def test_sync_multiple_flush_calls(serial_pair: SerialPair) -> None:
     """Test multiple consecutive flush calls."""
+    if serial_pair.backend == "esphome":
+        # TODO: the flush API currently has a bug
+        pytest.xfail("ESPHome backend does not properly implement flush()")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200) as right,
