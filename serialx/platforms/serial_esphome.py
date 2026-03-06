@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Buffer, Callable
+from collections.abc import Callable
 from enum import IntFlag
 import logging
 from pathlib import Path
 import sys
 import urllib.parse
+
+from typing_extensions import Buffer
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
