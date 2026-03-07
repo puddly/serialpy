@@ -29,8 +29,8 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
-    "aioesphomeapi",
-    "esphome",
+    "aioesphomeapi @ git+https://github.com/esphome/aioesphomeapi.git@20260210-serial-proxy",
+    "esphome @ git+https://github.com/esphome/esphome@20260210-serial-proxy",
 ]
 
 [tool.setuptools.packages.find]

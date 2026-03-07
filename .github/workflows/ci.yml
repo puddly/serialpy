@@ -134,7 +134,7 @@ jobs:
         run: |
           . venv/bin/activate
           pip install pytest-github-actions-annotate-failures
-      - name: Compile ESPHome host daemon fixture
+      - name: Compile ESPHome host daemon
         env:
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: python
         run: |
