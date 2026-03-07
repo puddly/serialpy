@@ -138,6 +138,7 @@ jobs:
           . venv/bin/activate
           uv pip install pytest-github-actions-annotate-failures
       - name: Compile ESPHome host daemon
+        if: matrix.python-version != '3.10'
         env:
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: python
         run: |

@@ -29,8 +29,8 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
-    "esphome",
-    "aioesphomeapi",
+    "esphome; python_version >= '3.11'",
+    "aioesphomeapi; python_version >= '3.11'",
 ]
 
 [tool.setuptools.packages.find]

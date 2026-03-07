@@ -3,7 +3,6 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
-import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -19,7 +18,6 @@ import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
-AIOESPHOMEAPI_AVAILABLE = importlib.util.find_spec("aioesphomeapi") is not None
 _SERIALX_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM = (
     _SERIALX_ROOT

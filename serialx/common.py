@@ -537,10 +537,16 @@ def get_serial_classes(
 
         return SocketSerial, SocketSerialTransport
     elif parsed_path.scheme == "esphome":
-        from .platforms.serial_esphome import (  # noqa: PLC0415
-            ESPHomeSerial,
-            ESPHomeSerialTransport,
-        )
+        try:
+            from .platforms.serial_esphome import (  # noqa: PLC0415
+                ESPHomeSerial,
+                ESPHomeSerialTransport,
+            )
+        except ImportError as exc:
+            raise RuntimeError(
+                "ESPHome serial transport requires extra dependencies."
+                " Install with `pip install serialx[esphome]`"
+            ) from exc
 
         return ESPHomeSerial, ESPHomeSerialTransport
     else:
