@@ -143,8 +143,6 @@ jobs:
           PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION: python
         run: |
           . venv/bin/activate
-          uv pip install 'git+https://github.com/esphome/aioesphomeapi.git@20260210-serial-proxy'
-          # uv pip install --no-deps 'git+https://github.com/esphome/esphome@20260210-serial-proxy'
           uv pip install --no-deps 'git+https://github.com/esphome/esphome@db0a841496caf9ff98188ec965e0febea4efa2ed'
           esphome compile tests/esphome/host_daemon.yaml
       - name: Run pytest

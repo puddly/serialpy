@@ -20,7 +20,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 esphome = [
-    "aioesphomeapi",
+    "aioesphomeapi>=44.3.1",
 ]
 dev = [
     "ruff",
@@ -30,7 +30,7 @@ dev = [
     "pytest-timeout",
     "pytest-xdist",
     "esphome; python_version >= '3.11'",
-    "aioesphomeapi; python_version >= '3.11'",
+    "aioesphomeapi>=44.3.1; python_version >= '3.11'",
 ]
 
 [tool.setuptools.packages.find]
