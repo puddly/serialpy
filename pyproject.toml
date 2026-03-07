@@ -20,7 +20,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 esphome = [
-    "aioesphomeapi @ git+https://github.com/esphome/aioesphomeapi.git@20260210-serial-proxy",
+    "aioesphomeapi",
 ]
 dev = [
     "ruff",
@@ -29,8 +29,8 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
-    "aioesphomeapi @ git+https://github.com/esphome/aioesphomeapi.git@20260210-serial-proxy",
-    "esphome @ git+https://github.com/esphome/esphome@20260210-serial-proxy",
+    "esphome",
+    "aioesphomeapi",
 ]
 
 [tool.setuptools.packages.find]
