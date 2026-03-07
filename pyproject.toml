@@ -29,8 +29,7 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
-    "cython",
-    "esphome; python_version >= '3.11'",
+    "esphome; python_version >= '3.11' and platform_system != 'Darwin'",
     "aioesphomeapi>=44.3.1; python_version >= '3.11'",
 ]
 
