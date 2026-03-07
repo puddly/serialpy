@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from enum import IntFlag
 import logging
 from pathlib import Path
 import sys
+import threading
+from typing import Any, TypeVar
 import urllib.parse
 
 from typing_extensions import Buffer
@@ -29,6 +31,8 @@ from serialx.common import (
     PinState,
     StopBits,
 )
+
+_T = TypeVar("_T")
 
 LOGGER = logging.getLogger(__name__)
 
@@ -91,7 +95,10 @@ class ESPHomeSerial(BaseSerial):
         if self._stopbits not in STOP_BITS_MAP:
             raise UnsupportedSetting(f"Unsupported stop bits: {self._stopbits}")
 
-        self._loop = loop if loop is not None else asyncio.new_event_loop()
+        # This API is used by both the sync API and the async API. The sync API manages
+        # a temporary event loop while the async one passes through its own.
+        self._loop = loop
+        self._loop_thread: threading.Thread | None = None
 
         parsed = urllib.parse.urlparse(str(self._path))
         params = urllib.parse.parse_qs(parsed.query)
@@ -113,8 +120,10 @@ class ESPHomeSerial(BaseSerial):
 
         self._last_line_state = LineStateFlag(0)
 
-    def _loop_factory(self) -> asyncio.AbstractEventLoop:
-        return self._loop
+    def _call_on_loop(self, coro: Coroutine[Any, Any, _T]) -> _T:
+        """Dispatch a coroutine to the event loop thread and block."""
+        assert self._loop is not None
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 
     def _on_data(self, msg: SerialProxyDataReceived) -> None:
         if msg.instance == self.instance:
@@ -123,10 +132,13 @@ class ESPHomeSerial(BaseSerial):
 
     def _open(self) -> None:
         """Open the serial port."""
-        self._loop.run_until_complete(self._async_open())
-        assert self._api is not None
-        self._subscribe_instance()
-        self._unsub = self._api.subscribe_serial_proxy_data(self._on_data)
+        self._loop = asyncio.new_event_loop()
+        self._read_event = asyncio.Event()
+        self._loop_thread = threading.Thread(target=self._loop.run_forever)
+        self._loop_thread.start()
+
+        self._call_on_loop(self._async_open())
+        self._call_on_loop(self._async_subscribe())
 
     async def _async_open(self) -> None:
         self._api = aioesphomeapi.APIClient(
@@ -136,6 +148,11 @@ class ESPHomeSerial(BaseSerial):
             noise_psk=self._noise_psk,
         )
         await self._api.connect(login=True)
+
+    async def _async_subscribe(self) -> None:
+        assert self._api is not None
+        self._subscribe_instance()
+        self._unsub = self._api.subscribe_serial_proxy_data(self._on_data)
 
     def _subscribe_instance(self) -> None:
         """Subscribe serial proxy streaming for this instance if supported."""
@@ -184,7 +201,7 @@ class ESPHomeSerial(BaseSerial):
         )
 
     def _get_modem_pins(self) -> ModemPins:
-        return self._loop.run_until_complete(self._async_get_modem_pins())
+        return self._call_on_loop(self._async_get_modem_pins())
 
     async def _async_get_modem_pins(self) -> ModemPins:
         assert self._api is not None
@@ -211,9 +228,7 @@ class ESPHomeSerial(BaseSerial):
     def readinto(self, b: Buffer) -> int:
         """Read bytes from serial port into buffer."""
         try:
-            return self._loop.run_until_complete(
-                self._async_readinto(b, self._read_timeout)
-            )
+            return self._call_on_loop(self._async_readinto(b, self._read_timeout))
         except TimeoutError:
             return 0
 
@@ -237,8 +252,15 @@ class ESPHomeSerial(BaseSerial):
 
         if self._api is not None:
             self._unsubscribe_instance()
-            self._loop.run_until_complete(self._api.disconnect())
+            self._call_on_loop(self._api.disconnect())
             self._api = None
+
+        if self._loop_thread is not None:
+            assert self._loop is not None
+            self._loop.call_soon_threadsafe(self._loop.stop)
+            self._loop_thread.join()
+            self._loop.close()
+            self._loop_thread = None
 
 
 class ESPHomeSerialTransport(BaseSerialTransport):
@@ -309,8 +331,6 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     async def flush(self) -> None:
         """Flush write buffers."""
-        assert self._serial is not None
-        # TODO: this needs to block
         self._serial.flush()
 
     async def get_modem_pins(self) -> ModemPins:
