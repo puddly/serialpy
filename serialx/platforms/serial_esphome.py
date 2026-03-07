@@ -91,7 +91,7 @@ class ESPHomeSerial(BaseSerial):
         if self._stopbits not in STOP_BITS_MAP:
             raise UnsupportedSetting(f"Unsupported stop bits: {self._stopbits}")
 
-        self._loop = asyncio.get_event_loop() if loop is None else loop
+        self._loop = loop if loop is not None else asyncio.new_event_loop()
 
         parsed = urllib.parse.urlparse(str(self._path))
         params = urllib.parse.parse_qs(parsed.query)
