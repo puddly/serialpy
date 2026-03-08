@@ -365,6 +365,10 @@ def test_sync_open_close_cycles(serial_pair: SerialPair) -> None:
 
 def test_sync_flush_after_write(serial_pair: SerialPair) -> None:
     """Test flushing after write operation."""
+    if serial_pair.backend == "esphome":
+        # TODO: Remove skip when ESPHome sync serial_proxy flush is implemented upstream.
+        pytest.skip("ESPHome backend does not properly implement flush()")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200) as right,
