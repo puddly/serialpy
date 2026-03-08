@@ -41,7 +41,7 @@ class DarwinSerial(PosixSerial):
 
     @property
     def _has_non_posix_baudrate(self) -> bool:
-        return hasattr(termios, f"B{self._baudrate}")
+        return not hasattr(termios, f"B{self._baudrate}")
 
     def _set_non_posix_baudrate(self, baudrate: int) -> None:
         """Set the baudrate of the serial port."""
