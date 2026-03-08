@@ -206,10 +206,14 @@ class ESPHomeSerial(BaseSerial):
             rts=PinState.convert(rsp.line_states & LineStateFlag.RTS),
         )
 
-    def flush(self) -> None:
+    async def _async_flush(self) -> None:
         """Flush write buffers."""
         assert self._api is not None
-        self._api.serial_proxy_flush(instance=self.instance)
+        await self._api.serial_proxy_flush(instance=self.instance)
+
+    def flush(self) -> None:
+        """Flush write buffers."""
+        self._call_on_loop(self._async_flush())
 
     def write(self, b: Buffer) -> int:
         """Write bytes to serial port."""
@@ -324,7 +328,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     async def flush(self) -> None:
         """Flush write buffers."""
-        self._serial.flush()
+        await self._serial._async_flush()
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""

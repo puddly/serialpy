@@ -20,7 +20,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 esphome = [
-    "aioesphomeapi>=44.3.1",
+    "git+https://github.com/puddly/aioesphomeapi@puddly/fix-serial-proxy-request-response",
 ]
 dev = [
     "ruff",
@@ -29,7 +29,7 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
-    "aioesphomeapi>=44.3.1; python_version >= '3.11'",
+    "git+https://github.com/puddly/aioesphomeapi@puddly/fix-serial-proxy-request-response; python_version >= '3.11'",
 ]
 
 [tool.setuptools.packages.find]

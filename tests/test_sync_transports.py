@@ -365,10 +365,6 @@ def test_sync_open_close_cycles(serial_pair: SerialPair) -> None:
 
 def test_sync_flush_after_write(serial_pair: SerialPair) -> None:
     """Test flushing after write operation."""
-    if serial_pair.backend == "esphome":
-        # TODO: Remove skip when ESPHome sync serial_proxy flush is implemented upstream.
-        pytest.skip("ESPHome backend does not properly implement flush()")
-
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200) as right,
@@ -384,10 +380,6 @@ def test_sync_flush_after_write(serial_pair: SerialPair) -> None:
 
 def test_sync_multiple_flush_calls(serial_pair: SerialPair) -> None:
     """Test multiple consecutive flush calls."""
-    if serial_pair.backend == "esphome":
-        # TODO: the flush API currently has a bug
-        pytest.xfail("ESPHome backend does not properly implement flush()")
-
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200) as right,
@@ -622,8 +614,6 @@ def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
 
 def test_fast_open_close(serial_pair: SerialPair) -> None:
     """Test quickly opening and closing a port."""
-    if serial_pair.backend == "esphome":
-        pytest.skip("ESPHome backend does not support flushing yet")
 
     message = b"Fast write and close test"
 
