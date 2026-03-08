@@ -285,10 +285,34 @@ jobs:
           include-hidden-files: true
           path: .coverage
 
+  pytest-freebsd:
+    runs-on: ubuntu-latest
+    name: Run tests (FreeBSD)
+    steps:
+      - name: Check out code from GitHub
+        uses: actions/checkout@v4
+      - name: Run tests on FreeBSD
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg install -y python3 socat git
+          run: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -e .[dev] pytest-cov
+            pytest --timeout=20 --cov=serialx tests
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-freebsd-latest
+          include-hidden-files: true
+          path: .coverage
+
   coverage:
     name: Process test coverage
     runs-on: ubuntu-latest
-    needs: [pytest, pytest-macos, pytest-windows]
+    needs: [pytest, pytest-macos, pytest-windows, pytest-freebsd]
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v4
