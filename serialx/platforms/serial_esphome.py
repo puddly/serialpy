@@ -7,20 +7,13 @@ from collections.abc import Callable, Coroutine
 from enum import IntFlag
 import logging
 from pathlib import Path
-import sys
 import threading
 from typing import Any, TypeVar
 import urllib.parse
 
-from typing_extensions import Buffer
-
-if sys.version_info >= (3, 11):
-    from asyncio import timeout as asyncio_timeout
-else:
-    from async_timeout import timeout as asyncio_timeout
-
 import aioesphomeapi
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
+from typing_extensions import Buffer
 
 from serialx import UnsupportedSetting
 from serialx.common import (
@@ -233,7 +226,7 @@ class ESPHomeSerial(BaseSerial):
             return 0
 
     async def _async_readinto(self, b: Buffer, timeout: float | None) -> int:
-        async with asyncio_timeout(timeout):
+        async with asyncio.timeout(timeout):
             while not self._read_buffer:
                 self._read_event.clear()
                 await self._read_event.wait()
