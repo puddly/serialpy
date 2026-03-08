@@ -26,9 +26,6 @@ external_components:
   - source:
       type: local
       path: external_components
-  - source: github://pr#14573
-    components: [uart]
-    refresh: 1h
 
 serialx_host_overrides:
   left_uart_id: proxy_uart_left

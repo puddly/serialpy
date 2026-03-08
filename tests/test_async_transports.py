@@ -501,10 +501,6 @@ async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> N
 
 async def test_async_flush(serial_pair: SerialPair) -> None:
     """Test flushing async transport write buffers."""
-    if serial_pair.backend == "esphome":
-        # TODO: Remove xfail when ESPHome async serial_proxy flush is implemented upstream.
-        pytest.xfail("ESPHome async flush is not implemented yet")
-
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (_, writer_left, reader_right, _):
