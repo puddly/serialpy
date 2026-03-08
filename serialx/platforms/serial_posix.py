@@ -20,8 +20,15 @@ else:
 
 from typing_extensions import Buffer
 
-from .. import UnsupportedSetting
-from ..common import BaseSerial, ModemPins, Parity, PinState, SerialPortInfo, StopBits
+from ..common import (
+    BaseSerial,
+    ModemPins,
+    Parity,
+    PinState,
+    SerialPortInfo,
+    StopBits,
+    UnsupportedSetting,
+)
 from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
