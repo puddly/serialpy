@@ -13,8 +13,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from serialx.common import SerialPortInfo
-from serialx.platforms import serial_posix
-from serialx.platforms.serial_posix import posix_list_serial_ports
+from serialx.platforms import serial_linux
+from serialx.platforms.serial_linux import linux_list_serial_ports
 
 
 def create_usb_serial_device(
@@ -293,8 +293,8 @@ def fake_sysfs(tmp_path):
     )
 
     with (
-        patch.object(serial_posix, "SYS_ROOT", sys_root),
-        patch.object(serial_posix, "DEV_ROOT", dev_root),
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
     ):
         yield sys_root, dev_root
 
@@ -303,7 +303,7 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
     """Test listing all serial ports on a system mimicking test-yellow-core."""
     sys_root, dev_root = fake_sysfs
 
-    ports = posix_list_serial_ports()
+    ports = linux_list_serial_ports()
     assert len(ports) == 9
 
     ports_by_name = {Path(p.resolved_device).name: p for p in ports}

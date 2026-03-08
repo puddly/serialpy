@@ -239,6 +239,8 @@ def test_sync_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
     if serial_pair.backend == "esphome" and parity in (Parity.MARK, Parity.SPACE):
         pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
+    if sys.platform == "darwin" and parity in (Parity.MARK, Parity.SPACE):
+        pytest.skip("MARK/SPACE parity not supported on macOS")
 
     with Serial.from_url(serial_pair.left, baudrate=115200, parity=parity) as serial:
         assert serial.parity == parity
@@ -264,6 +266,8 @@ def test_sync_valid_stopbits(
     """Test that valid stopbits settings are accepted."""
     if serial_pair.backend == "esphome" and expected is StopBits.ONE_POINT_FIVE:
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
+    if sys.platform in ("linux", "darwin") and expected is StopBits.ONE_POINT_FIVE:
+        pytest.skip("1.5 stop bits not supported on POSIX")
 
     with Serial.from_url(
         serial_pair.left, baudrate=115200, stopbits=stopbits
