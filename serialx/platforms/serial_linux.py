@@ -104,8 +104,8 @@ class LinuxSerial(PosixSerial):
             ) from exc
 
         termios2_speed_struct = Termios2SpeedStruct.from_buffer(buffer, offset)
-        termios2_speed_struct.c_ispeed = self._baudrate
-        termios2_speed_struct.c_ospeed = self._baudrate
+        termios2_speed_struct.c_ispeed = baudrate
+        termios2_speed_struct.c_ospeed = baudrate
 
         # The ctypes structures mutate the buffer in place
         LOGGER.debug(
