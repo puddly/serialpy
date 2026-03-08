@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-import array
 import asyncio
-import ctypes
 import errno
 import fcntl
 import logging
 import os
-from pathlib import Path
 import select
 import sys
 import termios
 import time
+from typing import NamedTuple
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
@@ -22,13 +20,11 @@ else:
 
 from typing_extensions import Buffer
 
+from .. import UnsupportedSetting
 from ..common import BaseSerial, ModemPins, Parity, PinState, SerialPortInfo, StopBits
 from ..descriptor_transport import DescriptorTransport
 
 LOGGER = logging.getLogger(__name__)
-
-SYS_ROOT = Path("/sys")
-DEV_ROOT = Path("/dev")
 
 FLUSH_TIMEOUT = 10.0
 
@@ -36,23 +32,6 @@ FLUSH_TIMEOUT = 10.0
 # `TCIOFLUSH`. Otherwise, the flush operation does not work reliably and stale data may
 # be read.
 AFTER_OPEN_DELAY = 0.01
-
-ASYNC_LOW_LATENCY = 1 << 13
-CMSPAR = 0o10000000000
-TCGETS = 0x5401
-TCGETS2 = 0x802C542A
-TCSETS2 = 0x402C542B
-
-TIOCGSERIAL = getattr(termios, "TIOCGSERIAL", None)
-TIOCSSERIAL = getattr(termios, "TIOCSSERIAL", None)
-CBAUD = getattr(termios, "CBAUD", 0o00010017)
-CBAUDEX = getattr(termios, "CBAUDEX", 0o00010000)
-CRTSCTS = getattr(termios, "CRTSCTS", getattr(termios, "CNEW_RTSCTS", None))
-
-# When we need to set a non-POSIX baudrate, we set the baudrates to a known default and
-# then override
-NON_POSIX_FALLBACK_BAUDRATE = 115200
-NON_POSIX_FALLBACK_BAUDRATE_CONST = termios.B115200
 
 MODEM_BIT_MAPPING = {
     "le": termios.TIOCM_LE,
@@ -67,34 +46,18 @@ MODEM_BIT_MAPPING = {
 }
 assert MODEM_BIT_MAPPING.keys() == ModemPins.__annotations__.keys()
 
-POSIX_CHARACTER_SIZE_MAPPING = {
-    5: termios.CS5,
-    6: termios.CS6,
-    7: termios.CS7,
-    8: termios.CS8,
-}
 
+class TcsetattrFlags(NamedTuple):
+    """Flags for `termios.tcsetattr`."""
 
-class TermiosStruct(ctypes.Structure):
-    """The `termios` struct."""
-
-    _fields_ = [
-        ("c_iflag", ctypes.c_uint32),
-        ("c_oflag", ctypes.c_uint32),
-        ("c_cflag", ctypes.c_uint32),
-        ("c_lflag", ctypes.c_uint32),
-        ("c_line", ctypes.c_uint8),
-        ("c_cc", ctypes.c_uint8 * 64),  # NCCS is usually 19 bytes, let's be safe
-    ]
-
-
-class Termios2SpeedStruct(ctypes.Structure):
-    """The extra `c_ispeed` and `c_ospeed` members at the end of `struct termios2`."""
-
-    _fields_ = [
-        ("c_ispeed", ctypes.c_uint32),
-        ("c_ospeed", ctypes.c_uint32),
-    ]
+    iflag: int
+    oflag: int
+    cflag: int
+    lflag: int
+    ispeed: int
+    ospeed: int
+    cc_vmin: int
+    cc_vtime: int
 
 
 def modem_pins_mask_of_value(modem_pins: ModemPins, mask: PinState) -> int:
@@ -127,7 +90,6 @@ class PosixSerial(BaseSerial):
         self,
         *args,
         fileno: int | None = None,
-        low_latency: bool = True,
         inter_byte_timeout: float = 0.01,
         min_read_size: int = 1,
         **kwargs,
@@ -135,7 +97,6 @@ class PosixSerial(BaseSerial):
         """Initialize POSIX serial port."""
         super().__init__(*args, **kwargs)
         self._fileno: int | None = fileno
-        self._low_latency: bool = low_latency
         self._inter_byte_timeout = inter_byte_timeout
         self._min_read_size = min_read_size
 
@@ -175,57 +136,68 @@ class PosixSerial(BaseSerial):
         assert self._fileno is not None
         fcntl.flock(self._fileno, fcntl.LOCK_UN)
 
-    def _set_non_posix_baudrate(self, baudrate: int) -> None:
-        """Set the baudrate of the serial port, must be called after `tcsetattr`."""
-        assert self._fileno is not None
+    def _build_parity_flags(self) -> int:
+        if self._parity == Parity.NONE:
+            return 0
+        elif self._parity == Parity.EVEN:
+            return termios.PARENB
+        elif self._parity == Parity.ODD:
+            return termios.PARENB | termios.PARODD
+        else:
+            raise UnsupportedSetting(f"Unsupported parity {self._parity}")
 
-        # The termios2 struct is going to be smaller than the sum of these two objects
-        buffer = bytearray(
-            ctypes.sizeof(TermiosStruct) + ctypes.sizeof(Termios2SpeedStruct)
-        )
-        fcntl.ioctl(self._fileno, TCGETS2, buffer)
+    def _build_character_size_flags(self) -> int:
+        if self._byte_size == 5:
+            return termios.CS5
+        elif self._byte_size == 6:
+            return termios.CS6
+        elif self._byte_size == 7:
+            return termios.CS7
+        elif self._byte_size == 8:
+            return termios.CS8
+        else:
+            raise UnsupportedSetting(
+                f"Unsupported byte size {self._byte_size}, must be 5, 6, 7, or 8"
+            )
 
-        # The POSIX baudrates are stored in the lower bits of `c_cflag`. We clear them.
-        termios_struct = TermiosStruct.from_buffer(buffer)
-        termios_struct.c_cflag &= ~CBAUD
-        termios_struct.c_cflag |= CBAUDEX
+    def _build_stopbits_flags(self) -> int:
+        if self._stopbits == StopBits.ONE:
+            return 0
+        elif self._stopbits == StopBits.TWO:
+            return termios.CSTOPB
+        elif self._stopbits == StopBits.ONE_POINT_FIVE:
+            raise UnsupportedSetting(
+                "1.5 stop bits not supported on POSIX, using 1 stop bit"
+            )
+        else:
+            raise UnsupportedSetting(f"Unsupported stop bits {self._stopbits}")
 
-        # `termios2` extends `termios` with two extra fields. The problem is that these
-        # fields appear *after* the `c_cc` array, which has a length defined by `NCCS`,
-        # a constant that we do not have access to. We overcome this by searching for
-        # the speed fields directly, since we set them to a known value earlier.
-        try:
-            temp_speed_buffer = bytearray(ctypes.sizeof(Termios2SpeedStruct))
-            temp_speed_struct = Termios2SpeedStruct.from_buffer(temp_speed_buffer)
-            temp_speed_struct.c_ispeed = NON_POSIX_FALLBACK_BAUDRATE
-            temp_speed_struct.c_ospeed = NON_POSIX_FALLBACK_BAUDRATE
-
-            offset = buffer.index(temp_speed_buffer)
-        except ValueError as exc:
-            raise RuntimeError(
-                f"Could not determine offset of termios2 speed fields: {buffer.hex()}"
-            ) from exc
-
-        termios2_speed_struct = Termios2SpeedStruct.from_buffer(buffer, offset)
-        termios2_speed_struct.c_ispeed = self._baudrate
-        termios2_speed_struct.c_ospeed = self._baudrate
-
-        # The ctypes structures mutate the buffer in place
-        LOGGER.debug(
-            "Writing termios2 struct (c_ispeed offset %d bytes): %r",
-            offset,
-            buffer.hex(),
-        )
-        fcntl.ioctl(self._fileno, TCSETS2, buffer)
-
-    def _configure_port(self) -> None:  # noqa: C901
-        """Configure the serial port settings."""
-        LOGGER.debug("Configuring serial port %r", self._path)
-
-        if self._fileno is None:
-            raise ValueError("Cannot configure, serial port is not open")
-
+    def _build_flow_control_flags(self) -> tuple[int, int]:
+        iflag = 0x00000000
         cflag = 0x00000000
+
+        if self._xonxoff:
+            iflag |= termios.IXON | termios.IXOFF | termios.IXANY
+
+        return (iflag, cflag)
+
+    def _build_ispeed(self) -> int:
+        try:
+            return getattr(termios, f"B{self._baudrate}")
+        except AttributeError as exc:
+            raise UnsupportedSetting(f"Unsupported baudrate {self._baudrate}") from exc
+
+    def _build_ospeed(self) -> int:
+        try:
+            return getattr(termios, f"B{self._baudrate}")
+        except AttributeError as exc:
+            raise UnsupportedSetting(f"Unsupported baudrate {self._baudrate}") from exc
+
+    def _build_tcsetattr_flags(self) -> TcsetattrFlags:
+        iflag = 0x00000000
+        oflag = 0x00000000
+        cflag = 0x00000000
+        lflag = 0x00000000
 
         # Enable receiver
         cflag |= termios.CREAD
@@ -237,59 +209,19 @@ class PosixSerial(BaseSerial):
         if self._rtsdtr_on_close is PinState.UNDEFINED:
             pass
         elif self._rtsdtr_on_close is PinState.HIGH:
-            LOGGER.warning("POSIX only supports setting RTS/DTR to LOW on close")
+            raise UnsupportedSetting(
+                "POSIX only supports setting RTS/DTR to LOW on close"
+            )
         else:
             cflag |= termios.HUPCL
 
-        # Character size
-        if self._byte_size == 5:
-            cflag |= termios.CS5
-        elif self._byte_size == 6:
-            cflag |= termios.CS6
-        elif self._byte_size == 7:
-            cflag |= termios.CS7
-        elif self._byte_size == 8:
-            cflag |= termios.CS8
-        else:
-            raise ValueError(
-                f"Unsupported byte size {self._byte_size}, must be 5, 6, 7, or 8"
-            )
+        cflag |= self._build_character_size_flags()
+        cflag |= self._build_parity_flags()
+        cflag |= self._build_stopbits_flags()
 
-        # Parity
-        if self._parity == Parity.NONE:
-            pass
-        elif self._parity == Parity.EVEN:
-            cflag |= termios.PARENB
-        elif self._parity == Parity.ODD:
-            cflag |= termios.PARENB | termios.PARODD
-        elif self._parity == Parity.MARK:
-            cflag |= termios.PARENB | termios.PARODD | CMSPAR
-        elif self._parity == Parity.SPACE:
-            cflag |= termios.PARENB | CMSPAR
-
-        # Stop bits
-        if self._stopbits == StopBits.TWO:
-            cflag |= termios.CSTOPB
-        elif self._stopbits == StopBits.ONE_POINT_FIVE:
-            LOGGER.warning("1.5 stop bits not supported on POSIX, using 1 stop bit")
-        elif self._stopbits == StopBits.ONE:
-            pass
-
-        # Hardware flow control
-        if self._rtscts:
-            if CRTSCTS is None:
-                LOGGER.warning("RTS/CTS flow control not supported on this platform")
-            else:
-                cflag |= CRTSCTS
-
-        iflag = 0x00000000
-
-        # Software flow control
-        if self._xonxoff:
-            iflag |= termios.IXON | termios.IXOFF | termios.IXANY
-
-        oflag = 0x00000000
-        lflag = 0x00000000
+        fc_iflag, fc_cflag = self._build_flow_control_flags()
+        cflag |= fc_cflag
+        iflag |= fc_iflag
 
         # Only emit reads if VMIN characters have been read, after no more data comes in
         # for VTIME seconds
@@ -306,17 +238,33 @@ class PosixSerial(BaseSerial):
                 f"VTIME must be in range 0-255 (inter_byte_timeout={self._inter_byte_timeout})"
             )
 
-        try:
-            # Set baudrate
-            ispeed = getattr(termios, f"B{self._baudrate}")
-            ospeed = getattr(termios, f"B{self._baudrate}")
-            non_posix_baudrate = False
-        except AttributeError:
-            # Non-POSIX baudrate, use defaults for `tcsetattr` and then override
-            ispeed = NON_POSIX_FALLBACK_BAUDRATE_CONST
-            ospeed = NON_POSIX_FALLBACK_BAUDRATE_CONST
-            non_posix_baudrate = True
+        ispeed = self._build_ispeed()
+        ospeed = self._build_ospeed()
 
+        return TcsetattrFlags(
+            iflag=iflag,
+            oflag=oflag,
+            cflag=cflag,
+            lflag=lflag,
+            ispeed=ispeed,
+            ospeed=ospeed,
+            cc_vmin=vmin,
+            cc_vtime=vtime,
+        )
+
+    def _after_configure_port(self) -> None:
+        pass
+
+    def _configure_port(self) -> None:
+        """Configure the serial port settings."""
+        LOGGER.debug("Configuring serial port %r", self._path)
+
+        if self._fileno is None:
+            raise ValueError("Cannot configure, serial port is not open")
+
+        tcsetattr = self._build_tcsetattr_flags()
+
+        # We need to overwrite VMIN and VTIME in the CC array
         (
             _iflag,
             _oflag,
@@ -327,57 +275,32 @@ class PosixSerial(BaseSerial):
             cc,
         ) = termios.tcgetattr(self._fileno)
 
-        cc[termios.VMIN] = vmin
-        cc[termios.VTIME] = vtime
+        cc[termios.VMIN] = tcsetattr.cc_vmin
+        cc[termios.VTIME] = tcsetattr.cc_vtime
 
-        LOGGER.debug(
-            "Configuring serial port: %r",
-            [iflag, oflag, cflag, lflag, ispeed, ospeed, cc],
-        )
+        LOGGER.debug("Configuring serial port: %r + cc=%r", tcsetattr, cc)
 
         # Finally, set up the serial port
         termios.tcsetattr(
             self._fileno,
             termios.TCSANOW,  # TODO: should we use TCSADRAIN or TCSAFLUSH instead?
-            [iflag, oflag, cflag, lflag, ispeed, ospeed, cc],
+            [
+                tcsetattr.iflag,
+                tcsetattr.oflag,
+                tcsetattr.cflag,
+                tcsetattr.lflag,
+                tcsetattr.ispeed,
+                tcsetattr.ospeed,
+                cc,
+            ],
         )
 
-        if non_posix_baudrate:
-            LOGGER.debug("Setting non-POSIX baudrate %d", self._baudrate)
-            self._set_non_posix_baudrate(self._baudrate)
-
-        if TIOCSSERIAL is not None:
-            try:
-                self._set_low_latency(self._low_latency)
-            except OSError as exc:
-                if exc.errno in (errno.ENOTTY, errno.EOPNOTSUPP):
-                    LOGGER.debug("Device does not support setting low latency")
-                else:
-                    raise
+        self._after_configure_port()
 
         self.set_modem_pins(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
 
         # Flush input and output buffers to discard stale data
         termios.tcflush(self._fileno, termios.TCIOFLUSH)
-
-    def _set_low_latency(self, value: bool) -> None:
-        """Set low latency mode."""
-        assert self._fileno is not None
-        assert TIOCGSERIAL is not None
-        assert TIOCSSERIAL is not None
-
-        LOGGER.debug("Setting low latency mode: %r", value)
-
-        buffer = array.array("i", [0x00000000] * 19 * 8)
-
-        fcntl.ioctl(self._fileno, TIOCGSERIAL, buffer)
-
-        if self._low_latency:
-            buffer[4] |= ASYNC_LOW_LATENCY
-        else:
-            buffer[4] &= ~ASYNC_LOW_LATENCY
-
-        fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
 
     def _get_modem_pins(self) -> ModemPins:
         """Get current modem control bits."""
@@ -557,88 +480,5 @@ class PosixSerialTransport(DescriptorTransport):
 
 
 def posix_list_serial_ports() -> list[SerialPortInfo]:
-    """List serial ports on Linux."""
-    by_id_symlinks = {}
-    by_id_path = DEV_ROOT / "serial/by-id"
-
-    if by_id_path.exists():
-        for symlink in by_id_path.iterdir():
-            by_id_symlinks[symlink.resolve()] = symlink
-
-    results = []
-
-    for path in (SYS_ROOT / "class/tty").iterdir():
-        if not path.name.startswith("tty"):
-            continue
-
-        tty_device = path / "device"
-        if not (tty_device / "driver").exists():
-            continue
-
-        device = DEV_ROOT / path.name
-        resolved = tty_device.resolve()
-        subsystem = (resolved / "subsystem").resolve().name
-        unique_device = by_id_symlinks.get(device, device)
-
-        if subsystem == "usb-serial":
-            # USB-serial chips
-            usb_interface = resolved.parent
-            usb_device = usb_interface.parent
-            interface_file = usb_interface / "interface"
-            info = SerialPortInfo(
-                device=unique_device,
-                resolved_device=device,
-                vid=int((usb_device / "idVendor").read_text(), 16),
-                pid=int((usb_device / "idProduct").read_text(), 16),
-                serial_number=(usb_device / "serial").read_text()[:-1],
-                manufacturer=(usb_device / "manufacturer").read_text()[:-1],
-                product=(usb_device / "product").read_text()[:-1],
-                bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                interface_description=(
-                    interface_file.read_text()[:-1] if interface_file.exists() else None
-                ),
-                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
-            )
-        elif subsystem == "usb":
-            # CDC ACM devices
-            usb_interface = resolved
-            usb_device = usb_interface.parent
-            interface_file = usb_interface / "interface"
-            info = SerialPortInfo(
-                device=unique_device,
-                resolved_device=device,
-                vid=int((usb_device / "idVendor").read_text(), 16),
-                pid=int((usb_device / "idProduct").read_text(), 16),
-                serial_number=(usb_device / "serial").read_text()[:-1],
-                manufacturer=(usb_device / "manufacturer").read_text()[:-1],
-                product=(usb_device / "product").read_text()[:-1],
-                bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                interface_description=(
-                    interface_file.read_text()[:-1] if interface_file.exists() else None
-                ),
-                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
-            )
-        elif subsystem == "serial-base":
-            # Native serial ports
-            info = SerialPortInfo(
-                device=unique_device,
-                resolved_device=device,
-                vid=None,
-                pid=None,
-                serial_number=None,
-                manufacturer=None,
-                product=None,
-                bcd_device=None,
-                interface_description=None,
-                interface_num=None,
-            )
-        else:
-            LOGGER.warning(
-                "Unknown serial device subsystem %r for device %r",
-                subsystem,
-                device,
-            )
-
-        results.append(info)
-
-    return results
+    """List available serial ports on POSIX."""
+    return []
