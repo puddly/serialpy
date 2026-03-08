@@ -50,6 +50,10 @@ class SerialException(Exception):
     pass
 
 
+class UnsupportedSetting(SerialException):
+    """Raised when an unsupported serial port setting is used."""
+
+
 def serial_for_url(url, *args, **kwargs) -> BaseSerial:
     """Create a serial port for the given URL."""
     serial_cls, _serial_transport = get_serial_classes(url)

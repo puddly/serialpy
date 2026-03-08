@@ -450,9 +450,29 @@ class BaseSerialTransport(asyncio.Transport):
         """Connect to serial port."""
         raise NotImplementedError
 
-    async def connect(self, **kwargs) -> None:
+    async def connect(
+        self,
+        *,
+        path: str,
+        baudrate: int,
+        parity: Parity = Parity.NONE,
+        stopbits: StopBits = StopBits.ONE,
+        xonxoff: bool = False,
+        rtscts: bool = False,
+        byte_size: int = 8,
+        **kwargs,
+    ) -> None:
         """Connect to serial port."""
-        return await self._connect(**kwargs)
+        return await self._connect(
+            path=path,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            byte_size=byte_size,
+            **kwargs,
+        )
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
@@ -516,6 +536,19 @@ def get_serial_classes(
         )
 
         return SocketSerial, SocketSerialTransport
+    elif parsed_path.scheme == "esphome":
+        try:
+            from .platforms.serial_esphome import (  # noqa: PLC0415
+                ESPHomeSerial,
+                ESPHomeSerialTransport,
+            )
+        except ImportError as exc:
+            raise RuntimeError(
+                "ESPHome serial transport requires extra dependencies."
+                " Install with `pip install serialx[esphome]`"
+            ) from exc
+
+        return ESPHomeSerial, ESPHomeSerialTransport
     else:
         from .platforms import Serial, SerialTransport  # noqa: PLC0415
 

@@ -201,6 +201,11 @@ async def test_async_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
+    if (serial_pair.backend, baudrate, iterations) == ("esphome", 921600, 512):
+        pytest.skip(
+            "ESPHome backend is too slow for sustained throughput at 921600/512"
+        )
+
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=baudrate
     ) as (_, writer_left, reader_right, _):
@@ -232,6 +237,9 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
 )
 async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
+    if serial_pair.backend == "esphome" and parity in (Parity.MARK, Parity.SPACE):
+        pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
+
     async with async_create_reader_writer(
         serial_pair.left, baudrate=115200, parity=parity
     ) as (_, writer):
@@ -256,6 +264,9 @@ async def test_async_valid_stopbits(
     expected: StopBits,
 ) -> None:
     """Test that valid stopbits settings are accepted."""
+    if serial_pair.backend == "esphome" and expected is StopBits.ONE_POINT_FIVE:
+        pytest.xfail("ESPHome backend does not support 1.5 stop bits")
+
     async with async_create_reader_writer(
         serial_pair.left, baudrate=115200, stopbits=stopbits
     ) as (_, writer):
@@ -345,6 +356,7 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await writer_left.wait_closed()
 
 
+@pytest.mark.skip_backends("esphome")
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
     async with async_create_reader_writer_pair(
@@ -467,7 +479,7 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
     sys.platform == "win32",
     reason="Only DescriptorTransport implements write buffer limits",
 )
-@pytest.mark.skip_backends("socket")
+@pytest.mark.skip_backends("socket", "esphome")
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
@@ -489,6 +501,10 @@ async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> N
 
 async def test_async_flush(serial_pair: SerialPair) -> None:
     """Test flushing async transport write buffers."""
+    if serial_pair.backend == "esphome":
+        # TODO: Remove xfail when ESPHome async serial_proxy flush is implemented upstream.
+        pytest.xfail("ESPHome async flush is not implemented yet")
+
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (_, writer_left, reader_right, _):
@@ -499,6 +515,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
         assert result == b"flush test data"
 
 
+@pytest.mark.skip_backends("esphome")
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
     async with async_create_reader_writer_pair(
@@ -634,7 +651,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
-@pytest.mark.skip_backends("socket", "com0com", "socat")
+@pytest.mark.skip_backends("socket", "com0com", "socat", "esphome")
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 

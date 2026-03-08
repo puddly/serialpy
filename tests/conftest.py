@@ -8,8 +8,19 @@ import time
 import pytest
 
 import serialx
-from tests.common import SOCAT_BINARY, SerialPair, create_socat_pair
+from tests.common import (
+    SOCAT_BINARY,
+    SerialPair,
+    create_esphome_pair,
+    create_socat_pair,
+    get_esphome_host_daemon_program,
+)
 from tests.socket_relay import create_socket_pair
+
+try:
+    import aioesphomeapi
+except ImportError:
+    aioesphomeapi = None
 
 COM0COM_RE = re.compile(r"^CNC[A-Z]\d+$", re.IGNORECASE)
 
@@ -64,6 +75,18 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         if SOCAT_BINARY:
             params.append(pytest.param(("socat",), id="socat"))
 
+            if (
+                sys.version_info >= (3, 11)
+                and aioesphomeapi is not None
+                and (esphome_program := get_esphome_host_daemon_program()) is not None
+            ):
+                params.append(
+                    pytest.param(
+                        ("esphome", esphome_program),
+                        id="esphome",
+                    )
+                )
+
         params.append(pytest.param(("socket",), id="socket"))
 
         for left, right in _get_adapter_pairs(metafunc.config):
@@ -102,8 +125,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     """Yield a connected serial port pair with backend metadata.
 
-    Parametrized over all available backends: socat, socket, and any
-    physical adapter pairs passed via --adapter-pair.
+    Parametrized over all available backends: socat, esphome, socket,
+    and any physical adapter pairs passed via --adapter-pair.
     """
     backend_info = request.param
     backend = backend_info[0]
@@ -119,6 +142,9 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     if backend == "socat":
         with create_socat_pair() as (left, right):
             yield SerialPair(left, right, "socat")
+    elif backend == "esphome":
+        with create_esphome_pair(backend_info[1]) as (left, right):
+            yield SerialPair(left, right, "esphome")
     elif backend == "socket":
         with create_socket_pair() as (left, right):
             yield SerialPair(left, right, "socket")
