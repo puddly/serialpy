@@ -29,7 +29,7 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
-    "aioesphomeapi @ git+https://github.com/puddly/aioesphomeapi@puddly/fix-serial-proxy-request-response; python_version >= '3.11'",
+    "aioesphomeapi @ git+https://github.com/puddly/aioesphomeapi@puddly/fix-serial-proxy-request-response ; python_version >= '3.11'",
 ]
 
 [tool.setuptools.packages.find]
