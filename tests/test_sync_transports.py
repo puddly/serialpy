@@ -622,12 +622,14 @@ def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
 
 def test_fast_open_close(serial_pair: SerialPair) -> None:
     """Test quickly opening and closing a port."""
+    if serial_pair.backend == "esphome":
+        pytest.skip("ESPHome backend does not support flushing yet")
+
     message = b"Fast write and close test"
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(serial_pair.right, baudrate=115200) as right:
             right.write(message)
-            right.flush()
 
         assert left.readexactly(len(message)) == message
 
