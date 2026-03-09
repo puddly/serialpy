@@ -28,17 +28,6 @@ class FreeBSDSerialTransport(ExtendedPosixSerialTransport):
     _serial_cls = FreeBSDSerial
 
 
-def _run_sysctl(*args: str) -> str:
-    """Run sysctl and return stdout."""
-    result = subprocess.run(
-        ["sysctl", *args],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout
-
-
 def _parse_pnpinfo(pnpinfo: str) -> dict[str, str]:
     """Parse a sysctl %pnpinfo value into a dict.
 
@@ -65,61 +54,69 @@ def _parse_location(location: str) -> dict[str, str]:
     return result
 
 
-def _get_usb_strings(ugen: str) -> tuple[str | None, str | None]:
-    """Get manufacturer and product strings from usbconfig."""
+def _get_all_usb_strings() -> dict[str, tuple[str | None, str | None]]:
+    """Get manufacturer and product strings for all USB devices via usbconfig."""
     result = subprocess.run(
-        ["usbconfig", "-d", ugen, "dump_device_desc"],
+        ["usbconfig", "dump_device_desc"],
         capture_output=True,
         text=True,
         check=True,
     )
 
-    manufacturer = None
-    product = None
+    devices: dict[str, tuple[str | None, str | None]] = {}
+    current_ugen: str | None = None
+    manufacturer: str | None = None
+    product: str | None = None
 
     for line in result.stdout.splitlines():
+        if line.startswith("ugen"):
+            if current_ugen is not None:
+                devices[current_ugen] = (manufacturer, product)
+            current_ugen = line.split(":")[0]
+            manufacturer = None
+            product = None
+            continue
+
         match = _MANUFACTURER_RE.search(line)
         if match:
             manufacturer = match.group(1)
+            continue
 
         match = _PRODUCT_RE.search(line)
         if match:
             product = match.group(1)
 
-    return manufacturer, product
+    if current_ugen is not None:
+        devices[current_ugen] = (manufacturer, product)
+
+    return devices
 
 
 def freebsd_list_serial_ports() -> list[SerialPortInfo]:
     """List available serial ports on FreeBSD."""
+    sysctl_text = subprocess.run(
+        ["sysctl", "-e", "dev"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    sysctl = dict(line.split("=", 1) for line in sysctl_text.splitlines())
+
+    usb_strings = _get_all_usb_strings()
     results = []
-    ttyname_nodes = [
-        n for n in _run_sysctl("-N", "dev").splitlines() if n.endswith(".ttyname")
-    ]
 
-    for node in ttyname_nodes:
-        parent = node.removesuffix(".ttyname")
+    for key, value in sysctl.items():
+        if not key.endswith(".ttyname"):
+            continue
 
-        output = _run_sysctl(
-            f"{parent}.ttyname",
-            f"{parent}.%pnpinfo",
-            f"{parent}.%location",
-        )
+        parent = key.removesuffix(".ttyname")
+        ttyname = value
+        pnpinfo = _parse_pnpinfo(sysctl[f"{parent}.%pnpinfo"])
+        location = _parse_location(sysctl[f"{parent}.%location"])
 
-        values = {}
-        for line in output.splitlines():
-            key, _, value = line.partition(": ")
-            values[key.strip()] = value.strip()
-
-        ttyname = values[f"{parent}.ttyname"]
-        pnpinfo_raw = values[f"{parent}.%pnpinfo"]
-        location_raw = values[f"{parent}.%location"]
-
-        pnpinfo = _parse_pnpinfo(pnpinfo_raw)
-        location = _parse_location(location_raw)
+        manufacturer, product = usb_strings.get(location["ugen"], (None, None))
 
         device = Path(f"/dev/cua{ttyname}")
-        manufacturer, product = _get_usb_strings(location["ugen"])
-
         vid_str = pnpinfo.get("vendor")
         pid_str = pnpinfo.get("product")
         release_str = pnpinfo.get("release")
