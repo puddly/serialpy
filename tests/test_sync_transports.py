@@ -452,7 +452,7 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
 def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
     if serial_pair.backend == "socat" and sys.platform.startswith("freebsd"):
-        pytest.skip("FreeBSD PTYs do not track modem pin state")
+        pytest.xfail("FreeBSD socat sets all pins to LOW")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.set_modem_pins(dtr=True, rts=True)

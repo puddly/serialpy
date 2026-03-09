@@ -630,7 +630,7 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
     if serial_pair.backend == "socat" and sys.platform.startswith("freebsd"):
-        pytest.skip("FreeBSD PTYs do not track modem pin state")
+        pytest.xfail("FreeBSD socat sets all pins to LOW")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         _,
