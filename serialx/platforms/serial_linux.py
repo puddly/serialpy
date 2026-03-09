@@ -10,8 +10,7 @@ import logging
 from pathlib import Path
 import termios
 
-from .. import UnsupportedSetting
-from ..common import Parity, SerialPortInfo
+from ..common import Parity, SerialPortInfo, UnsupportedSetting
 from .serial_posix import PosixSerial, PosixSerialTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ class Termios2SpeedStruct(ctypes.Structure):
 
 
 class LinuxSerial(PosixSerial):
-    """POSIX serial port implementation."""
+    """Linux serial port implementation."""
 
     def __init__(
         self,
@@ -68,7 +67,7 @@ class LinuxSerial(PosixSerial):
         low_latency: bool = True,
         **kwargs,
     ):
-        """Initialize POSIX serial port."""
+        """Initialize Linux serial port."""
         super().__init__(*args, **kwargs)
         self._low_latency = low_latency
 
@@ -164,7 +163,7 @@ class LinuxSerial(PosixSerial):
             else getattr(termios, f"B{self._baudrate}")
         )
 
-    def _after_configure_port(self) -> None:  # noqa: C901
+    def _after_configure_port(self) -> None:
         if self._has_non_posix_baudrate:
             LOGGER.debug("Setting non-POSIX baudrate %d", self._baudrate)
             self._set_non_posix_baudrate(self._baudrate)
@@ -177,12 +176,6 @@ class LinuxSerial(PosixSerial):
                     LOGGER.debug("Device does not support setting low latency")
                 else:
                     raise
-
-        self.set_modem_pins(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
-
-        # Flush input and output buffers to discard stale data
-        assert self._fileno is not None
-        termios.tcflush(self._fileno, termios.TCIOFLUSH)
 
     def _set_low_latency(self, value: bool) -> None:
         """Set low latency mode."""
@@ -205,7 +198,7 @@ class LinuxSerial(PosixSerial):
 
 
 class LinuxSerialTransport(PosixSerialTransport):
-    """POSIX serial port transport using asyncio."""
+    """Linux serial port transport using asyncio."""
 
     _serial_cls = LinuxSerial
 

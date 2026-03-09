@@ -173,9 +173,7 @@ class PosixSerial(BaseSerial):
         elif self._stopbits == StopBits.TWO:
             return termios.CSTOPB
         elif self._stopbits == StopBits.ONE_POINT_FIVE:
-            raise UnsupportedSetting(
-                "1.5 stop bits not supported on POSIX, using 1 stop bit"
-            )
+            raise UnsupportedSetting("1.5 stop bits not supported on POSIX")
         else:
             raise UnsupportedSetting(f"Unsupported stop bits {self._stopbits}")
 
@@ -185,6 +183,11 @@ class PosixSerial(BaseSerial):
 
         if self._xonxoff:
             iflag |= termios.IXON | termios.IXOFF | termios.IXANY
+
+        if self._rtscts:
+            raise UnsupportedSetting(
+                "RTS/CTS hardware flow control is not supported on this POSIX platform"
+            )
 
         return (iflag, cflag)
 
