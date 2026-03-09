@@ -209,6 +209,9 @@ split-on-trailing-comma = false
 [tool.ruff.lint.mccabe]
 max-complexity = 25
 
+[tool.codespell]
+skip = "tests/data/*"
+
 [tool.coverage.report]
 show_missing = true
 exclude_also = [
