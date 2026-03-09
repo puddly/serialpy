@@ -13,8 +13,10 @@ from .common import (
     ModemPins,
     Parity,
     PinState,
+    SerialException,
     SerialPortInfo,
     StopBits,
+    UnsupportedSetting,
     get_serial_classes,
 )
 from .platforms import Serial, SerialTransport, list_serial_ports
@@ -30,6 +32,8 @@ __all__ = [
     "BaseSerial",
     "BaseSerialTransport",
     "Serial",
+    "SerialException",
+    "UnsupportedSetting",
     "SerialPortInfo",
     "SerialStreamWriter",
     "SerialTransport",
@@ -44,14 +48,6 @@ def patch_pyserial():
 
     for module in _MODULES_TO_PATCH:
         sys.modules[module] = sys.modules[__name__]
-
-
-class SerialException(Exception):
-    pass
-
-
-class UnsupportedSetting(SerialException):
-    """Raised when an unsupported serial port setting is used."""
 
 
 def serial_for_url(url, *args, **kwargs) -> BaseSerial:

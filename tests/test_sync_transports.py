@@ -129,6 +129,13 @@ def test_sync_random_large(
     serial_pair: SerialPair, baudrate: int, chunk_size: int
 ) -> None:
     """Test random read/write at various speeds."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=baudrate) as left,
         Serial.from_url(serial_pair.right, baudrate=baudrate) as right,
@@ -172,6 +179,12 @@ def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
+    if sys.platform == "darwin" and serial_pair.serial_class in (
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=921600) as left,
         Serial.from_url(serial_pair.right, baudrate=921600) as right,
@@ -204,6 +217,13 @@ def test_sync_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     if serial_pair.backend == "esphome" and (baudrate, iterations) == (921600, 512):
         pytest.skip(
             "ESPHome backend is too slow for sustained throughput at 921600/512"
@@ -227,6 +247,13 @@ def test_sync_sustained_throughput(
 )
 def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     with Serial.from_url(serial_pair.left, baudrate=baudrate) as serial:
         assert serial.baudrate == baudrate
         serial.write(b"test")
@@ -239,6 +266,11 @@ def test_sync_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
     if serial_pair.backend == "esphome" and parity in (Parity.MARK, Parity.SPACE):
         pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
+    if serial_pair.serial_class not in ("LinuxSerial", "Win32Serial") and parity in (
+        Parity.MARK,
+        Parity.SPACE,
+    ):
+        pytest.skip("MARK/SPACE parity requires CMSPAR (Linux) or Win32")
 
     with Serial.from_url(serial_pair.left, baudrate=115200, parity=parity) as serial:
         assert serial.parity == parity
@@ -264,6 +296,11 @@ def test_sync_valid_stopbits(
     """Test that valid stopbits settings are accepted."""
     if serial_pair.backend == "esphome" and expected is StopBits.ONE_POINT_FIVE:
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
+    if (
+        serial_pair.serial_class not in ("Win32Serial",)
+        and expected is StopBits.ONE_POINT_FIVE
+    ):
+        pytest.skip("1.5 stop bits only supported on Win32")
 
     with Serial.from_url(
         serial_pair.left, baudrate=115200, stopbits=stopbits
@@ -291,6 +328,9 @@ def test_sync_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
 @pytest.mark.parametrize("rtscts", [True, False])
 def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
+    if rtscts and serial_pair.serial_class == "PosixSerial":
+        pytest.xfail("Strict POSIX backend does not support RTS/CTS flow control")
+
     # Open both sides: on com0com, opening right asserts DTR which raises CTS on left
     with Serial.from_url(serial_pair.right, baudrate=115200):
         with Serial.from_url(serial_pair.left, baudrate=115200, rtscts=rtscts) as left:

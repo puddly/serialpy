@@ -17,6 +17,14 @@ import warnings
 from typing_extensions import Self
 
 
+class SerialException(Exception):
+    """Base serial exception."""
+
+
+class UnsupportedSetting(SerialException):
+    """Raised when an unsupported serial port setting is used."""
+
+
 class StopBits(Enum):
     """Stop bits configuration."""
 

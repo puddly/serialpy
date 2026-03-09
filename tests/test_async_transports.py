@@ -122,6 +122,13 @@ async def test_async_random_large(
     serial_pair: SerialPair, baudrate: int, chunk_size: int
 ) -> None:
     """Test random read/write at various speeds."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=baudrate
     ) as (_, writer_left, reader_right, _):
@@ -167,6 +174,12 @@ async def test_async_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 async def test_async_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
+    if sys.platform == "darwin" and serial_pair.serial_class in (
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=921600
     ) as (_, writer_left, reader_right, _):
@@ -201,6 +214,13 @@ async def test_async_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     if (serial_pair.backend, baudrate, iterations) == ("esphome", 921600, 512):
         pytest.skip(
             "ESPHome backend is too slow for sustained throughput at 921600/512"
@@ -224,6 +244,13 @@ async def test_async_sustained_throughput(
 )
 async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     async with async_create_reader_writer(serial_pair.left, baudrate=baudrate) as (
         _,
         writer,
@@ -239,6 +266,12 @@ async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> No
     """Test that valid parity settings are accepted."""
     if serial_pair.backend == "esphome" and parity in (Parity.MARK, Parity.SPACE):
         pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
+
+    if serial_pair.serial_class not in ("LinuxSerial", "Win32Serial") and parity in (
+        Parity.MARK,
+        Parity.SPACE,
+    ):
+        pytest.skip("MARK/SPACE parity requires CMSPAR (Linux) or Win32")
 
     async with async_create_reader_writer(
         serial_pair.left, baudrate=115200, parity=parity
@@ -266,6 +299,12 @@ async def test_async_valid_stopbits(
     """Test that valid stopbits settings are accepted."""
     if serial_pair.backend == "esphome" and expected is StopBits.ONE_POINT_FIVE:
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
+
+    if (
+        serial_pair.serial_class not in ("Win32Serial",)
+        and expected is StopBits.ONE_POINT_FIVE
+    ):
+        pytest.skip("1.5 stop bits only supported on Win32")
 
     async with async_create_reader_writer(
         serial_pair.left, baudrate=115200, stopbits=stopbits
@@ -295,6 +334,9 @@ async def test_async_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> 
 @pytest.mark.parametrize("rtscts", [True, False])
 async def test_async_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
+    if rtscts and serial_pair.serial_class == "PosixSerial":
+        pytest.xfail("Strict POSIX backend does not support RTS/CTS flow control")
+
     async with async_create_reader_writer(serial_pair.right, baudrate=115200):
         async with async_create_reader_writer(
             serial_pair.left, baudrate=115200, rtscts=rtscts

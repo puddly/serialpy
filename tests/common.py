@@ -38,6 +38,7 @@ class SerialPair(NamedTuple):
     left: str
     right: str
     backend: str  # "socat", "socket", "esphome", "adapter", or "com0com"
+    serial_class: str = serialx.Serial.__name__
 
 
 class BridgedSocatPair(NamedTuple):
