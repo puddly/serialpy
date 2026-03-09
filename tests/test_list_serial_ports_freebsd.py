@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
+try:
+    import termios  # noqa: F401
+except ImportError:
+    pytest.skip("FreeBSD-only tests", allow_module_level=True)
+
+
 from pathlib import Path
 from unittest.mock import patch
 
