@@ -11,7 +11,7 @@ from pathlib import Path
 import termios
 
 from ..common import Parity, SerialPortInfo, UnsupportedSetting
-from .serial_posix import PosixSerial, PosixSerialTransport
+from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +28,6 @@ TIOCGSERIAL = getattr(termios, "TIOCGSERIAL", None)
 TIOCSSERIAL = getattr(termios, "TIOCSSERIAL", None)
 CBAUD = getattr(termios, "CBAUD", 0o00010017)
 CBAUDEX = getattr(termios, "CBAUDEX", 0o00010000)
-CRTSCTS = getattr(termios, "CRTSCTS", getattr(termios, "CNEW_RTSCTS", None))
 
 # When we need to set a non-POSIX baudrate, we set the baudrates to a known default and
 # then override
@@ -58,7 +57,7 @@ class Termios2SpeedStruct(ctypes.Structure):
     ]
 
 
-class LinuxSerial(PosixSerial):
+class LinuxSerial(ExtendedPosixSerial):
     """Linux serial port implementation."""
 
     def __init__(
@@ -128,23 +127,6 @@ class LinuxSerial(PosixSerial):
         else:
             raise UnsupportedSetting(f"Unsupported parity {self._parity}")
 
-    def _build_flow_control_flags(self) -> tuple[int, int]:
-        iflag = 0x00000000
-        cflag = 0x00000000
-
-        if self._xonxoff:
-            iflag |= termios.IXON | termios.IXOFF | termios.IXANY
-
-        if self._rtscts:
-            if CRTSCTS is None:
-                raise UnsupportedSetting(
-                    "RTS/CTS flow control not supported on this platform"
-                )
-            else:
-                cflag |= CRTSCTS
-
-        return (iflag, cflag)
-
     @property
     def _has_non_posix_baudrate(self) -> bool:
         return not hasattr(termios, f"B{self._baudrate}")
@@ -197,7 +179,7 @@ class LinuxSerial(PosixSerial):
         fcntl.ioctl(self._fileno, TIOCSSERIAL, buffer)
 
 
-class LinuxSerialTransport(PosixSerialTransport):
+class LinuxSerialTransport(ExtendedPosixSerialTransport):
     """Linux serial port transport using asyncio."""
 
     _serial_cls = LinuxSerial

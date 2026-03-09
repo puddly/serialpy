@@ -28,11 +28,19 @@ elif sys.platform == "darwin":
         darwin_list_serial_ports as list_serial_ports,
     )
 elif maybe_posix:
-    from .serial_posix import (
-        PosixSerial as Serial,
-        PosixSerialTransport as SerialTransport,
-        posix_list_serial_ports as list_serial_ports,
-    )
+    from .serial_extended_posix import is_extended_posix
+
+    if is_extended_posix():
+        from .serial_extended_posix import (
+            ExtendedPosixSerial as Serial,
+            ExtendedPosixSerialTransport as SerialTransport,
+        )
+    else:
+        from .serial_posix import (
+            PosixSerial as Serial,
+            PosixSerialTransport as SerialTransport,
+        )
+    from .serial_posix import posix_list_serial_ports as list_serial_ports
 else:
     raise RuntimeError(f"Unsupported platform: {sys.platform}")
 

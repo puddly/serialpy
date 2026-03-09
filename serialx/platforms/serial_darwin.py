@@ -11,7 +11,7 @@ import termios
 from serialx._serialx_rust import list_serial_ports_darwin_impl
 from serialx.common import SerialPortInfo
 
-from .serial_posix import PosixSerial, PosixSerialTransport
+from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ IOSSIOSPEED = 0x80045402
 NON_POSIX_FALLBACK_BAUDRATE_CONST = termios.B115200
 
 
-class DarwinSerial(PosixSerial):
+class DarwinSerial(ExtendedPosixSerial):
     """Darwin serial port implementation."""
 
     def _build_ispeed(self) -> int:
@@ -61,7 +61,7 @@ class DarwinSerial(PosixSerial):
             self._set_non_posix_baudrate(self._baudrate)
 
 
-class DarwinSerialTransport(PosixSerialTransport):
+class DarwinSerialTransport(ExtendedPosixSerialTransport):
     """Darwin asyncio serial port transport."""
 
     _serial_cls = DarwinSerial
