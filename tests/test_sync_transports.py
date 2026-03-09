@@ -129,6 +129,13 @@ def test_sync_random_large(
     serial_pair: SerialPair, baudrate: int, chunk_size: int
 ) -> None:
     """Test random read/write at various speeds."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=baudrate) as left,
         Serial.from_url(serial_pair.right, baudrate=baudrate) as right,
@@ -172,6 +179,12 @@ def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
+    if sys.platform == "darwin" and serial_pair.serial_class in (
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     with (
         Serial.from_url(serial_pair.left, baudrate=921600) as left,
         Serial.from_url(serial_pair.right, baudrate=921600) as right,
@@ -204,6 +217,13 @@ def test_sync_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     if serial_pair.backend == "esphome" and (baudrate, iterations) == (921600, 512):
         pytest.skip(
             "ESPHome backend is too slow for sustained throughput at 921600/512"
@@ -227,6 +247,13 @@ def test_sync_sustained_throughput(
 )
 def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
+    if (
+        baudrate > 230400
+        and sys.platform == "darwin"
+        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+    ):
+        pytest.xfail("macOS termios lacks constants above B230400")
+
     with Serial.from_url(serial_pair.left, baudrate=baudrate) as serial:
         assert serial.baudrate == baudrate
         serial.write(b"test")
@@ -301,6 +328,9 @@ def test_sync_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
 @pytest.mark.parametrize("rtscts", [True, False])
 def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
+    if rtscts and serial_pair.serial_class == "PosixSerial":
+        pytest.xfail("Strict POSIX backend does not support RTS/CTS flow control")
+
     # Open both sides: on com0com, opening right asserts DTR which raises CTS on left
     with Serial.from_url(serial_pair.right, baudrate=115200):
         with Serial.from_url(serial_pair.left, baudrate=115200, rtscts=rtscts) as left:

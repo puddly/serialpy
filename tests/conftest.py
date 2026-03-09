@@ -1,13 +1,16 @@
 """Pytest configuration for serialx tests."""
 
 from collections.abc import Generator
+import importlib
 import re
 import sys
 import time
+from unittest.mock import patch
 
 import pytest
 
 import serialx
+import serialx.platforms
 from tests.common import (
     SOCAT_BINARY,
     SerialPair,
@@ -23,6 +26,30 @@ except ImportError:
     aioesphomeapi = None
 
 COM0COM_RE = re.compile(r"^CNC[A-Z]\d+$", re.IGNORECASE)
+
+
+def _get_posix_serial_classes() -> list[str]:
+    """Get extra POSIX serial class names to test on this platform.
+
+    On Linux (or any platform with a deeper class hierarchy), we also test
+    with the generic POSIX and extended POSIX backends by patching sys.platform
+    and is_extended_posix to force the fallback paths in serialx.platforms.
+    """
+    try:
+        import termios  # noqa: F401, PLC0415
+    except ImportError:
+        return []
+
+    from serialx.platforms.serial_extended_posix import (  # noqa: PLC0415
+        is_extended_posix,
+    )
+
+    result = ["PosixSerial"]
+
+    if is_extended_posix():
+        result.append("ExtendedPosixSerial")
+
+    return result
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -87,7 +114,13 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                     )
                 )
 
+            for cls_name in _get_posix_serial_classes():
+                params.append(pytest.param(("socat", cls_name), id=f"socat+{cls_name}"))
+
         params.append(pytest.param(("socket",), id="socket"))
+
+        for cls_name in _get_posix_serial_classes():
+            params.append(pytest.param(("socket", cls_name), id=f"socket+{cls_name}"))
 
         for left, right in _get_adapter_pairs(metafunc.config):
             if COM0COM_RE.match(left) or COM0COM_RE.match(right):
@@ -139,7 +172,36 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
         if backend not in marker.args:
             pytest.skip(f"Requires backend in {marker.args!r}, got {backend!r}")
 
-    if backend == "socat":
+    # Check if a serial class override is requested (e.g. "PosixSerial")
+    serial_class_override = (
+        backend_info[1]
+        if len(backend_info) > 1 and backend in ("socat", "socket")
+        else None
+    )
+
+    if serial_class_override:
+        is_extended = serial_class_override == "ExtendedPosixSerial"
+        with (
+            patch("sys.platform", "unknown"),
+            patch(
+                "serialx.platforms.serial_extended_posix.is_extended_posix",
+                return_value=is_extended,
+            ),
+        ):
+            importlib.reload(serialx.platforms)
+
+        serial_class = serialx.platforms.Serial.__name__
+
+        try:
+            if backend == "socat":
+                with create_socat_pair() as (left, right):
+                    yield SerialPair(left, right, "socat", serial_class)
+            elif backend == "socket":
+                with create_socket_pair() as (left, right):
+                    yield SerialPair(left, right, "socket", serial_class)
+        finally:
+            importlib.reload(serialx.platforms)
+    elif backend == "socat":
         with create_socat_pair() as (left, right):
             yield SerialPair(left, right, "socat")
     elif backend == "esphome":
