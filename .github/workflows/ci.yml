@@ -13,10 +13,10 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Python ${{ matrix.python-version }}
         id: python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
@@ -56,9 +56,9 @@ jobs:
     needs: prepare-base
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         id: python
         with:
           python-version: "3.10"
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Restore cached ESPHome binary
         id: cache-esphome
         uses: actions/cache/restore@v4
@@ -113,7 +113,7 @@ jobs:
             hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Set up Python 3.13
         if: steps.cache-esphome.outputs.cache-hit != 'true'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Compile ESPHome host daemon
@@ -142,9 +142,9 @@ jobs:
     name: Run tests Python ${{ matrix.python-version }} (Linux)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         id: python
         with:
           python-version: ${{ matrix.python-version }}
@@ -205,9 +205,9 @@ jobs:
     name: Run tests Python 3.13 (macOS)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Cache Rust build
@@ -239,7 +239,7 @@ jobs:
     name: Run tests Python 3.13 (Windows)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Install com0com
         shell: pwsh
         working-directory: .github
@@ -256,7 +256,7 @@ jobs:
         run: |
           .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rdtr PortName=-,EmuBR=yes,cts=rdtr
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Cache Rust build
@@ -291,9 +291,9 @@ jobs:
     needs: [pytest, pytest-macos, pytest-windows]
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         id: python
         with:
           python-version: "3.10"
