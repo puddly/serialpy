@@ -564,6 +564,10 @@ async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> 
 
 
 @pytest.mark.skipif(not SOCAT_BINARY, reason="socat binary is missing")
+@pytest.mark.xfail(
+    sys.platform.startswith("freebsd"),
+    reason="FreeBSD PTYs do not signal peer close",
+)
 async def test_async_peer_close_triggers_connection_lost() -> None:
     """Test that killing one socat process triggers connection_lost on the other."""
     async with async_create_bridged_socat_pair() as pair:
@@ -625,6 +629,8 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
+    if sys.platform.startswith("freebsd") and serial_pair.backend == "socat":
+        pytest.xfail("FreeBSD PTYs do not track modem pin state")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         _,

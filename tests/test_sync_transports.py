@@ -451,6 +451,9 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
 
 def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
+    if sys.platform.startswith("freebsd") and serial_pair.backend == "socat":
+        pytest.xfail("FreeBSD PTYs do not track modem pin state")
+
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.set_modem_pins(dtr=True, rts=True)
         pins_high = serial.get_modem_pins()
@@ -580,6 +583,10 @@ def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skip_backends("socket", "esphome")
+@pytest.mark.xfail(
+    sys.platform.startswith("freebsd"),
+    reason="FreeBSD ucom driver does not enforce write buffer limits",
+)
 def test_sync_write_timeout(serial_pair: SerialPair) -> None:
     """Test that write timeout works when buffer is full."""
 
