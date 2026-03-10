@@ -131,12 +131,13 @@ class BaseSerial(io.RawIOBase):
 
     def __init__(
         self,
-        path: str | Path,
-        baudrate: int,
+        path: str | Path | None = None,
+        baudrate: int = 9600,
         parity: Parity | None = Parity.NONE,
         stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
+        dsrdtr: bool = False,
         byte_size: int = 8,
         *,
         read_timeout: float | None = None,
@@ -144,6 +145,13 @@ class BaseSerial(io.RawIOBase):
         rtsdtr_on_open: PinState = PinState.HIGH,
         rtsdtr_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
+        # pyserial compatibility kwargs
+        port: str | None = None,
+        timeout: float | None = None,
+        bytesize: int | None = None,
+        do_not_open: bool | None = None,
+        writeTimeout: float | None = None,
+        inter_byte_timeout: int | None = None,
     ) -> None:
         """Initialize serial port configuration."""
         super().__init__()
@@ -169,6 +177,30 @@ class BaseSerial(io.RawIOBase):
         self._rtsdtr_on_close = rtsdtr_on_close
 
         self._auto_close = False
+
+        # Compatibility kwargs
+        if writeTimeout is not None:
+            self._write_timeout = writeTimeout
+
+        if port is not None:
+            self._path = port
+
+        if timeout is not None:
+            self._read_timeout = timeout
+
+        if bytesize is not None:
+            self._byte_size = bytesize
+
+        if writeTimeout is not None:
+            self._write_timeout = writeTimeout
+
+        if do_not_open is False:
+            warnings.warn(
+                "do_not_open=False is deprecated, use open() instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self.open()
 
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
@@ -351,6 +383,28 @@ class BaseSerial(io.RawIOBase):
 
         return bytes(buffer)
 
+    def read_until(self, expected: bytes = b"\n", size: int | None = None) -> bytes:
+        """Read until the expected sequence is found."""
+        buffer = bytearray()
+        expected_len = len(expected)
+
+        # TODO: sync timeout
+        while True:
+            byte = self.read(1)
+
+            if not byte:
+                break
+
+            buffer += byte
+
+            if buffer[-expected_len:] == expected:
+                break
+
+            if size is not None and len(buffer) >= size:
+                break
+
+        return bytes(buffer)
+
     def __enter__(self) -> Self:
         """Enter context manager."""
         self.open()
@@ -364,6 +418,66 @@ class BaseSerial(io.RawIOBase):
         """Cleanup on deletion."""
         if getattr(self, "_auto_close", False):
             self.close()
+
+    @abstractmethod
+    def num_unread_bytes(self) -> int:
+        """Number of bytes waiting to be read."""
+
+    @abstractmethod
+    def num_unwritten_bytes(self) -> int:
+        """Number of bytes waiting to be read."""
+
+    @abstractmethod
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+
+    @abstractmethod
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+
+    # Deprecated aliases
+    @property
+    def port(self) -> str:
+        return self.path
+
+    @property
+    def timeout(self) -> float:
+        return self.read_timeout
+
+    @property
+    def bytesize(self) -> int:
+        return self.byte_size
+
+    @property
+    def writeTimeout(self) -> float:
+        return self.write_timeout
+
+    def reset_input_buffer(self) -> None:
+        self.reset_read_buffer()
+
+    def reset_output_buffer(self) -> None:
+        self.reset_write_buffer()
+
+    def flushInput(self) -> None:
+        self.reset_read_buffer()
+
+    def flushOutput(self) -> None:
+        self.reset_write_buffer()
+
+    @property
+    def in_waiting(self) -> int:
+        return self.num_unread_bytes()
+
+    @property
+    def out_waiting(self) -> int:
+        return self.num_unwritten_bytes()
+
+    @property
+    def inWaiting(self) -> int:
+        return self.in_waiting()
+
+    def isOpen(self) -> bool:
+        return not self.closed
 
 
 class BaseSerialTransport(asyncio.Transport):
@@ -578,6 +692,15 @@ class SerialPortInfo:
     bcd_device: int | None
     interface_description: str | None
     interface_num: int | None
+
+    def __getitem__(self, key: int | slice) -> str | int:
+        """Compatibility shim for `serial.tools.list_ports_common.ListPortInfo`."""
+        warnings.warn(
+            "Slicing `SerialPortInfo` is deprecated, use attributes instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return (str(self.device), self.description, "")[key]
 
     @property
     def description(self) -> str | None:
