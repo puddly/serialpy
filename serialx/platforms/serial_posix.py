@@ -189,6 +189,11 @@ class PosixSerial(BaseSerial):
                 "RTS/CTS hardware flow control is not supported on this POSIX platform"
             )
 
+        if self._dsrdtr:
+            raise UnsupportedSetting(
+                "DSR/DTR hardware flow control is not supported on this POSIX platform"
+            )
+
         return (iflag, cflag)
 
     def _build_ispeed(self) -> int:

@@ -103,17 +103,7 @@ class ModemPins:
 
         bits = []
 
-        for bit in (
-            "le",
-            "dtr",
-            "rts",
-            "st",
-            "sr",
-            "cts",
-            "car",
-            "rng",
-            "dsr",
-        ):
+        for bit in ("le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"):
             value = getattr(self, bit)
 
             if value is PinState.UNDEFINED:
@@ -133,13 +123,13 @@ class BaseSerial(io.RawIOBase):
         self,
         path: str | Path | None = None,
         baudrate: int = 9600,
+        *,
         parity: Parity | None = Parity.NONE,
         stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
         dsrdtr: bool = False,
         byte_size: int = 8,
-        *,
         read_timeout: float | None = None,
         write_timeout: float | None = None,
         rtsdtr_on_open: PinState = PinState.HIGH,
@@ -340,30 +330,6 @@ class BaseSerial(io.RawIOBase):
         """Get the exclusive setting."""
         return self._exclusive
 
-    # Deprecated alias
-    @property
-    def dtr(self) -> bool | None:
-        """Get DTR modem bit."""
-        return self.get_modem_pins().dtr.to_bool()
-
-    # Deprecated alias
-    @dtr.setter
-    def dtr(self, value: bool) -> None:
-        """Set DTR modem bit."""
-        self.set_modem_pins(dtr=bool(value))
-
-    # Deprecated alias
-    @property
-    def rts(self) -> bool | None:
-        """Get RTS modem bit."""
-        return self.get_modem_pins().rts.to_bool()
-
-    # Deprecated alias
-    @rts.setter
-    def rts(self, value: bool) -> None:
-        """Set RTS modem bit."""
-        self.set_modem_pins(rts=bool(value))
-
     def readexactly(self, n: int) -> bytes:
         """Read exactly n bytes."""
         buffer = bytearray(n)
@@ -435,6 +401,12 @@ class BaseSerial(io.RawIOBase):
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
+    @abstractmethod
+    @property
+    def is_open(self) -> bool:
+        """Return whether the serial port is open."""
+        raise NotImplementedError
+
     # Deprecated aliases
     @property
     def port(self) -> str:
@@ -443,6 +415,10 @@ class BaseSerial(io.RawIOBase):
     @property
     def timeout(self) -> float:
         return self.read_timeout
+
+    @timeout.setter
+    def timeout(self, value: float) -> None:
+        self._read_timeout = value
 
     @property
     def bytesize(self) -> int:
@@ -477,7 +453,43 @@ class BaseSerial(io.RawIOBase):
         return self.in_waiting()
 
     def isOpen(self) -> bool:
-        return not self.closed
+        return self.is_open
+
+    @property
+    def dtr(self) -> bool | None:
+        """Get DTR modem bit."""
+        return self.get_modem_pins().dtr.to_bool()
+
+    @dtr.setter
+    def dtr(self, value: bool) -> None:
+        """Set DTR modem bit."""
+        self.set_modem_pins(dtr=bool(value))
+
+    @property
+    def rts(self) -> bool | None:
+        """Get RTS modem bit."""
+        return self.get_modem_pins().rts.to_bool()
+
+    @rts.setter
+    def rts(self, value: bool) -> None:
+        """Set RTS modem bit."""
+        self.set_modem_pins(rts=bool(value))
+
+    @property
+    def cts(self) -> bool | None:
+        """Get CTS modem bit."""
+        return self.get_modem_pins().cts.to_bool()
+
+    @cts.setter
+    def cts(self, value: bool) -> None:
+        """Set CTS modem bit."""
+        self.set_modem_pins(cts=bool(value))
+
+    @baudrate.setter
+    def baudrate(self, value: int) -> None:
+        """Set baud rate."""
+        self._baudrate = value
+        self._configure_port()
 
 
 class BaseSerialTransport(asyncio.Transport):
