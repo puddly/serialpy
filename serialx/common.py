@@ -423,19 +423,19 @@ class BaseSerial(io.RawIOBase):
         if getattr(self, "_auto_close", False):
             self.close()
 
-    # @abstractmethod
+    @abstractmethod
     def num_unread_bytes(self) -> int:
         """Number of bytes waiting to be read."""
 
-    # @abstractmethod
+    @abstractmethod
     def num_unwritten_bytes(self) -> int:
         """Number of bytes waiting to be read."""
 
-    # @abstractmethod
+    @abstractmethod
     def reset_read_buffer(self) -> None:
         """Reset the read buffer."""
 
-    # @abstractmethod
+    @abstractmethod
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
