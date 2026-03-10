@@ -307,8 +307,10 @@ class Win32Serial(BaseSerial):
         """Flush write buffers."""
         FlushFileBuffers(self._handle)
 
-    def readinto(self, b: Buffer) -> int:
+    def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
         """Read data into the provided bytearray."""
+        timeout = self._read_timeout if timeout is None else timeout
+
         assert self._overlapped_read is not None
         ResetEvent(self._overlapped_read.hEvent)
 
@@ -319,10 +321,7 @@ class Win32Serial(BaseSerial):
 
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
-            timeout_ms = INFINITE
-            if self._read_timeout is not None:
-                timeout_ms = int(self._read_timeout * 1000)
-
+            timeout_ms = int(timeout * 1000) if timeout is not None else INFINITE
             res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
 
             if res == WAIT_TIMEOUT:
@@ -339,8 +338,10 @@ class Win32Serial(BaseSerial):
 
         return n
 
-    def write(self, data: Buffer) -> int:
+    def write(self, data: Buffer, *, timeout: float | None = None) -> int:
         """Write data to the serial port synchronously."""
+        timeout = self._read_timeout if timeout is None else timeout
+
         assert self._overlapped_write is not None
         ResetEvent(self._overlapped_write.hEvent)
 
@@ -351,10 +352,7 @@ class Win32Serial(BaseSerial):
 
         if err == ERROR_IO_PENDING:
             # IO is pending, wait for it
-            timeout_ms = INFINITE
-            if self._write_timeout is not None:
-                timeout_ms = int(self._write_timeout * 1000)
-
+            timeout_ms = int(timeout * 1000) if timeout is not None else INFINITE
             res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
 
             if res == WAIT_TIMEOUT:

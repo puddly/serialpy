@@ -397,12 +397,13 @@ class PosixSerial(BaseSerial):
     # `io.IOBase` implements `read`, `readline`, using `readinto`
     if sys.version_info >= (3, 14):
 
-        def readinto(self, b: Buffer) -> int:
+        def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
+            timeout = self._read_timeout if timeout is None else timeout
 
-            if self._read_timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
+            if timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], timeout)
                 if not ready:
                     return 0
 
@@ -413,12 +414,13 @@ class PosixSerial(BaseSerial):
 
     else:
 
-        def readinto(self, b: Buffer) -> int:
+        def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
+            timeout = self._read_timeout if timeout is None else timeout
 
-            if self._read_timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
+            if timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], timeout)
                 if not ready:
                     return 0
 
@@ -434,13 +436,14 @@ class PosixSerial(BaseSerial):
 
             return n
 
-    def write(self, data: Buffer) -> int:
+    def write(self, data: Buffer, *, timeout: float | None = None) -> int:
         """Write bytes to serial port."""
         LOGGER.debug("Writing %d bytes: %r", len(data), data)  # type: ignore[arg-type]
         assert self._fileno is not None
+        timeout = self._write_timeout if timeout is None else None
 
-        if self._write_timeout is not None:
-            _, ready, _ = select.select([], [self._fileno], [], self._write_timeout)
+        if timeout is not None:
+            _, ready, _ = select.select([], [self._fileno], [], timeout)
             if not ready:
                 raise TimeoutError("Write timeout")
 

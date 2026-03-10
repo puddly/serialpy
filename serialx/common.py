@@ -5,11 +5,13 @@ from __future__ import annotations
 from abc import abstractmethod
 import asyncio
 from asyncio import IncompleteReadError
+from contextlib import contextmanager
 import dataclasses
 from enum import Enum
 import io
 import os
 from pathlib import Path
+import time
 from typing import Any
 import urllib.parse
 import warnings
@@ -114,6 +116,24 @@ class ModemPins:
                 bits.append(f"!{bit}")
 
         return f"{self.__class__.__name__}[{' '.join(bits)}]"
+
+
+@contextmanager
+def measure_time() -> Iterator[Callable[[], float]]:
+    """Measure elapsed time in a context."""
+    start = time.monotonic()
+    end = None
+
+    def get_result() -> float:
+        if end is None:
+            raise RuntimeError("Context has not exited yet")
+
+        return end - start
+
+    try:
+        yield get_result
+    finally:
+        end = time.monotonic()
 
 
 class BaseSerial(io.RawIOBase):
@@ -330,14 +350,19 @@ class BaseSerial(io.RawIOBase):
         """Get the exclusive setting."""
         return self._exclusive
 
-    def readexactly(self, n: int) -> bytes:
+    def readexactly(self, n: int, *, timeout: float | None = None) -> bytes:
         """Read exactly n bytes."""
         buffer = bytearray(n)
         view = memoryview(buffer)
         remaining = n
+        timeout = self.read_timeout if timeout is None else timeout
 
         while remaining > 0:
-            read = self.readinto(view)
+            with measure_time() as get_elapsed:
+                read = self.readinto(view, timeout=timeout)
+
+            timeout -= get_elapsed()
+
             view = view[read:]
             remaining -= read
 
@@ -349,14 +374,23 @@ class BaseSerial(io.RawIOBase):
 
         return bytes(buffer)
 
-    def read_until(self, expected: bytes = b"\n", size: int | None = None) -> bytes:
+    def read_until(
+        self,
+        expected: bytes = b"\n",
+        size: int | None = None,
+        *,
+        timeout: float | None = None,
+    ) -> bytes:
         """Read until the expected sequence is found."""
         buffer = bytearray()
         expected_len = len(expected)
+        timeout = self.read_timeout if timeout is None else timeout
 
-        # TODO: sync timeout
         while True:
-            byte = self.read(1)
+            with measure_time() as get_elapsed:
+                byte = self.readexactly(1, timeout=timeout)
+
+            timeout -= get_elapsed()
 
             if not byte:
                 break

@@ -215,17 +215,21 @@ class ESPHomeSerial(BaseSerial):
         """Flush write buffers."""
         self._call_on_loop(self._async_flush())
 
-    def write(self, b: Buffer) -> int:
+    def write(self, b: Buffer, *, timeout: float | None = None) -> int:
         """Write bytes to serial port."""
+        timeout = self._write_timeout if timeout is None else timeout
+
         assert self._api is not None
         data = bytes(b)
         self._api.serial_proxy_write(instance=self.instance, data=data)
         return len(data)
 
-    def readinto(self, b: Buffer) -> int:
+    def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
         """Read bytes from serial port into buffer."""
+        timeout = self._read_timeout if timeout is None else timeout
+
         try:
-            return self._call_on_loop(self._async_readinto(b, self._read_timeout))
+            return self._call_on_loop(self._async_readinto(b, timeout))
         except TimeoutError:
             return 0
 
