@@ -275,6 +275,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     async def _connect(self, **kwargs) -> None:
         self._serial = ESPHomeSerial(loop=self._loop, **kwargs)
+        self._extra["serial"] = self._serial
 
         await self._serial._async_open()
         self._serial.configure_port()

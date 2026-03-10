@@ -167,6 +167,8 @@ class SocketSerialTransport(BaseSerialTransport):
             rtscts=rtscts,
             byte_size=byte_size,
         )
+        self._extra["serial"] = self._serial
+
         self._tcp_connection_lost_waiter = self._loop.create_future()
 
         tcp_transport, _ = await self._loop.create_connection(
