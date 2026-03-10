@@ -695,7 +695,7 @@ def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
         assert right.read(1024) == b""
 
 
-@pytest.mark.skip_backends("socket", "esphome")
+@pytest.mark.skip_backends("socket", "esphome", "socat")
 def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_write_buffer discards pending output."""
     with Serial.from_url(serial_pair.left, baudrate=9600) as left:
