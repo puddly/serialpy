@@ -1,5 +1,7 @@
 """Tests for pyserial API compatibility shims."""
 
+import pytest
+
 from serialx import Serial, SerialPortInfo
 from serialx.tools.list_ports import comports, grep
 from serialx.tools.list_ports_common import ListPortInfo
@@ -84,6 +86,15 @@ def test_compat_no_arg_construction() -> None:
     assert s.path is None
     assert s.baudrate == 9600
     assert s.port is None
+
+
+def test_compat_do_not_open(serial_pair: SerialPair) -> None:
+    """Test `do_not_open` backwards compatibility."""
+    with pytest.raises(RuntimeError, match="do_not_open=False is not supported"):
+        Serial(serial_pair.left, do_not_open=False)
+
+    s = Serial(serial_pair.left, do_not_open=True)
+    assert not s.is_open
 
 
 def test_compat_tools_module() -> None:

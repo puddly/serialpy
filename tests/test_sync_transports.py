@@ -1,7 +1,6 @@
 """Sync transport tests."""
 
 from asyncio import IncompleteReadError
-from collections.abc import Iterator
 import logging
 import os
 import sys
@@ -10,25 +9,9 @@ import time
 import pytest
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
-from serialx.common import BaseSerial
 from tests.common import SerialPair, measure_time
 
 LOGGER = logging.getLogger(__name__)
-
-
-@pytest.fixture
-def serial_opened_pair(
-    serial_pair: SerialPair,
-) -> Iterator[tuple[BaseSerial, BaseSerial]]:
-    """Yield a connected pair of opened Serial objects with default settings."""
-    with (
-        Serial.from_url(serial_pair.left, baudrate=115200) as left,
-        Serial.from_url(serial_pair.right, baudrate=115200) as right,
-    ):
-        yield left, right
-
-
-# --- Data transmission ---
 
 
 def test_sync_all_bytes(serial_pair: SerialPair) -> None:
@@ -698,8 +681,9 @@ def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
 @pytest.mark.skip_backends("socket", "esphome", "socat")
 def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_write_buffer discards pending output."""
-    with Serial.from_url(serial_pair.left, baudrate=9600) as left:
+    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.5) as left:
         left.write(b"x" * 1024)
+
         assert left.num_unwritten_bytes() > 0
         left.reset_write_buffer()
         assert left.num_unwritten_bytes() == 0

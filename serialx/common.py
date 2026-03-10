@@ -204,12 +204,7 @@ class BaseSerial(io.RawIOBase):
             self._write_timeout = writeTimeout
 
         if do_not_open is False:
-            warnings.warn(
-                "do_not_open=False is deprecated, use open() instead",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            self.open()
+            raise RuntimeError("do_not_open=False is not supported")
 
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
@@ -449,18 +444,22 @@ class BaseSerial(io.RawIOBase):
     @abstractmethod
     def num_unread_bytes(self) -> int:
         """Return the number of bytes waiting to be read."""
+        raise NotImplementedError
 
     @abstractmethod
     def num_unwritten_bytes(self) -> int:
         """Return the number of bytes waiting to be written."""
+        raise NotImplementedError
 
     @abstractmethod
     def reset_read_buffer(self) -> None:
         """Reset the read buffer."""
+        raise NotImplementedError
 
     @abstractmethod
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
+        raise NotImplementedError
 
     @property
     @abstractmethod
