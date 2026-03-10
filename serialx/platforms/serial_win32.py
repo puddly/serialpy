@@ -128,12 +128,16 @@ class Win32Serial(BaseSerial):
         *args,
         handle: int | None = None,
         inter_byte_timeout: float = 0.01,
+        read_buffer_size: int = 4096,
+        write_buffer_size: int = 4096,
         **kwargs,
     ):
         """Initialize the Windows serial port."""
         super().__init__(*args, **kwargs)
         self._handle = handle
         self._inter_byte_timeout = inter_byte_timeout
+        self._read_buffer_size = read_buffer_size
+        self._write_buffer_size = write_buffer_size
         self._overlapped_read: OVERLAPPED | None = None
         self._overlapped_write: OVERLAPPED | None = None
 
@@ -195,8 +199,8 @@ class Win32Serial(BaseSerial):
             )
             SetCommTimeouts(self._handle, timeouts)
 
-            # Setup buffers (input, output) - standard pyserial size
-            SetupComm(self._handle, 4096, 4096)
+            # Setup buffers
+            SetupComm(self._handle, self._read_buffer_size, self._write_buffer_size)
 
             # Clear buffers
             PurgeComm(
@@ -375,6 +379,10 @@ class Win32Serial(BaseSerial):
             raise OSError(e.winerror, e.strerror) from e
 
         if err == ERROR_IO_PENDING:
+            if timeout == 0:
+                # Non-blocking: the kernel accepted the whole write
+                return memoryview(data).nbytes
+
             # IO is pending, wait for it
             timeout_ms = int(timeout * 1000) if timeout is not None else INFINITE
             res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
