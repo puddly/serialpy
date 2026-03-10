@@ -168,6 +168,11 @@ class Win32Serial(BaseSerial):
 
         self._auto_close = True
 
+    @property
+    def is_open(self) -> bool:
+        """Check if the serial port is open."""
+        return self._handle is not None
+
     def _configure_port(self) -> None:
         """Configure the serial port settings."""
         try:
@@ -302,6 +307,28 @@ class Win32Serial(BaseSerial):
             EscapeCommFunction(
                 self._handle, (SETDTR if modem_pins.dtr is PinState.HIGH else CLRDTR)
             )
+
+    def num_unread_bytes(self) -> int:
+        """Number of bytes waiting to be read."""
+        assert self._handle is not None
+        _flags, comstat = ClearCommError(self._handle)
+        return comstat.cbInQue
+
+    def num_unwritten_bytes(self) -> int:
+        """Number of bytes waiting to be written."""
+        assert self._handle is not None
+        _flags, comstat = ClearCommError(self._handle)
+        return comstat.cbOutQue
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        assert self._handle is not None
+        PurgeComm(self._handle, PURGE_RXABORT | PURGE_RXCLEAR)
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+        assert self._handle is not None
+        PurgeComm(self._handle, PURGE_TXABORT | PURGE_TXCLEAR)
 
     def flush(self) -> None:
         """Flush write buffers."""

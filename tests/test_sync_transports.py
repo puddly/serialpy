@@ -598,6 +598,79 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
                 serial.write(data)
 
 
+# --- Buffer inspection and reset ---
+
+
+@pytest.mark.skip_backends("socket", "esphome")
+def test_sync_num_unread_bytes(serial_pair: SerialPair) -> None:
+    """Test that num_unread_bytes reflects pending data."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        assert right.num_unread_bytes() == 0
+
+        left.write(b"hello")
+        left.flush()
+        time.sleep(0.05)
+
+        assert right.num_unread_bytes() == 5
+
+        right.readexactly(5)
+        assert right.num_unread_bytes() == 0
+
+
+@pytest.mark.skip_backends("socket", "esphome")
+def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
+    """Test that num_unwritten_bytes returns an integer."""
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
+        # After flush, unwritten bytes should be zero
+        left.flush()
+        assert left.num_unwritten_bytes() == 0
+
+
+@pytest.mark.skip_backends("socket", "esphome")
+def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
+    """Test that reset_read_buffer discards pending input."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.2) as right,
+    ):
+        left.write(b"discard me")
+        left.flush()
+        time.sleep(0.05)
+
+        assert right.num_unread_bytes() > 0
+        right.reset_read_buffer()
+        assert right.num_unread_bytes() == 0
+
+        # Confirm read returns nothing after flush
+        assert right.read(1024) == b""
+
+
+@pytest.mark.skip_backends("socket", "esphome")
+def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
+    """Test that reset_write_buffer discards pending output."""
+    with Serial.from_url(serial_pair.left, baudrate=9600) as left:
+        left.write(b"x" * 1024)
+        assert left.num_unwritten_bytes() > 0
+        left.reset_write_buffer()
+        assert left.num_unwritten_bytes() == 0
+
+
+def test_sync_buffer_methods(serial_pair: SerialPair) -> None:
+    """Test that buffer inspection and reset methods."""
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
+        assert left.num_unread_bytes() >= 0
+        assert left.num_unwritten_bytes() >= 0
+
+        left.reset_read_buffer()
+        assert left.num_unread_bytes() == 0
+
+        left.reset_write_buffer()
+        assert left.num_unwritten_bytes() == 0
+
+
 # --- Adapter-pair-specific tests ---
 # These tests require physical adapter pairs (com0com, real hardware)
 # and verify cross-port behavior that virtual backends can't emulate.

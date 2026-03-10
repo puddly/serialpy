@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import abstractmethod
 import asyncio
 from asyncio import IncompleteReadError
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import dataclasses
 from enum import Enum
@@ -177,6 +178,7 @@ class BaseSerial(io.RawIOBase):
         self._stopbits = stopbits
         self._xonxoff = xonxoff
         self._rtscts = rtscts
+        self._dsrdtr = dsrdtr
         self._parity = parity
         self._byte_size = byte_size
         self._exclusive = exclusive
@@ -311,7 +313,7 @@ class BaseSerial(io.RawIOBase):
         raise NotImplementedError
 
     @property
-    def path(self) -> str | Path:
+    def path(self) -> str | Path | None:
         """Get the serial port path."""
         return self._path
 
@@ -361,7 +363,8 @@ class BaseSerial(io.RawIOBase):
             with measure_time() as get_elapsed:
                 read = self.readinto(view, timeout=timeout)
 
-            timeout -= get_elapsed()
+            if timeout is not None:
+                timeout -= get_elapsed()
 
             view = view[read:]
             remaining -= read
@@ -390,7 +393,8 @@ class BaseSerial(io.RawIOBase):
             with measure_time() as get_elapsed:
                 byte = self.readexactly(1, timeout=timeout)
 
-            timeout -= get_elapsed()
+            if timeout is not None:
+                timeout -= get_elapsed()
 
             if not byte:
                 break
@@ -419,24 +423,24 @@ class BaseSerial(io.RawIOBase):
         if getattr(self, "_auto_close", False):
             self.close()
 
-    @abstractmethod
+    # @abstractmethod
     def num_unread_bytes(self) -> int:
         """Number of bytes waiting to be read."""
 
-    @abstractmethod
+    # @abstractmethod
     def num_unwritten_bytes(self) -> int:
         """Number of bytes waiting to be read."""
 
-    @abstractmethod
+    # @abstractmethod
     def reset_read_buffer(self) -> None:
         """Reset the read buffer."""
 
-    @abstractmethod
+    # @abstractmethod
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
-    @abstractmethod
     @property
+    @abstractmethod
     def is_open(self) -> bool:
         """Return whether the serial port is open."""
         raise NotImplementedError

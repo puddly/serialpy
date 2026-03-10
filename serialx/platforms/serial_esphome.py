@@ -133,6 +133,10 @@ class ESPHomeSerial(BaseSerial):
         self._call_on_loop(self._async_open())
         self._call_on_loop(self._async_subscribe())
 
+    def is_open(self) -> bool:
+        """Return whether the serial port is open."""
+        return self._api is not None
+
     async def _async_open(self) -> None:
         self._api = aioesphomeapi.APIClient(
             self._host,
@@ -205,6 +209,21 @@ class ESPHomeSerial(BaseSerial):
             dtr=PinState.convert(rsp.line_states & LineStateFlag.DTR),
             rts=PinState.convert(rsp.line_states & LineStateFlag.RTS),
         )
+
+    def num_unread_bytes(self) -> int:
+        """Number of bytes waiting to be read."""
+        return len(self._read_buffer)
+
+    def num_unwritten_bytes(self) -> int:
+        """Number of bytes waiting to be written."""
+        return 0
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        self._read_buffer.clear()
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
 
     async def _async_flush(self) -> None:
         """Flush write buffers."""

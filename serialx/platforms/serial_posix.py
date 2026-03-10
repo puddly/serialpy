@@ -122,6 +122,11 @@ class PosixSerial(BaseSerial):
 
         time.sleep(AFTER_OPEN_DELAY)
 
+    @property
+    def is_open(self) -> bool:
+        """Check if the serial port is open."""
+        return self._fileno is not None
+
     def _lock(self) -> None:
         """Lock the serial port for exclusive access."""
         LOGGER.debug("Locking serial port %r", self._path)
@@ -448,6 +453,34 @@ class PosixSerial(BaseSerial):
                 raise TimeoutError("Write timeout")
 
         return os.write(self._fileno, data)  # type: ignore[arg-type]
+
+    def num_unread_bytes(self) -> int:
+        """Number of bytes waiting to be read."""
+        assert self._fileno is not None
+        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+
+        fcntl.ioctl(self._fileno, termios.FIONREAD, buffer)
+
+        return int.from_bytes(buffer, "little")
+
+    def num_unwritten_bytes(self) -> int:
+        """Number of bytes waiting to be read."""
+        assert self._fileno is not None
+        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+
+        fcntl.ioctl(self._fileno, termios.TIOCOUTQ, buffer)
+
+        return int.from_bytes(buffer, "little")
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        assert self._fileno is not None
+        termios.tcflush(self._fileno, termios.TCIFLUSH)
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+        assert self._fileno is not None
+        termios.tcflush(self._fileno, termios.TCOFLUSH)
 
 
 class PosixSerialTransport(DescriptorTransport):

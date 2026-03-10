@@ -49,6 +49,11 @@ class SocketSerial(BaseSerial):
         )
 
     @property
+    def is_open(self) -> bool:
+        """Check if the serial port is open."""
+        return self._socket is not None
+
+    @property
     def connect_timeout(self) -> float | None:
         """Get the connection timeout in seconds."""
         return self._connect_timeout
@@ -82,6 +87,20 @@ class SocketSerial(BaseSerial):
 
     def _get_modem_pins(self) -> ModemPins:
         return ModemPins()
+
+    def num_unread_bytes(self) -> int:
+        """Number of bytes waiting to be read."""
+        return 0
+
+    def num_unwritten_bytes(self) -> int:
+        """Number of bytes waiting to be written."""
+        return 0
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
 
     def flush(self) -> None:
         """Flush write buffers (no-op for sockets)."""
