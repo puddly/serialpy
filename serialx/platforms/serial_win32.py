@@ -144,6 +144,7 @@ class Win32Serial(BaseSerial):
         if self._handle is not None:
             raise ValueError("Serial port is already open")
 
+        assert self._path is not None
         path = _normalize_windows_port_path(self._path)
 
         share_mode = 0 if self._exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
@@ -334,10 +335,8 @@ class Win32Serial(BaseSerial):
         """Flush write buffers."""
         FlushFileBuffers(self._handle)
 
-    def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
         """Read data into the provided bytearray."""
-        timeout = self._read_timeout if timeout is None else timeout
-
         assert self._overlapped_read is not None
         ResetEvent(self._overlapped_read.hEvent)
 
@@ -365,10 +364,8 @@ class Win32Serial(BaseSerial):
 
         return n
 
-    def write(self, data: Buffer, *, timeout: float | None = None) -> int:
+    def _write(self, data: Buffer, *, timeout: float | None) -> int:
         """Write data to the serial port synchronously."""
-        timeout = self._read_timeout if timeout is None else timeout
-
         assert self._overlapped_write is not None
         ResetEvent(self._overlapped_write.hEvent)
 

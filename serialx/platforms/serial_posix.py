@@ -114,6 +114,7 @@ class PosixSerial(BaseSerial):
         if self._fileno is not None:
             raise ValueError("Serial port is already open")
 
+        assert self._path is not None
         self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
         self._auto_close = True
 
@@ -402,10 +403,9 @@ class PosixSerial(BaseSerial):
     # `io.IOBase` implements `read`, `readline`, using `readinto`
     if sys.version_info >= (3, 14):
 
-        def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
+        def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
-            timeout = self._read_timeout if timeout is None else timeout
 
             if timeout is not None:
                 ready, _, _ = select.select([self._fileno], [], [], timeout)
@@ -419,10 +419,9 @@ class PosixSerial(BaseSerial):
 
     else:
 
-        def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
+        def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
-            timeout = self._read_timeout if timeout is None else timeout
 
             if timeout is not None:
                 ready, _, _ = select.select([self._fileno], [], [], timeout)
@@ -441,11 +440,10 @@ class PosixSerial(BaseSerial):
 
             return n
 
-    def write(self, data: Buffer, *, timeout: float | None = None) -> int:
+    def _write(self, data: Buffer, *, timeout: float | None) -> int:
         """Write bytes to serial port."""
         LOGGER.debug("Writing %d bytes: %r", len(data), data)  # type: ignore[arg-type]
         assert self._fileno is not None
-        timeout = self._write_timeout if timeout is None else None
 
         if timeout is not None:
             _, ready, _ = select.select([], [self._fileno], [], timeout)

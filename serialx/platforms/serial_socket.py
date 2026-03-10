@@ -105,22 +105,20 @@ class SocketSerial(BaseSerial):
     def flush(self) -> None:
         """Flush write buffers (no-op for sockets)."""
 
-    def write(self, b: Buffer, *, timeout: float | None = None) -> int:
+    def _write(self, b: Buffer, *, timeout: float | None) -> int:
         """Write bytes to socket."""
         assert self._socket is not None
 
-        timeout = self._write_timeout if timeout is None else timeout
         self._socket.settimeout(timeout)
 
         data = bytes(b)
         self._socket.sendall(data)
         return len(data)
 
-    def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
         """Read bytes from socket into buffer."""
         assert self._socket is not None
 
-        timeout = self._read_timeout if timeout is None else timeout
         self._socket.settimeout(timeout)
 
         m = memoryview(b).cast("B")

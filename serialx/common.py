@@ -17,7 +17,7 @@ from typing import Any
 import urllib.parse
 import warnings
 
-from typing_extensions import Self
+from typing_extensions import Buffer, Self
 
 
 class SerialException(Exception):
@@ -307,14 +307,24 @@ class BaseSerial(io.RawIOBase):
         """Set modem control bits, internal."""
         raise NotImplementedError
 
-    @abstractmethod
     def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
         """Read bytes from serial port into buffer."""
-        raise NotImplementedError
+        timeout = self._read_timeout if timeout is None else timeout
+        return self._readinto(b, timeout=timeout)
 
     @abstractmethod
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
+        """Read bytes from serial port into buffer, internal."""
+        raise NotImplementedError
+
     def write(self, data: Buffer, *, timeout: float | None = None) -> int:
         """Write bytes to serial port."""
+        timeout = self._write_timeout if timeout is None else timeout
+        return self._write(data, timeout=timeout)
+
+    @abstractmethod
+    def _write(self, data: Buffer, *, timeout: float | None) -> int:
+        """Write bytes to serial port, internal."""
         raise NotImplementedError
 
     @abstractmethod
