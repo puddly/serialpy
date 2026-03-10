@@ -339,6 +339,12 @@ class BaseSerial(io.RawIOBase):
         """Get the baud rate."""
         return self._baudrate
 
+    @baudrate.setter
+    def baudrate(self, value: int) -> None:
+        """Set baud rate (deprecated)."""
+        self._baudrate = value
+        self._configure_port()
+
     @property
     def parity(self) -> Parity:
         """Get the parity."""
@@ -551,12 +557,6 @@ class BaseSerial(io.RawIOBase):
     def cts(self, value: bool) -> None:
         """Set CTS modem bit."""
         self.set_modem_pins(cts=bool(value))
-
-    @baudrate.setter  # type: ignore[attr-defined, no-redef]
-    def baudrate(self, value: int) -> None:
-        """Set baud rate."""
-        self._baudrate = value
-        self._configure_port()
 
 
 class BaseSerialTransport(asyncio.Transport):
