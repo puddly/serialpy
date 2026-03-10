@@ -455,7 +455,7 @@ class PosixSerial(BaseSerial):
         return os.write(self._fileno, data)  # type: ignore[arg-type]
 
     def num_unread_bytes(self) -> int:
-        """Number of bytes waiting to be read."""
+        """Return the number of bytes waiting to be read."""
         assert self._fileno is not None
         buffer = bytearray((0x00000000).to_bytes(4, "little"))
 
@@ -464,7 +464,7 @@ class PosixSerial(BaseSerial):
         return int.from_bytes(buffer, "little")
 
     def num_unwritten_bytes(self) -> int:
-        """Number of bytes waiting to be read."""
+        """Return the number of bytes waiting to be written."""
         assert self._fileno is not None
         buffer = bytearray((0x00000000).to_bytes(4, "little"))
 

@@ -133,6 +133,7 @@ class ESPHomeSerial(BaseSerial):
         self._call_on_loop(self._async_open())
         self._call_on_loop(self._async_subscribe())
 
+    @property
     def is_open(self) -> bool:
         """Return whether the serial port is open."""
         return self._api is not None
@@ -211,11 +212,11 @@ class ESPHomeSerial(BaseSerial):
         )
 
     def num_unread_bytes(self) -> int:
-        """Number of bytes waiting to be read."""
+        """Return the number of bytes waiting to be read."""
         return len(self._read_buffer)
 
     def num_unwritten_bytes(self) -> int:
-        """Number of bytes waiting to be written."""
+        """Return the number of bytes waiting to be written."""
         return 0
 
     def reset_read_buffer(self) -> None:

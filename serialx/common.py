@@ -308,6 +308,16 @@ class BaseSerial(io.RawIOBase):
         raise NotImplementedError
 
     @abstractmethod
+    def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
+        """Read bytes from serial port into buffer."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def write(self, data: Buffer, *, timeout: float | None = None) -> int:
+        """Write bytes to serial port."""
+        raise NotImplementedError
+
+    @abstractmethod
     def flush(self) -> None:
         """Flush write buffers."""
         raise NotImplementedError
@@ -425,11 +435,11 @@ class BaseSerial(io.RawIOBase):
 
     @abstractmethod
     def num_unread_bytes(self) -> int:
-        """Number of bytes waiting to be read."""
+        """Return the number of bytes waiting to be read."""
 
     @abstractmethod
     def num_unwritten_bytes(self) -> int:
-        """Number of bytes waiting to be read."""
+        """Return the number of bytes waiting to be written."""
 
     @abstractmethod
     def reset_read_buffer(self) -> None:
@@ -447,11 +457,13 @@ class BaseSerial(io.RawIOBase):
 
     # Deprecated aliases
     @property
-    def port(self) -> str:
-        return self.path
+    def port(self) -> str | None:
+        """Deprecated: use `path` instead."""
+        return str(self.path) if self.path is not None else None
 
     @property
-    def timeout(self) -> float:
+    def timeout(self) -> float | None:
+        """Deprecated: use `read_timeout` instead."""
         return self.read_timeout
 
     @timeout.setter
@@ -460,37 +472,47 @@ class BaseSerial(io.RawIOBase):
 
     @property
     def bytesize(self) -> int:
+        """Deprecated: use `byte_size` instead."""
         return self.byte_size
 
     @property
-    def writeTimeout(self) -> float:
+    def writeTimeout(self) -> float | None:
+        """Deprecated: use `write_timeout` instead."""
         return self.write_timeout
 
     def reset_input_buffer(self) -> None:
+        """Reset the read buffer (deprecated: use `reset_read_buffer`)."""
         self.reset_read_buffer()
 
     def reset_output_buffer(self) -> None:
+        """Reset the write buffer (deprecated: use `reset_write_buffer`)."""
         self.reset_write_buffer()
 
     def flushInput(self) -> None:
+        """Reset the read buffer (deprecated: use `reset_read_buffer`)."""
         self.reset_read_buffer()
 
     def flushOutput(self) -> None:
+        """Reset the write buffer (deprecated: use `reset_write_buffer`)."""
         self.reset_write_buffer()
 
     @property
     def in_waiting(self) -> int:
+        """Deprecated: use `num_unread_bytes` instead."""
         return self.num_unread_bytes()
 
     @property
     def out_waiting(self) -> int:
+        """Deprecated: use `num_unwritten_bytes` instead."""
         return self.num_unwritten_bytes()
 
     @property
     def inWaiting(self) -> int:
-        return self.in_waiting()
+        """Deprecated: use `num_unread_bytes` instead."""
+        return self.in_waiting
 
     def isOpen(self) -> bool:
+        """Return whether the serial port is open (deprecated: use `is_open`)."""
         return self.is_open
 
     @property
@@ -523,7 +545,7 @@ class BaseSerial(io.RawIOBase):
         """Set CTS modem bit."""
         self.set_modem_pins(cts=bool(value))
 
-    @baudrate.setter
+    @baudrate.setter  # type: ignore[attr-defined, no-redef]
     def baudrate(self, value: int) -> None:
         """Set baud rate."""
         self._baudrate = value
@@ -743,7 +765,7 @@ class SerialPortInfo:
     interface_description: str | None
     interface_num: int | None
 
-    def __getitem__(self, key: int | slice) -> str | int:
+    def __getitem__(self, key: int | slice) -> str | None:
         """Compatibility shim for `serial.tools.list_ports_common.ListPortInfo`."""
         warnings.warn(
             "Slicing `SerialPortInfo` is deprecated, use attributes instead",

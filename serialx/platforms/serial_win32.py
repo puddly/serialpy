@@ -309,13 +309,13 @@ class Win32Serial(BaseSerial):
             )
 
     def num_unread_bytes(self) -> int:
-        """Number of bytes waiting to be read."""
+        """Return the number of bytes waiting to be read."""
         assert self._handle is not None
         _flags, comstat = ClearCommError(self._handle)
         return comstat.cbInQue
 
     def num_unwritten_bytes(self) -> int:
-        """Number of bytes waiting to be written."""
+        """Return the number of bytes waiting to be written."""
         assert self._handle is not None
         _flags, comstat = ClearCommError(self._handle)
         return comstat.cbOutQue

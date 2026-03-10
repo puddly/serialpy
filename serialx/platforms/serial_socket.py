@@ -89,11 +89,11 @@ class SocketSerial(BaseSerial):
         return ModemPins()
 
     def num_unread_bytes(self) -> int:
-        """Number of bytes waiting to be read."""
+        """Return the number of bytes waiting to be read."""
         return 0
 
     def num_unwritten_bytes(self) -> int:
-        """Number of bytes waiting to be written."""
+        """Return the number of bytes waiting to be written."""
         return 0
 
     def reset_read_buffer(self) -> None:

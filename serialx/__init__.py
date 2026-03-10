@@ -1,7 +1,5 @@
 """serialx serial port implementation."""
 
-import sys
-
 from .async_serial import (
     SerialStreamWriter,
     create_serial_connection,
