@@ -1,0 +1,930 @@
+dev.umodem.0.ttyports=1
+dev.umodem.0.ttyname=U0
+dev.umodem.0.%iommu=
+dev.umodem.0.%parent=uhub4
+dev.umodem.0.%pnpinfo=vendor=0x303a product=0x4001 devclass=0xef devsubclass=0x02 devproto=0x01 sernum="80B54EEFAE18" release=0x0101 mode=host intclass=0x02 intsubclass=0x02 intprotocol=0x00 ttyname=U0 ttyports=1
+dev.umodem.0.%location=bus=8 hubaddr=1 port=19 devaddr=4 interface=0 ugen=ugen8.4
+dev.umodem.0.%driver=umodem
+dev.umodem.0.%desc=Nabu Casa ZBT-2, class 239/2, rev 2.00/1.01, addr 3
+dev.umodem.%parent=
+dev.uplcom.%parent=
+dev.uslcom.0.ttyports=1
+dev.uslcom.0.ttyname=U3
+dev.uslcom.0.%iommu=
+dev.uslcom.0.%parent=uhub4
+dev.uslcom.0.%pnpinfo=vendor=0x10c4 product=0xea60 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="ec4903cb" release=0x0100 mode=host intclass=0xff intsubclass=0x00 intprotocol=0x00 ttyname=U3 ttyports=1
+dev.uslcom.0.%location=bus=8 hubaddr=1 port=20 devaddr=5 interface=0 ugen=ugen8.5
+dev.uslcom.0.%driver=uslcom
+dev.uslcom.0.%desc=Silicon Labs CP2102 USB to UART Bridge Controller, class 0/0, rev 1.10/1.00, addr 4
+dev.uslcom.%parent=
+dev.uftdi.0.ttyports=1
+dev.uftdi.0.ttyname=U4
+dev.uftdi.0.%iommu=
+dev.uftdi.0.%parent=uhub4
+dev.uftdi.0.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="rutabaga" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U4 ttyports=1
+dev.uftdi.0.%location=bus=8 hubaddr=1 port=18 devaddr=6 interface=0 ugen=ugen8.6
+dev.uftdi.0.%driver=uftdi
+dev.uftdi.0.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 5
+dev.uftdi.2.ttyports=1
+dev.uftdi.2.ttyname=U2
+dev.uftdi.2.%iommu=
+dev.uftdi.2.%parent=uhub4
+dev.uftdi.2.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="A5069RR4" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U2 ttyports=1
+dev.uftdi.2.%location=bus=8 hubaddr=1 port=17 devaddr=3 interface=0 ugen=ugen8.3
+dev.uftdi.2.%driver=uftdi
+dev.uftdi.2.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 2
+dev.uftdi.1.ttyports=1
+dev.uftdi.1.ttyname=U1
+dev.uftdi.1.%iommu=
+dev.uftdi.1.%parent=uhub4
+dev.uftdi.1.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="A5069RR4" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U1 ttyports=1
+dev.uftdi.1.%location=bus=8 hubaddr=1 port=16 devaddr=2 interface=0 ugen=ugen8.2
+dev.uftdi.1.%driver=uftdi
+dev.uftdi.1.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 1
+dev.uftdi.%parent=
+dev.uhid.0.%iommu=
+dev.uhid.0.%parent=uhub7
+dev.uhid.0.%pnpinfo=vendor=0x0627 product=0x0001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="28754-0000:00:1d.7-1" release=0x0000 mode=host intclass=0x03 intsubclass=0x00 intprotocol=0x00
+dev.uhid.0.%location=bus=7 hubaddr=1 port=1 devaddr=2 interface=0 ugen=ugen7.2
+dev.uhid.0.%driver=uhid
+dev.uhid.0.%desc=QEMU QEMU USB Tablet, class 0/0, rev 2.00/0.00, addr 2
+dev.uhid.%parent=
+dev.vtcon.0.%iommu=
+dev.vtcon.0.%parent=virtio_pci0
+dev.vtcon.0.%pnpinfo=vendor=0x00001af4 device=0x1003 subvendor=0x1af4 device_type=0x00000003
+dev.vtcon.0.%location=
+dev.vtcon.0.%driver=vtcon
+dev.vtcon.0.%desc=VirtIO Console Adapter
+dev.vtcon.%parent=
+dev.smbus.0.%iommu=
+dev.smbus.0.%parent=ichsmb0
+dev.smbus.0.%pnpinfo=
+dev.smbus.0.%location=
+dev.smbus.0.%driver=smbus
+dev.smbus.0.%desc=System Management Bus
+dev.smbus.%parent=
+dev.ichsmb.0.%iommu=rid=0xfb
+dev.ichsmb.0.%parent=pci0
+dev.ichsmb.0.%pnpinfo=vendor=0x8086 device=0x2930 subvendor=0x1af4 subdevice=0x1100 class=0x0c0500
+dev.ichsmb.0.%location=slot=31 function=3 dbsf=pci0:0:31:3 handle=\_SB_.PCI0.SFB_
+dev.ichsmb.0.%driver=ichsmb
+dev.ichsmb.0.%desc=Intel 82801I (ICH9) SMBus controller
+dev.ichsmb.%parent=
+dev.uhub.8.disable_port_power=0
+dev.uhub.8.disable_enumeration=0
+dev.uhub.8.%iommu=
+dev.uhub.8.%parent=usbus3
+dev.uhub.8.%pnpinfo=
+dev.uhub.8.%location=
+dev.uhub.8.%driver=uhub
+dev.uhub.8.%desc=Intel EHCI root HUB, class 9/0, rev 2.00/1.00, addr 1
+dev.uhub.7.disable_port_power=0
+dev.uhub.7.disable_enumeration=0
+dev.uhub.7.%iommu=
+dev.uhub.7.%parent=usbus7
+dev.uhub.7.%pnpinfo=
+dev.uhub.7.%location=
+dev.uhub.7.%driver=uhub
+dev.uhub.7.%desc=Intel EHCI root HUB, class 9/0, rev 2.00/1.00, addr 1
+dev.uhub.6.disable_port_power=0
+dev.uhub.6.disable_enumeration=0
+dev.uhub.6.%iommu=
+dev.uhub.6.%parent=usbus5
+dev.uhub.6.%pnpinfo=
+dev.uhub.6.%location=
+dev.uhub.6.%driver=uhub
+dev.uhub.6.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.5.disable_port_power=0
+dev.uhub.5.disable_enumeration=0
+dev.uhub.5.%iommu=
+dev.uhub.5.%parent=usbus0
+dev.uhub.5.%pnpinfo=
+dev.uhub.5.%location=
+dev.uhub.5.%driver=uhub
+dev.uhub.5.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.4.disable_port_power=0
+dev.uhub.4.disable_enumeration=0
+dev.uhub.4.%iommu=
+dev.uhub.4.%parent=usbus8
+dev.uhub.4.%pnpinfo=
+dev.uhub.4.%location=
+dev.uhub.4.%driver=uhub
+dev.uhub.4.%desc=(0x1b36) XHCI root HUB, class 9/0, rev 3.00/1.00, addr 1
+dev.uhub.3.disable_port_power=0
+dev.uhub.3.disable_enumeration=0
+dev.uhub.3.%iommu=
+dev.uhub.3.%parent=usbus1
+dev.uhub.3.%pnpinfo=
+dev.uhub.3.%location=
+dev.uhub.3.%driver=uhub
+dev.uhub.3.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.2.disable_port_power=0
+dev.uhub.2.disable_enumeration=0
+dev.uhub.2.%iommu=
+dev.uhub.2.%parent=usbus6
+dev.uhub.2.%pnpinfo=
+dev.uhub.2.%location=
+dev.uhub.2.%driver=uhub
+dev.uhub.2.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.1.disable_port_power=0
+dev.uhub.1.disable_enumeration=0
+dev.uhub.1.%iommu=
+dev.uhub.1.%parent=usbus4
+dev.uhub.1.%pnpinfo=
+dev.uhub.1.%location=
+dev.uhub.1.%driver=uhub
+dev.uhub.1.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.0.disable_port_power=0
+dev.uhub.0.disable_enumeration=0
+dev.uhub.0.%iommu=
+dev.uhub.0.%parent=usbus2
+dev.uhub.0.%pnpinfo=
+dev.uhub.0.%location=
+dev.uhub.0.%driver=uhub
+dev.uhub.0.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.%parent=
+dev.attimer.0.%iommu=
+dev.attimer.0.%parent=isa0
+dev.attimer.0.%pnpinfo=
+dev.attimer.0.%location=
+dev.attimer.0.%driver=attimer
+dev.attimer.0.%desc=AT timer
+dev.attimer.%parent=
+dev.apic.0.%iommu=
+dev.apic.0.%parent=nexus0
+dev.apic.0.%pnpinfo=
+dev.apic.0.%location=
+dev.apic.0.%driver=apic
+dev.apic.0.%desc=APIC resources
+dev.apic.%parent=
+dev.psm.0.%iommu=
+dev.psm.0.%parent=atkbdc0
+dev.psm.0.%pnpinfo=
+dev.psm.0.%location=
+dev.psm.0.%driver=psm
+dev.psm.0.%desc=PS/2 Mouse
+dev.psm.%parent=
+dev.psmcpnp.0.%iommu=
+dev.psmcpnp.0.%parent=acpi0
+dev.psmcpnp.0.%pnpinfo=_HID=PNP0F13 _UID=0 _CID=none
+dev.psmcpnp.0.%location=handle=\_SB_.PCI0.SF8_.MOU_
+dev.psmcpnp.0.%driver=psmcpnp
+dev.psmcpnp.0.%desc=PS/2 mouse port
+dev.psmcpnp.%parent=
+dev.atkbd.0.%iommu=
+dev.atkbd.0.%parent=atkbdc0
+dev.atkbd.0.%pnpinfo=
+dev.atkbd.0.%location=
+dev.atkbd.0.%driver=atkbd
+dev.atkbd.0.%desc=AT Keyboard
+dev.atkbd.%parent=
+dev.atkbdc.0.%iommu=
+dev.atkbdc.0.%parent=acpi0
+dev.atkbdc.0.%pnpinfo=_HID=PNP0303 _UID=0 _CID=none
+dev.atkbdc.0.%location=handle=\_SB_.PCI0.SF8_.KBD_
+dev.atkbdc.0.%driver=atkbdc
+dev.atkbdc.0.%desc=Keyboard controller (i8042)
+dev.atkbdc.%parent=
+dev.vmgenc.0.%iommu=
+dev.vmgenc.0.%parent=acpi0
+dev.vmgenc.0.%pnpinfo=_HID=QEMUVGID _UID=0 _CID=VM_GEN_COUNTER
+dev.vmgenc.0.%location=handle=\_SB_.VGEN
+dev.vmgenc.0.%driver=vmgenc
+dev.vmgenc.0.%desc=VM Generation Counter
+dev.vmgenc.%parent=
+dev.acpi_syscontainer.4.%iommu=
+dev.acpi_syscontainer.4.%parent=acpi0
+dev.acpi_syscontainer.4.%pnpinfo=_HID=PNP0A06 _UID=0 _CID=none
+dev.acpi_syscontainer.4.%location=handle=\_SB_.PCI0.PHPR
+dev.acpi_syscontainer.4.%driver=acpi_syscontainer
+dev.acpi_syscontainer.4.%desc=System Container
+dev.acpi_syscontainer.3.%iommu=
+dev.acpi_syscontainer.3.%parent=acpi0
+dev.acpi_syscontainer.3.%pnpinfo=_HID=PNP0A06 _UID=0 _CID=none
+dev.acpi_syscontainer.3.%location=handle=\_SB_.PCI0.GPE0
+dev.acpi_syscontainer.3.%driver=acpi_syscontainer
+dev.acpi_syscontainer.3.%desc=System Container
+dev.acpi_syscontainer.2.%iommu=
+dev.acpi_syscontainer.2.%parent=acpi0
+dev.acpi_syscontainer.2.%pnpinfo=_HID=PNP0A06 _UID=0 _CID=none
+dev.acpi_syscontainer.2.%location=handle=\_SB_.PCI0.PRES
+dev.acpi_syscontainer.2.%driver=acpi_syscontainer
+dev.acpi_syscontainer.2.%desc=System Container
+dev.acpi_syscontainer.1.%iommu=
+dev.acpi_syscontainer.1.%parent=acpi0
+dev.acpi_syscontainer.1.%pnpinfo=_HID=PNP0A06 _UID=0 _CID=none
+dev.acpi_syscontainer.1.%location=handle=\_SB_.PCI0.SMI0
+dev.acpi_syscontainer.1.%driver=acpi_syscontainer
+dev.acpi_syscontainer.1.%desc=System Container
+dev.acpi_syscontainer.0.%iommu=
+dev.acpi_syscontainer.0.%parent=acpi0
+dev.acpi_syscontainer.0.%pnpinfo=_HID=ACPI0010 _UID=0 _CID=PNP0A05
+dev.acpi_syscontainer.0.%location=handle=\_SB_.CPUS
+dev.acpi_syscontainer.0.%driver=acpi_syscontainer
+dev.acpi_syscontainer.0.%desc=System Container
+dev.acpi_syscontainer.%parent=
+dev.ahcich.5.disable_phy=0
+dev.ahcich.5.%iommu=
+dev.ahcich.5.%parent=ahci0
+dev.ahcich.5.%pnpinfo=
+dev.ahcich.5.%location=channel=5
+dev.ahcich.5.%driver=ahcich
+dev.ahcich.5.%desc=AHCI channel
+dev.ahcich.4.disable_phy=0
+dev.ahcich.4.%iommu=
+dev.ahcich.4.%parent=ahci0
+dev.ahcich.4.%pnpinfo=
+dev.ahcich.4.%location=channel=4
+dev.ahcich.4.%driver=ahcich
+dev.ahcich.4.%desc=AHCI channel
+dev.ahcich.3.disable_phy=0
+dev.ahcich.3.%iommu=
+dev.ahcich.3.%parent=ahci0
+dev.ahcich.3.%pnpinfo=
+dev.ahcich.3.%location=channel=3
+dev.ahcich.3.%driver=ahcich
+dev.ahcich.3.%desc=AHCI channel
+dev.ahcich.2.disable_phy=0
+dev.ahcich.2.%iommu=
+dev.ahcich.2.%parent=ahci0
+dev.ahcich.2.%pnpinfo=
+dev.ahcich.2.%location=channel=2
+dev.ahcich.2.%driver=ahcich
+dev.ahcich.2.%desc=AHCI channel
+dev.ahcich.1.disable_phy=0
+dev.ahcich.1.%iommu=
+dev.ahcich.1.%parent=ahci0
+dev.ahcich.1.%pnpinfo=
+dev.ahcich.1.%location=channel=1
+dev.ahcich.1.%driver=ahcich
+dev.ahcich.1.%desc=AHCI channel
+dev.ahcich.0.disable_phy=0
+dev.ahcich.0.%iommu=
+dev.ahcich.0.%parent=ahci0
+dev.ahcich.0.%pnpinfo=
+dev.ahcich.0.%location=channel=0
+dev.ahcich.0.%driver=ahcich
+dev.ahcich.0.%desc=AHCI channel
+dev.ahcich.%parent=
+dev.ahci.0.%iommu=rid=0xfa
+dev.ahci.0.%parent=pci0
+dev.ahci.0.%pnpinfo=vendor=0x8086 device=0x2922 subvendor=0x1af4 subdevice=0x1100 class=0x010601
+dev.ahci.0.%location=slot=31 function=2 dbsf=pci0:0:31:2 handle=\_SB_.PCI0.SFA_
+dev.ahci.0.%driver=ahci
+dev.ahci.0.%desc=Intel ICH9 AHCI SATA controller
+dev.ahci.%parent=
+dev.isa.0.%iommu=
+dev.isa.0.%parent=isab0
+dev.isa.0.%pnpinfo=
+dev.isa.0.%location=
+dev.isa.0.%driver=isa
+dev.isa.0.%desc=ISA bus
+dev.isa.%parent=
+dev.isab.0.%iommu=rid=0xf8
+dev.isab.0.%parent=pci0
+dev.isab.0.%pnpinfo=vendor=0x8086 device=0x2918 subvendor=0x1af4 subdevice=0x1100 class=0x060100
+dev.isab.0.%location=slot=31 function=0 dbsf=pci0:0:31:0 handle=\_SB_.PCI0.SF8_
+dev.isab.0.%driver=isab
+dev.isab.0.%desc=PCI-ISA bridge
+dev.isab.%parent=
+dev.xhci.0.%iommu=rid=0xf0
+dev.xhci.0.%parent=pci7
+dev.xhci.0.%pnpinfo=vendor=0x1b36 device=0x000d subvendor=0x1af4 subdevice=0x1100 class=0x0c0330
+dev.xhci.0.%location=slot=27 function=0 dbsf=pci0:7:27:0 handle=\_SB_.PCI0.SF0_.S10_.SD8_
+dev.xhci.0.%driver=xhci
+dev.xhci.0.%desc=XHCI (generic) USB 3.0 controller
+dev.xhci.%parent=
+dev.vtnet.0.txq0.rescheduled=0
+dev.vtnet.0.txq0.tso=135
+dev.vtnet.0.txq0.csum=41914
+dev.vtnet.0.txq0.omcasts=6
+dev.vtnet.0.txq0.obytes=7208777
+dev.vtnet.0.txq0.opackets=41995
+dev.vtnet.0.rxq0.rescheduled=0
+dev.vtnet.0.rxq0.host_lro=0
+dev.vtnet.0.rxq0.csum_failed=0
+dev.vtnet.0.rxq0.csum=17583
+dev.vtnet.0.rxq0.ierrors=0
+dev.vtnet.0.rxq0.iqdrops=0
+dev.vtnet.0.rxq0.ibytes=37948248
+dev.vtnet.0.rxq0.ipackets=85409
+dev.vtnet.0.tx_task_rescheduled=0
+dev.vtnet.0.tx_tso_offloaded=135
+dev.vtnet.0.tx_csum_offloaded=41917
+dev.vtnet.0.tx_defrag_failed=0
+dev.vtnet.0.tx_defragged=0
+dev.vtnet.0.tx_tso_without_csum=0
+dev.vtnet.0.tx_tso_not_tcp=0
+dev.vtnet.0.tx_csum_proto_mismatch=0
+dev.vtnet.0.tx_csum_unknown_ethtype=0
+dev.vtnet.0.rx_task_rescheduled=0
+dev.vtnet.0.rx_csum_offloaded=17583
+dev.vtnet.0.rx_csum_failed=0
+dev.vtnet.0.rx_csum_inaccessible_ipproto=0
+dev.vtnet.0.rx_csum_bad_offset=0
+dev.vtnet.0.rx_csum_bad_ipproto=0
+dev.vtnet.0.rx_csum_bad_ethtype=0
+dev.vtnet.0.rx_mergeable_failed=0
+dev.vtnet.0.rx_enq_replacement_failed=0
+dev.vtnet.0.rx_frame_too_large=0
+dev.vtnet.0.mbuf_alloc_failed=0
+dev.vtnet.0.flags=4cfe<MAC,CTRL_VQ,CTRL_RX,CTRL_MAC,VLAN_FILTER,TSO_ECN,MRG_RXBUFS,INDIRECT,EVENT_IDX,SW_LRO>
+dev.vtnet.0.features=3087b86f<CSUM,GUEST_CSUM,CTRL_GUEST_OFFLOADS,MTU,MAC,GSO,HOST_TSO4,HOST_TSO6,HOST_ECN,MRG_RXBUF,STATUS,CTRL_VQ,CTRL_RX,CTRL_MAC_ADDR>
+dev.vtnet.0.act_vq_pairs=1
+dev.vtnet.0.req_vq_pairs=1
+dev.vtnet.0.max_vq_pairs=1
+dev.vtnet.0.%iommu=
+dev.vtnet.0.%parent=virtio_pci2
+dev.vtnet.0.%pnpinfo=vendor=0x00001af4 device=0x1000 subvendor=0x1af4 device_type=0x00000001
+dev.vtnet.0.%location=
+dev.vtnet.0.%driver=vtnet
+dev.vtnet.0.%desc=VirtIO Networking Adapter
+dev.vtnet.%parent=
+dev.vtblk.0.writecache_mode=1
+dev.vtblk.0.%iommu=
+dev.vtblk.0.%parent=virtio_pci1
+dev.vtblk.0.%pnpinfo=vendor=0x00001af4 device=0x1001 subvendor=0x1af4 device_type=0x00000002
+dev.vtblk.0.%location=
+dev.vtblk.0.%driver=vtblk
+dev.vtblk.0.%desc=VirtIO Block Adapter
+dev.vtblk.%parent=
+dev.virtio_pci.2.negotiated_features=0x3087b86f <RingEventIdx,RingIndirectDesc,CtrlMacAddr,CtrlRxMode,CtrlVq,Status,MrgRxBuf,TxTSOECN,TxTSOv6,TxTSOv4,TxGSO,MAC,0x8,CtrlRxOffloads,RxChecksum,TxChecksum>
+dev.virtio_pci.2.host_features=0x79bfffef <RingEventIdx,RingIndirectDesc,AnyLayout,NotifyOnEmpty,CtrlMacAddr,GuestAnnounce,CtrlRxModeExtra,CtrlVLANFilter,CtrlRxMode,CtrlVq,Status,MrgRxBuf,TxUFO,TxTSOECN,TxTSOv6,TxTSOv4,RxUFO,RxLROECN,RxLROv6,RxLROv4,TxGSO,MAC,0x8,CtrlRxOffloads,RxChecksum,TxChecksum>
+dev.virtio_pci.2.nvqs=3
+dev.virtio_pci.2.%iommu=rid=0xf0
+dev.virtio_pci.2.%parent=pci6
+dev.virtio_pci.2.%pnpinfo=vendor=0x1af4 device=0x1000 subvendor=0x1af4 subdevice=0x0001 class=0x020000
+dev.virtio_pci.2.%location=slot=18 function=0 dbsf=pci0:6:18:0 handle=\_SB_.PCI0.SF0_.S08_.S90_
+dev.virtio_pci.2.%driver=virtio_pci
+dev.virtio_pci.2.%desc=VirtIO PCI (legacy) Network adapter
+dev.virtio_pci.1.negotiated_features=0x10002e54 <RingIndirectDesc,Discard,ConfigWCE,Topology,FlushCmd,BlockSize,DiskGeometry,MaxNumSegs>
+dev.virtio_pci.1.host_features=0x79007e54 <RingEventIdx,RingIndirectDesc,AnyLayout,NotifyOnEmpty,WriteZeros,Discard,Multiqueue,ConfigWCE,Topology,FlushCmd,BlockSize,DiskGeometry,MaxNumSegs>
+dev.virtio_pci.1.nvqs=1
+dev.virtio_pci.1.%iommu=rid=0xf0
+dev.virtio_pci.1.%parent=pci6
+dev.virtio_pci.1.%pnpinfo=vendor=0x1af4 device=0x1001 subvendor=0x1af4 subdevice=0x0002 class=0x010000
+dev.virtio_pci.1.%location=slot=10 function=0 dbsf=pci0:6:10:0 handle=\_SB_.PCI0.SF0_.S08_.S50_
+dev.virtio_pci.1.%driver=virtio_pci
+dev.virtio_pci.1.%desc=VirtIO PCI (legacy) Block adapter
+dev.virtio_pci.0.negotiated_features=0x2 <MultiplePorts>
+dev.virtio_pci.0.host_features=0x79000006 <RingEventIdx,RingIndirectDesc,AnyLayout,NotifyOnEmpty,EmergencyWrite,MultiplePorts>
+dev.virtio_pci.0.nvqs=64
+dev.virtio_pci.0.%iommu=rid=0xf0
+dev.virtio_pci.0.%parent=pci6
+dev.virtio_pci.0.%pnpinfo=vendor=0x1af4 device=0x1003 subvendor=0x1af4 subdevice=0x0003 class=0x078000
+dev.virtio_pci.0.%location=slot=8 function=0 dbsf=pci0:6:8:0 handle=\_SB_.PCI0.SF0_.S08_.S40_
+dev.virtio_pci.0.%driver=virtio_pci
+dev.virtio_pci.0.%desc=VirtIO PCI (legacy) Console adapter
+dev.virtio_pci.%parent=
+dev.hdac.0.polling=0
+dev.hdac.0.pindump=0
+dev.hdac.0.%iommu=rid=0xd8
+dev.hdac.0.%parent=pci0
+dev.hdac.0.%pnpinfo=vendor=0x8086 device=0x293e subvendor=0x1af4 subdevice=0x1100 class=0x040300
+dev.hdac.0.%location=slot=27 function=0 dbsf=pci0:0:27:0 handle=\_SB_.PCI0.SD8_
+dev.hdac.0.%driver=hdac
+dev.hdac.0.%desc=Intel 82801I HDA Controller
+dev.hdac.%parent=
+dev.ehci.1.%iommu=rid=0xef
+dev.ehci.1.%parent=pci0
+dev.ehci.1.%pnpinfo=vendor=0x8086 device=0x293a subvendor=0x1af4 subdevice=0x1100 class=0x0c0320
+dev.ehci.1.%location=slot=29 function=7 dbsf=pci0:0:29:7 handle=\_SB_.PCI0.SEF_
+dev.ehci.1.%driver=ehci
+dev.ehci.1.%desc=Intel 82801I (ICH9) USB 2.0 controller
+dev.ehci.0.%iommu=rid=0xd7
+dev.ehci.0.%parent=pci0
+dev.ehci.0.%pnpinfo=vendor=0x8086 device=0x293c subvendor=0x1af4 subdevice=0x1100 class=0x0c0320
+dev.ehci.0.%location=slot=26 function=7 dbsf=pci0:0:26:7 handle=\_SB_.PCI0.SD7_
+dev.ehci.0.%driver=ehci
+dev.ehci.0.%desc=Intel 82801I (ICH9) USB 2.0 controller
+dev.ehci.%parent=
+dev.usbus.8.%iommu=
+dev.usbus.8.%parent=xhci0
+dev.usbus.8.%pnpinfo=
+dev.usbus.8.%location=
+dev.usbus.8.%driver=usbus
+dev.usbus.8.%desc=
+dev.usbus.7.%iommu=
+dev.usbus.7.%parent=ehci1
+dev.usbus.7.%pnpinfo=
+dev.usbus.7.%location=
+dev.usbus.7.%driver=usbus
+dev.usbus.7.%desc=
+dev.usbus.6.%iommu=
+dev.usbus.6.%parent=uhci5
+dev.usbus.6.%pnpinfo=
+dev.usbus.6.%location=
+dev.usbus.6.%driver=usbus
+dev.usbus.6.%desc=
+dev.usbus.5.%iommu=
+dev.usbus.5.%parent=uhci4
+dev.usbus.5.%pnpinfo=
+dev.usbus.5.%location=
+dev.usbus.5.%driver=usbus
+dev.usbus.5.%desc=
+dev.usbus.4.%iommu=
+dev.usbus.4.%parent=uhci3
+dev.usbus.4.%pnpinfo=
+dev.usbus.4.%location=
+dev.usbus.4.%driver=usbus
+dev.usbus.4.%desc=
+dev.usbus.3.%iommu=
+dev.usbus.3.%parent=ehci0
+dev.usbus.3.%pnpinfo=
+dev.usbus.3.%location=
+dev.usbus.3.%driver=usbus
+dev.usbus.3.%desc=
+dev.usbus.2.%iommu=
+dev.usbus.2.%parent=uhci2
+dev.usbus.2.%pnpinfo=
+dev.usbus.2.%location=
+dev.usbus.2.%driver=usbus
+dev.usbus.2.%desc=
+dev.usbus.1.%iommu=
+dev.usbus.1.%parent=uhci1
+dev.usbus.1.%pnpinfo=
+dev.usbus.1.%location=
+dev.usbus.1.%driver=usbus
+dev.usbus.1.%desc=
+dev.usbus.0.%iommu=
+dev.usbus.0.%parent=uhci0
+dev.usbus.0.%pnpinfo=
+dev.usbus.0.%location=
+dev.usbus.0.%driver=usbus
+dev.usbus.0.%desc=
+dev.usbus.%parent=
+dev.uhci.5.%iommu=rid=0xea
+dev.uhci.5.%parent=pci0
+dev.uhci.5.%pnpinfo=vendor=0x8086 device=0x2936 subvendor=0x1af4 subdevice=0x1100 class=0x0c0300
+dev.uhci.5.%location=slot=29 function=2 dbsf=pci0:0:29:2 handle=\_SB_.PCI0.SEA_
+dev.uhci.5.%driver=uhci
+dev.uhci.5.%desc=Intel 82801I (ICH9) USB controller
+dev.uhci.4.%iommu=rid=0xe9
+dev.uhci.4.%parent=pci0
+dev.uhci.4.%pnpinfo=vendor=0x8086 device=0x2935 subvendor=0x1af4 subdevice=0x1100 class=0x0c0300
+dev.uhci.4.%location=slot=29 function=1 dbsf=pci0:0:29:1 handle=\_SB_.PCI0.SE9_
+dev.uhci.4.%driver=uhci
+dev.uhci.4.%desc=Intel 82801I (ICH9) USB controller
+dev.uhci.3.%iommu=rid=0xe8
+dev.uhci.3.%parent=pci0
+dev.uhci.3.%pnpinfo=vendor=0x8086 device=0x2934 subvendor=0x1af4 subdevice=0x1100 class=0x0c0300
+dev.uhci.3.%location=slot=29 function=0 dbsf=pci0:0:29:0 handle=\_SB_.PCI0.SE8_
+dev.uhci.3.%driver=uhci
+dev.uhci.3.%desc=Intel 82801I (ICH9) USB controller
+dev.uhci.2.%iommu=rid=0xd2
+dev.uhci.2.%parent=pci0
+dev.uhci.2.%pnpinfo=vendor=0x8086 device=0x2939 subvendor=0x1af4 subdevice=0x1100 class=0x0c0300
+dev.uhci.2.%location=slot=26 function=2 dbsf=pci0:0:26:2 handle=\_SB_.PCI0.SD2_
+dev.uhci.2.%driver=uhci
+dev.uhci.2.%desc=Intel 82801I (ICH9) USB controller
+dev.uhci.1.%iommu=rid=0xd1
+dev.uhci.1.%parent=pci0
+dev.uhci.1.%pnpinfo=vendor=0x8086 device=0x2938 subvendor=0x1af4 subdevice=0x1100 class=0x0c0300
+dev.uhci.1.%location=slot=26 function=1 dbsf=pci0:0:26:1 handle=\_SB_.PCI0.SD1_
+dev.uhci.1.%driver=uhci
+dev.uhci.1.%desc=Intel 82801I (ICH9) USB controller
+dev.uhci.0.%iommu=rid=0xd0
+dev.uhci.0.%parent=pci0
+dev.uhci.0.%pnpinfo=vendor=0x8086 device=0x2937 subvendor=0x1af4 subdevice=0x1100 class=0x0c0300
+dev.uhci.0.%location=slot=26 function=0 dbsf=pci0:0:26:0 handle=\_SB_.PCI0.SD0_
+dev.uhci.0.%driver=uhci
+dev.uhci.0.%desc=Intel 82801I (ICH9) USB controller
+dev.uhci.%parent=
+dev.vgapci.0.%iommu=rid=0x8
+dev.vgapci.0.%parent=pci0
+dev.vgapci.0.%pnpinfo=vendor=0x1234 device=0x1111 subvendor=0x1af4 subdevice=0x1100 class=0x030000
+dev.vgapci.0.%location=slot=1 function=0 dbsf=pci0:0:1:0 handle=\_SB_.PCI0.S08_
+dev.vgapci.0.%driver=vgapci
+dev.vgapci.0.%desc=VGA-compatible display
+dev.vgapci.%parent=
+dev.hostb.0.%iommu=rid=0
+dev.hostb.0.%parent=pci0
+dev.hostb.0.%pnpinfo=vendor=0x8086 device=0x29c0 subvendor=0x1af4 subdevice=0x1100 class=0x060000
+dev.hostb.0.%location=slot=0 function=0 dbsf=pci0:0:0:0 handle=\_SB_.PCI0.S00_
+dev.hostb.0.%driver=hostb
+dev.hostb.0.%desc=Host to PCI bridge
+dev.hostb.%parent=
+dev.pci.9.%iommu=
+dev.pci.9.%parent=pcib9
+dev.pci.9.%pnpinfo=
+dev.pci.9.%location=
+dev.pci.9.%driver=pci
+dev.pci.9.%desc=ACPI PCI bus
+dev.pci.8.%iommu=
+dev.pci.8.%parent=pcib8
+dev.pci.8.%pnpinfo=
+dev.pci.8.%location=
+dev.pci.8.%driver=pci
+dev.pci.8.%desc=ACPI PCI bus
+dev.pci.7.%iommu=
+dev.pci.7.%parent=pcib7
+dev.pci.7.%pnpinfo=
+dev.pci.7.%location=
+dev.pci.7.%driver=pci
+dev.pci.7.%desc=ACPI PCI bus
+dev.pci.6.%iommu=
+dev.pci.6.%parent=pcib6
+dev.pci.6.%pnpinfo=
+dev.pci.6.%location=
+dev.pci.6.%driver=pci
+dev.pci.6.%desc=ACPI PCI bus
+dev.pci.5.%iommu=
+dev.pci.5.%parent=pcib5
+dev.pci.5.%pnpinfo=
+dev.pci.5.%location=
+dev.pci.5.%driver=pci
+dev.pci.5.%desc=ACPI PCI bus
+dev.pci.4.%iommu=
+dev.pci.4.%parent=pcib4
+dev.pci.4.%pnpinfo=
+dev.pci.4.%location=
+dev.pci.4.%driver=pci
+dev.pci.4.%desc=ACPI PCI bus
+dev.pci.3.%iommu=
+dev.pci.3.%parent=pcib3
+dev.pci.3.%pnpinfo=
+dev.pci.3.%location=
+dev.pci.3.%driver=pci
+dev.pci.3.%desc=ACPI PCI bus
+dev.pci.2.%iommu=
+dev.pci.2.%parent=pcib2
+dev.pci.2.%pnpinfo=
+dev.pci.2.%location=
+dev.pci.2.%driver=pci
+dev.pci.2.%desc=ACPI PCI bus
+dev.pci.1.%iommu=
+dev.pci.1.%parent=pcib1
+dev.pci.1.%pnpinfo=
+dev.pci.1.%location=
+dev.pci.1.%driver=pci
+dev.pci.1.%desc=ACPI PCI bus
+dev.pci.0.%iommu=
+dev.pci.0.%parent=pcib0
+dev.pci.0.%pnpinfo=
+dev.pci.0.%location=
+dev.pci.0.%driver=pci
+dev.pci.0.%desc=ACPI PCI bus
+dev.pci.%parent=
+dev.pcib.9.subbus=9
+dev.pcib.9.secbus=9
+dev.pcib.9.pribus=5
+dev.pcib.9.domain=0
+dev.pcib.9.%iommu=rid=0xf0
+dev.pcib.9.%parent=pci5
+dev.pcib.9.%pnpinfo=vendor=0x1b36 device=0x0001 subvendor=0x0000 subdevice=0x0000 class=0x060400
+dev.pcib.9.%location=slot=4 function=0 dbsf=pci0:5:4:0 handle=\_SB_.PCI0.SF0_.S20_
+dev.pcib.9.%driver=pcib
+dev.pcib.9.%desc=ACPI PCI-PCI bridge
+dev.pcib.8.subbus=8
+dev.pcib.8.secbus=8
+dev.pcib.8.pribus=5
+dev.pcib.8.domain=0
+dev.pcib.8.%iommu=rid=0xf0
+dev.pcib.8.%parent=pci5
+dev.pcib.8.%pnpinfo=vendor=0x1b36 device=0x0001 subvendor=0x0000 subdevice=0x0000 class=0x060400
+dev.pcib.8.%location=slot=3 function=0 dbsf=pci0:5:3:0 handle=\_SB_.PCI0.SF0_.S18_
+dev.pcib.8.%driver=pcib
+dev.pcib.8.%desc=ACPI PCI-PCI bridge
+dev.pcib.7.subbus=7
+dev.pcib.7.secbus=7
+dev.pcib.7.pribus=5
+dev.pcib.7.domain=0
+dev.pcib.7.%iommu=rid=0xf0
+dev.pcib.7.%parent=pci5
+dev.pcib.7.%pnpinfo=vendor=0x1b36 device=0x0001 subvendor=0x0000 subdevice=0x0000 class=0x060400
+dev.pcib.7.%location=slot=2 function=0 dbsf=pci0:5:2:0 handle=\_SB_.PCI0.SF0_.S10_
+dev.pcib.7.%driver=pcib
+dev.pcib.7.%desc=ACPI PCI-PCI bridge
+dev.pcib.6.subbus=6
+dev.pcib.6.secbus=6
+dev.pcib.6.pribus=5
+dev.pcib.6.domain=0
+dev.pcib.6.%iommu=rid=0xf0
+dev.pcib.6.%parent=pci5
+dev.pcib.6.%pnpinfo=vendor=0x1b36 device=0x0001 subvendor=0x0000 subdevice=0x0000 class=0x060400
+dev.pcib.6.%location=slot=1 function=0 dbsf=pci0:5:1:0 handle=\_SB_.PCI0.SF0_.S08_
+dev.pcib.6.%driver=pcib
+dev.pcib.6.%desc=ACPI PCI-PCI bridge
+dev.pcib.5.subbus=9
+dev.pcib.5.secbus=5
+dev.pcib.5.pribus=0
+dev.pcib.5.domain=0
+dev.pcib.5.%iommu=rid=0xf0
+dev.pcib.5.%parent=pci0
+dev.pcib.5.%pnpinfo=vendor=0x8086 device=0x244e subvendor=0x0000 subdevice=0x0000 class=0x060401
+dev.pcib.5.%location=slot=30 function=0 dbsf=pci0:0:30:0 handle=\_SB_.PCI0.SF0_
+dev.pcib.5.%driver=pcib
+dev.pcib.5.%desc=ACPI PCI-PCI bridge
+dev.pcib.4.subbus=4
+dev.pcib.4.secbus=4
+dev.pcib.4.pribus=0
+dev.pcib.4.domain=0
+dev.pcib.4.%iommu=rid=0xe3
+dev.pcib.4.%parent=pci0
+dev.pcib.4.%pnpinfo=vendor=0x1b36 device=0x000c subvendor=0x1b36 subdevice=0x0000 class=0x060400
+dev.pcib.4.%location=slot=28 function=3 dbsf=pci0:0:28:3 handle=\_SB_.PCI0.SE3_
+dev.pcib.4.%driver=pcib
+dev.pcib.4.%desc=ACPI PCI-PCI bridge
+dev.pcib.3.subbus=3
+dev.pcib.3.secbus=3
+dev.pcib.3.pribus=0
+dev.pcib.3.domain=0
+dev.pcib.3.%iommu=rid=0xe2
+dev.pcib.3.%parent=pci0
+dev.pcib.3.%pnpinfo=vendor=0x1b36 device=0x000c subvendor=0x1b36 subdevice=0x0000 class=0x060400
+dev.pcib.3.%location=slot=28 function=2 dbsf=pci0:0:28:2 handle=\_SB_.PCI0.SE2_
+dev.pcib.3.%driver=pcib
+dev.pcib.3.%desc=ACPI PCI-PCI bridge
+dev.pcib.2.subbus=2
+dev.pcib.2.secbus=2
+dev.pcib.2.pribus=0
+dev.pcib.2.domain=0
+dev.pcib.2.%iommu=rid=0xe1
+dev.pcib.2.%parent=pci0
+dev.pcib.2.%pnpinfo=vendor=0x1b36 device=0x000c subvendor=0x1b36 subdevice=0x0000 class=0x060400
+dev.pcib.2.%location=slot=28 function=1 dbsf=pci0:0:28:1 handle=\_SB_.PCI0.SE1_
+dev.pcib.2.%driver=pcib
+dev.pcib.2.%desc=ACPI PCI-PCI bridge
+dev.pcib.1.subbus=1
+dev.pcib.1.secbus=1
+dev.pcib.1.pribus=0
+dev.pcib.1.domain=0
+dev.pcib.1.%iommu=rid=0xe0
+dev.pcib.1.%parent=pci0
+dev.pcib.1.%pnpinfo=vendor=0x1b36 device=0x000c subvendor=0x1b36 subdevice=0x0000 class=0x060400
+dev.pcib.1.%location=slot=28 function=0 dbsf=pci0:0:28:0 handle=\_SB_.PCI0.SE0_
+dev.pcib.1.%driver=pcib
+dev.pcib.1.%desc=ACPI PCI-PCI bridge
+dev.pcib.0.%iommu=
+dev.pcib.0.%parent=acpi0
+dev.pcib.0.%pnpinfo=_HID=PNP0A08 _UID=0 _CID=PNP0A03
+dev.pcib.0.%location=handle=\_SB_.PCI0
+dev.pcib.0.%driver=pcib
+dev.pcib.0.%desc=ACPI Host-PCI bridge
+dev.pcib.%parent=
+dev.pci_link.15.%iommu=
+dev.pci_link.15.%parent=acpi0
+dev.pci_link.15.%pnpinfo=_HID=PNP0C0F _UID=23 _CID=none
+dev.pci_link.15.%location=handle=\_SB_.GSIH
+dev.pci_link.15.%driver=pci_link
+dev.pci_link.15.%desc=ACPI PCI Link GSIH
+dev.pci_link.14.%iommu=
+dev.pci_link.14.%parent=acpi0
+dev.pci_link.14.%pnpinfo=_HID=PNP0C0F _UID=22 _CID=none
+dev.pci_link.14.%location=handle=\_SB_.GSIG
+dev.pci_link.14.%driver=pci_link
+dev.pci_link.14.%desc=ACPI PCI Link GSIG
+dev.pci_link.13.%iommu=
+dev.pci_link.13.%parent=acpi0
+dev.pci_link.13.%pnpinfo=_HID=PNP0C0F _UID=21 _CID=none
+dev.pci_link.13.%location=handle=\_SB_.GSIF
+dev.pci_link.13.%driver=pci_link
+dev.pci_link.13.%desc=ACPI PCI Link GSIF
+dev.pci_link.12.%iommu=
+dev.pci_link.12.%parent=acpi0
+dev.pci_link.12.%pnpinfo=_HID=PNP0C0F _UID=20 _CID=none
+dev.pci_link.12.%location=handle=\_SB_.GSIE
+dev.pci_link.12.%driver=pci_link
+dev.pci_link.12.%desc=ACPI PCI Link GSIE
+dev.pci_link.11.%iommu=
+dev.pci_link.11.%parent=acpi0
+dev.pci_link.11.%pnpinfo=_HID=PNP0C0F _UID=19 _CID=none
+dev.pci_link.11.%location=handle=\_SB_.GSID
+dev.pci_link.11.%driver=pci_link
+dev.pci_link.11.%desc=ACPI PCI Link GSID
+dev.pci_link.10.%iommu=
+dev.pci_link.10.%parent=acpi0
+dev.pci_link.10.%pnpinfo=_HID=PNP0C0F _UID=18 _CID=none
+dev.pci_link.10.%location=handle=\_SB_.GSIC
+dev.pci_link.10.%driver=pci_link
+dev.pci_link.10.%desc=ACPI PCI Link GSIC
+dev.pci_link.9.%iommu=
+dev.pci_link.9.%parent=acpi0
+dev.pci_link.9.%pnpinfo=_HID=PNP0C0F _UID=17 _CID=none
+dev.pci_link.9.%location=handle=\_SB_.GSIB
+dev.pci_link.9.%driver=pci_link
+dev.pci_link.9.%desc=ACPI PCI Link GSIB
+dev.pci_link.8.%iommu=
+dev.pci_link.8.%parent=acpi0
+dev.pci_link.8.%pnpinfo=_HID=PNP0C0F _UID=16 _CID=none
+dev.pci_link.8.%location=handle=\_SB_.GSIA
+dev.pci_link.8.%driver=pci_link
+dev.pci_link.8.%desc=ACPI PCI Link GSIA
+dev.pci_link.7.%iommu=
+dev.pci_link.7.%parent=acpi0
+dev.pci_link.7.%pnpinfo=_HID=PNP0C0F _UID=7 _CID=none
+dev.pci_link.7.%location=handle=\_SB_.LNKH
+dev.pci_link.7.%driver=pci_link
+dev.pci_link.7.%desc=ACPI PCI Link LNKH
+dev.pci_link.6.%iommu=
+dev.pci_link.6.%parent=acpi0
+dev.pci_link.6.%pnpinfo=_HID=PNP0C0F _UID=6 _CID=none
+dev.pci_link.6.%location=handle=\_SB_.LNKG
+dev.pci_link.6.%driver=pci_link
+dev.pci_link.6.%desc=ACPI PCI Link LNKG
+dev.pci_link.5.%iommu=
+dev.pci_link.5.%parent=acpi0
+dev.pci_link.5.%pnpinfo=_HID=PNP0C0F _UID=5 _CID=none
+dev.pci_link.5.%location=handle=\_SB_.LNKF
+dev.pci_link.5.%driver=pci_link
+dev.pci_link.5.%desc=ACPI PCI Link LNKF
+dev.pci_link.4.%iommu=
+dev.pci_link.4.%parent=acpi0
+dev.pci_link.4.%pnpinfo=_HID=PNP0C0F _UID=4 _CID=none
+dev.pci_link.4.%location=handle=\_SB_.LNKE
+dev.pci_link.4.%driver=pci_link
+dev.pci_link.4.%desc=ACPI PCI Link LNKE
+dev.pci_link.3.%iommu=
+dev.pci_link.3.%parent=acpi0
+dev.pci_link.3.%pnpinfo=_HID=PNP0C0F _UID=3 _CID=none
+dev.pci_link.3.%location=handle=\_SB_.LNKD
+dev.pci_link.3.%driver=pci_link
+dev.pci_link.3.%desc=ACPI PCI Link LNKD
+dev.pci_link.2.%iommu=
+dev.pci_link.2.%parent=acpi0
+dev.pci_link.2.%pnpinfo=_HID=PNP0C0F _UID=2 _CID=none
+dev.pci_link.2.%location=handle=\_SB_.LNKC
+dev.pci_link.2.%driver=pci_link
+dev.pci_link.2.%desc=ACPI PCI Link LNKC
+dev.pci_link.1.%iommu=
+dev.pci_link.1.%parent=acpi0
+dev.pci_link.1.%pnpinfo=_HID=PNP0C0F _UID=1 _CID=none
+dev.pci_link.1.%location=handle=\_SB_.LNKB
+dev.pci_link.1.%driver=pci_link
+dev.pci_link.1.%desc=ACPI PCI Link LNKB
+dev.pci_link.0.%iommu=
+dev.pci_link.0.%parent=acpi0
+dev.pci_link.0.%pnpinfo=_HID=PNP0C0F _UID=0 _CID=none
+dev.pci_link.0.%location=handle=\_SB_.LNKA
+dev.pci_link.0.%driver=pci_link
+dev.pci_link.0.%desc=ACPI PCI Link LNKA
+dev.pci_link.%parent=
+dev.acpi_timer.0.%iommu=
+dev.acpi_timer.0.%parent=acpi0
+dev.acpi_timer.0.%pnpinfo=unknown
+dev.acpi_timer.0.%location=
+dev.acpi_timer.0.%driver=acpi_timer
+dev.acpi_timer.0.%desc=24-bit timer at 3.579545MHz
+dev.acpi_timer.%parent=
+dev.atrtc.0.%iommu=
+dev.atrtc.0.%parent=acpi0
+dev.atrtc.0.%pnpinfo=_HID=PNP0B00 _UID=0 _CID=none
+dev.atrtc.0.%location=handle=\_SB_.PCI0.SF8_.RTC_
+dev.atrtc.0.%driver=atrtc
+dev.atrtc.0.%desc=AT realtime clock
+dev.atrtc.%parent=
+dev.cpu.3.cx_method=C1/hlt
+dev.cpu.3.cx_usage_counters=503522
+dev.cpu.3.cx_usage=100.00% last 27us
+dev.cpu.3.cx_lowest=C1
+dev.cpu.3.cx_supported=C1/1/0
+dev.cpu.3.%iommu=
+dev.cpu.3.%parent=acpi0
+dev.cpu.3.%pnpinfo=_HID=none _UID=0 _CID=none
+dev.cpu.3.%location=handle=\_SB_.CPUS.C003
+dev.cpu.3.%driver=cpu
+dev.cpu.3.%desc=ACPI CPU
+dev.cpu.2.cx_method=C1/hlt
+dev.cpu.2.cx_usage_counters=527877
+dev.cpu.2.cx_usage=100.00% last 4092us
+dev.cpu.2.cx_lowest=C1
+dev.cpu.2.cx_supported=C1/1/0
+dev.cpu.2.%iommu=
+dev.cpu.2.%parent=acpi0
+dev.cpu.2.%pnpinfo=_HID=none _UID=0 _CID=none
+dev.cpu.2.%location=handle=\_SB_.CPUS.C002
+dev.cpu.2.%driver=cpu
+dev.cpu.2.%desc=ACPI CPU
+dev.cpu.1.cx_method=C1/hlt
+dev.cpu.1.cx_usage_counters=501138
+dev.cpu.1.cx_usage=100.00% last 25991us
+dev.cpu.1.cx_lowest=C1
+dev.cpu.1.cx_supported=C1/1/0
+dev.cpu.1.%iommu=
+dev.cpu.1.%parent=acpi0
+dev.cpu.1.%pnpinfo=_HID=none _UID=0 _CID=none
+dev.cpu.1.%location=handle=\_SB_.CPUS.C001
+dev.cpu.1.%driver=cpu
+dev.cpu.1.%desc=ACPI CPU
+dev.cpu.0.cx_method=C1/hlt
+dev.cpu.0.cx_usage_counters=1260378
+dev.cpu.0.cx_usage=100.00% last 20062us
+dev.cpu.0.cx_lowest=C1
+dev.cpu.0.cx_supported=C1/1/0
+dev.cpu.0.%iommu=
+dev.cpu.0.%parent=acpi0
+dev.cpu.0.%pnpinfo=_HID=none _UID=0 _CID=none
+dev.cpu.0.%location=handle=\_SB_.CPUS.C000
+dev.cpu.0.%driver=cpu
+dev.cpu.0.%desc=ACPI CPU
+dev.cpu.%parent=
+dev.acpi_sysresource.0.%iommu=
+dev.acpi_sysresource.0.%parent=acpi0
+dev.acpi_sysresource.0.%pnpinfo=_HID=PNP0C01 _UID=0 _CID=none
+dev.acpi_sysresource.0.%location=handle=\_SB_.DRAC
+dev.acpi_sysresource.0.%driver=acpi_sysresource
+dev.acpi_sysresource.0.%desc=System Resource
+dev.acpi_sysresource.%parent=
+dev.acpi.0.%iommu=
+dev.acpi.0.%parent=nexus0
+dev.acpi.0.%pnpinfo=
+dev.acpi.0.%location=
+dev.acpi.0.%driver=acpi
+dev.acpi.0.%desc=BOCHS BXPC
+dev.acpi.%parent=
+dev.aesni.0.%iommu=
+dev.aesni.0.%parent=nexus0
+dev.aesni.0.%pnpinfo=
+dev.aesni.0.%location=
+dev.aesni.0.%driver=aesni
+dev.aesni.0.%desc=AES-CBC,AES-CCM,AES-GCM,AES-ICM,AES-XTS,SHA1,SHA256
+dev.aesni.%parent=
+dev.cryptosoft.0.%iommu=
+dev.cryptosoft.0.%parent=nexus0
+dev.cryptosoft.0.%pnpinfo=
+dev.cryptosoft.0.%location=
+dev.cryptosoft.0.%driver=cryptosoft
+dev.cryptosoft.0.%desc=software crypto
+dev.cryptosoft.%parent=
+dev.smbios.0.%iommu=
+dev.smbios.0.%parent=nexus0
+dev.smbios.0.%pnpinfo=
+dev.smbios.0.%location=
+dev.smbios.0.%driver=smbios
+dev.smbios.0.%desc=System Management BIOS
+dev.smbios.%parent=
+dev.ram.0.%iommu=
+dev.ram.0.%parent=nexus0
+dev.ram.0.%pnpinfo=
+dev.ram.0.%location=
+dev.ram.0.%driver=ram
+dev.ram.0.%desc=System RAM
+dev.ram.%parent=
+dev.kvmclock.0.tsc_freq=806400000
+dev.kvmclock.0.vdso_enable_without_rdtscp=0
+dev.kvmclock.0.vdso_force_unstable=0
+dev.kvmclock.0.%iommu=
+dev.kvmclock.0.%parent=nexus0
+dev.kvmclock.0.%pnpinfo=
+dev.kvmclock.0.%location=
+dev.kvmclock.0.%driver=kvmclock
+dev.kvmclock.0.%desc=KVM paravirtual clock
+dev.kvmclock.%parent=
+dev.efirtc.0.%iommu=
+dev.efirtc.0.%parent=nexus0
+dev.efirtc.0.%pnpinfo=
+dev.efirtc.0.%location=
+dev.efirtc.0.%driver=efirtc
+dev.efirtc.0.%desc=EFI Realtime Clock
+dev.efirtc.%parent=
+dev.nexus.0.%iommu=
+dev.nexus.0.%parent=root0
+dev.nexus.0.%pnpinfo=
+dev.nexus.0.%location=
+dev.nexus.0.%driver=nexus
+dev.nexus.0.%desc=
+dev.nexus.%parent=
+dev.xen.xsd_kva=0
+dev.xen.xsd_port=0
+dev.xen.balloon.high_mem=0
+dev.xen.balloon.low_mem=0
+dev.xen.balloon.hard_limit=0
+dev.xen.balloon.driver_pages=0
+dev.xen.balloon.target=0
+dev.xen.balloon.current=0
+dev.netmap.iflib_rx_miss_bufs=0
+dev.netmap.iflib_rx_miss=0
+dev.netmap.iflib_crcstrip=1
+dev.netmap.max_bridges=8
+dev.netmap.bridge_batch=1024
+dev.netmap.default_pipes=0
+dev.netmap.port_numa_affinity=0
+dev.netmap.priv_buf_num=4098
+dev.netmap.priv_buf_size=2048
+dev.netmap.buf_curr_num=0
+dev.netmap.buf_num=163840
+dev.netmap.buf_curr_size=0
+dev.netmap.buf_size=2048
+dev.netmap.priv_ring_num=4
+dev.netmap.priv_ring_size=20480
+dev.netmap.ring_curr_num=0
+dev.netmap.ring_num=200
+dev.netmap.ring_curr_size=0
+dev.netmap.ring_size=36864
+dev.netmap.priv_if_num=2
+dev.netmap.priv_if_size=1024
+dev.netmap.if_curr_num=0
+dev.netmap.if_num=100
+dev.netmap.if_curr_size=0
+dev.netmap.if_size=1024
+dev.netmap.ptnet_vnet_hdr=1
+dev.netmap.generic_rings=1
+dev.netmap.generic_ringsize=1024
+dev.netmap.generic_mit=100000
+dev.netmap.generic_hwcsum=0
+dev.netmap.admode=0
+dev.netmap.fwd=0
+dev.netmap.txsync_retry=2
+dev.netmap.no_pendintr=1
+dev.netmap.no_timestamp=0
+dev.netmap.verbose=0

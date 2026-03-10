@@ -27,6 +27,12 @@ elif sys.platform == "darwin":
         DarwinSerialTransport as SerialTransport,
         darwin_list_serial_ports as list_serial_ports,
     )
+elif sys.platform.startswith("freebsd"):
+    from .serial_freebsd import (
+        FreeBSDSerial as Serial,
+        FreeBSDSerialTransport as SerialTransport,
+        freebsd_list_serial_ports as list_serial_ports,
+    )
 elif maybe_posix:
     from .serial_extended_posix import is_extended_posix
 
