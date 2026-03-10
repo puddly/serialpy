@@ -11,6 +11,7 @@ import pywintypes
 from typing_extensions import Buffer
 from win32con import (
     DTR_CONTROL_ENABLE,
+    DTR_CONTROL_HANDSHAKE,
     EVENPARITY,
     FILE_ATTRIBUTE_NORMAL,
     FILE_FLAG_OVERLAPPED,
@@ -231,11 +232,13 @@ class Win32Serial(BaseSerial):
                 dcb.fOutX = 0
                 dcb.fInX = 0
 
-            # Always enable DTR by default (similar to pyserial)
-            dcb.fDtrControl = DTR_CONTROL_ENABLE
+            if self._dsrdtr:
+                dcb.fDtrControl = DTR_CONTROL_HANDSHAKE
+                dcb.fOutxDsrFlow = 1
+            else:
+                dcb.fDtrControl = DTR_CONTROL_ENABLE
+                dcb.fOutxDsrFlow = 0
 
-            # Explicitly disable DSR sensitivity and other flags that might block IO
-            dcb.fOutxDsrFlow = 0
             dcb.fDsrSensitivity = 0
             dcb.fErrorChar = 0
             dcb.fNull = 0
