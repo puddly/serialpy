@@ -191,9 +191,6 @@ class BaseSerial(io.RawIOBase):
         self._auto_close = False
 
         # Compatibility kwargs
-        if writeTimeout is not None:
-            self._write_timeout = writeTimeout
-
         if port is not None:
             self._path = port
 
