@@ -582,6 +582,53 @@ def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
         assert elapsed() == pytest.approx(0.5, abs=0.1)
 
 
+def test_sync_read_until(serial_pair: SerialPair) -> None:
+    """Test that read_until returns data up to and including the delimiter."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=1.0) as right,
+    ):
+        left.write(b"hello\nworld\n")
+
+        assert right.read_until(b"\n") == b"hello\n"
+        assert right.read_until(b"\n") == b"world\n"
+
+
+def test_sync_readexactly_total_timeout(serial_pair: SerialPair) -> None:
+    """Test that readexactly bounds total wall-clock time, not per-read time."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.5) as right,
+    ):
+        # Write partial data so readexactly loops: first readinto returns 5 bytes,
+        # second readinto blocks until timeout expires
+        left.write(b"hello")
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError) as exc_info:
+                right.readexactly(10)
+
+        assert exc_info.value.partial == b"hello"
+        assert elapsed() == pytest.approx(0.5, abs=0.15)
+
+
+def test_sync_read_until_total_timeout(serial_pair: SerialPair) -> None:
+    """Test that read_until bounds total wall-clock time across many 1-byte reads."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.5) as right,
+    ):
+        # Write data without a newline; read_until calls readexactly(1) per byte,
+        # then blocks on the next one. Total time must still be ~0.5s.
+        left.write(b"no newline here")
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError):
+                right.read_until(b"\n")
+
+        assert elapsed() == pytest.approx(0.5, abs=0.15)
+
+
 @pytest.mark.skip_backends("socket", "esphome")
 @pytest.mark.xfail(
     sys.platform.startswith("freebsd"),
