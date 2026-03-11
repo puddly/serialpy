@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -18,6 +19,8 @@ import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
+SER2NET_BINARY = shutil.which("ser2net")
+
 _SERIALX_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM = (
     _SERIALX_ROOT
@@ -154,8 +157,59 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
 
         assert proc.returncode is None
 
-        yield (in_tty, out_tty)
+        try:
+            yield (in_tty, out_tty)
+        finally:
+            proc.terminate()
+            proc.wait()
 
+
+@contextlib.contextmanager
+def create_ser2net_pair(
+    left_adapter: str, right_adapter: str
+) -> Iterator[tuple[str, str]]:
+    """Create a pair of virtual RFC2217 sockets using ser2net."""
+
+    left_port = _pick_free_port()
+    right_port = _pick_free_port()
+
+    config = {
+        "connections": {
+            "server_side": {
+                "accepter": f"telnet(rfc2217),tcp,{left_port}",
+                "connector": f"serialdev,{left_adapter},115200n81,rtscts",
+            },
+            "client_side": {
+                "accepter": f"telnet(rfc2217),tcp,127.0.0.1,{right_port}",
+                "connector": f"serialdev,{right_adapter},115200n81,rtscts",
+                "options": {
+                    "connback": f"telnet(rfc2217),tcp,127.0.0.1,{left_port}",
+                },
+            },
+        }
+    }
+
+    proc = subprocess.Popen(
+        [
+            "ser2net",
+            "-n",
+            "-Y",
+            json.dumps(config),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+
+    time.sleep(0.1)
+
+    assert proc.returncode is None
+
+    try:
+        yield (
+            f"rfc2217://127.0.0.1:{left_port}",
+            f"rfc2217://127.0.0.1:{right_port}",
+        )
+    finally:
         proc.terminate()
         proc.wait()
 

@@ -12,9 +12,11 @@ import pytest
 import serialx
 import serialx.platforms
 from tests.common import (
+    SER2NET_BINARY,
     SOCAT_BINARY,
     SerialPair,
     create_esphome_pair,
+    create_ser2net_pair,
     create_socat_pair,
     get_esphome_host_daemon_program,
 )
@@ -135,6 +137,15 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 )
             )
 
+            if SER2NET_BINARY is not None:
+                params.append(
+                    pytest.param(
+                        ("rfc2217", left, right),
+                        marks=[pytest.mark.xdist_group(name=f"rfc2217:{left}:{right}")],
+                        id=f"rfc2217+{left}:{right}",
+                    )
+                )
+
         metafunc.parametrize("serial_pair", params, indirect=True)
 
     if "adapter_pair" in metafunc.fixturenames:
@@ -205,6 +216,11 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     elif backend == "socket":
         with create_socket_pair() as (left, right):
             yield SerialPair(left, right, "socket")
+    elif backend == "rfc2217":
+        assert SER2NET_BINARY is not None
+
+        with create_ser2net_pair(backend_info[1], backend_info[2]) as (left, right):
+            yield SerialPair(left, right, "rfc2217")
     elif backend in ("adapter", "com0com", "tty0tty"):
         yield SerialPair(backend_info[1], backend_info[2], backend)
 
