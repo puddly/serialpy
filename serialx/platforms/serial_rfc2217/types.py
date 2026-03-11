@@ -14,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TelnetOption(IntEnum):
-    """Telnet option codes (the byte following WILL/WONT/DO/DONT)."""
+    """Telnet option codes (the byte following WILL/WONT/DO/DONT)."""  # codespell:ignore wont
 
     BINARY = 0
     ECHO = 1
@@ -22,7 +22,8 @@ class TelnetOption(IntEnum):
     COM_PORT_OPTION = 44
 
     @classmethod
-    def _missing_(cls, value: object) -> TelnetOption:
+    def _missing_(cls, value: object) -> Self:
+        assert isinstance(value, int)
         """Allow unknown option codes to pass through as int values."""
         obj = int.__new__(cls, value)
         obj._name_ = f"UNKNOWN_{value}"
@@ -45,7 +46,7 @@ class TelnetCmdId(IntEnum):
     GA = 249
     SB = 250
     WILL = 251
-    WONT = 252
+    WONT = 252  # codespell:ignore wont
     DO = 253
     DONT = 254
     IAC = 255
@@ -185,7 +186,7 @@ class TelnetCommand(BaseCommand):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class TelnetOptionCommand(TelnetCommand, ABC):
-    """Base class for telnet option negotiation commands (WILL/WONT/DO/DONT)."""
+    """Base class for telnet option negotiation commands (WILL/WONT/DO/DONT)."""  # codespell:ignore wont
 
     option: TelnetOption
 
@@ -208,9 +209,9 @@ class WillCmd(TelnetOptionCommand):
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class WontCmd(TelnetOptionCommand):
-    """IAC WONT <option> — refuse to perform an option."""
+    """IAC WONT <option> — refuse to perform an option."""  # codespell:ignore wont
 
-    CMD_ID = TelnetCmdId.WONT
+    CMD_ID = TelnetCmdId.WONT  # codespell:ignore wont
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -480,7 +481,7 @@ def iac_escape(data: bytes) -> bytes:
     return data.replace(b"\xff", b"\xff\xff")
 
 
-def encode_command(cmd: BaseCommand) -> bytes:
+def encode_command(cmd: TelnetCommand | Rfc2217Command) -> bytes:
     """Encode a command to its wire representation.
 
     For telnet commands: IAC <cmd> <option>

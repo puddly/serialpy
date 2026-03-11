@@ -2,39 +2,30 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-import dataclasses
-from enum import IntEnum, IntFlag
+from enum import IntEnum
 import logging
-from typing import Union
 
 from typing_extensions import Buffer
 
 from ...common import (
+    BaseSerialTransport,
     ModemPins,
     Parity,
     PinState,
     SerialException,
-    SerialPortInfo,
     StopBits,
     UnsupportedSetting,
 )
 from ..serial_socket import SocketSerial
 from .types import (
     CMD_ID_TO_CLASS,
-    BaseCommand,
     ControlCmdId,
     DoCmd,
     DontCmd,
-    FlowcontrolResumeCmd,
-    FlowcontrolSuspendCmd,
     LineStateFlag,
     ModemStateFlag,
     NotifyLinestateCmd,
     NotifyModemstateCmd,
-    PurgeDataCmd,
-    PurgeDataValue,
-    Rfc2217CmdId,
     Rfc2217Command,
     Rfc2217Parity,
     Rfc2217StopSize,
@@ -45,7 +36,6 @@ from .types import (
     SetModemstateMaskCmd,
     SetParityCmd,
     SetStopsizeCmd,
-    SignatureCmd,
     TelnetCmdId,
     TelnetCommand,
     TelnetOption,
@@ -79,16 +69,20 @@ RFC2217_STOPBITS_MAP = {
 
 OPTION_CMD_TO_TYPE: dict[int, type[WillCmd | WontCmd | DoCmd | DontCmd]] = {
     TelnetCmdId.WILL: WillCmd,
-    TelnetCmdId.WONT: WontCmd,
+    TelnetCmdId.WONT: WontCmd,  # codespell:ignore wont
     TelnetCmdId.DO: DoCmd,
     TelnetCmdId.DONT: DontCmd,
 }
 
 
 class TelnetParserState(IntEnum):
+    """States for the telnet protocol parser state machine."""
+
     NORMAL = 0
     IAC_SEEN = 1
-    OPTION_CMD = 2  # waiting for option byte after WILL/WONT/DO/DONT
+    OPTION_CMD = (
+        2  # waiting for option byte after WILL/WONT/DO/DONT  # codespell:ignore wont
+    )
     SUBNEG_OPTION = 3  # waiting for option byte after SB
     SUBNEG_DATA = 4  # accumulating subneg payload
     SUBNEG_IAC = 5  # IAC seen inside subnegotiation
@@ -98,19 +92,20 @@ class TelnetParser:
     """State machine that separates a telnet byte stream into data and commands.
 
     Call ``feed()`` with raw bytes from the socket. It returns a list of items,
-    each either ``bytes`` (serial data) or a parsed ``BaseCommand``.
+    each either ``bytes`` (serial data) or a parsed ``TelnetCommand | Rfc2217Command``.
     """
 
     def __init__(self) -> None:
+        """Initialize the telnet parser."""
         self._state = TelnetParserState.NORMAL
         self._pending_cmd: int = 0
         self._subneg_option: int = 0
         self._subneg_buffer = bytearray()
 
-    def feed(self, data: bytes) -> list[bytes | BaseCommand]:
+    def feed(self, data: bytes) -> list[bytes | TelnetCommand | Rfc2217Command]:
         """Process raw bytes and return data chunks and commands."""
         LOGGER.debug("Parser feed: %d bytes: %s", len(data), data.hex(" "))
-        result: list[bytes | BaseCommand] = []
+        result: list[bytes | TelnetCommand | Rfc2217Command] = []
         data_buf = bytearray()
 
         for byte in data:
@@ -242,7 +237,7 @@ class RFC2217Serial(SocketSerial):
 
         self._parser = TelnetParser()
         self._data_buffer = bytearray()
-        self._pending_commands: list[BaseCommand] = []
+        self._pending_commands: list[TelnetCommand | Rfc2217Command] = []
         self._modemstate = ModemStateFlag(0)
         self._linestate = LineStateFlag(0)
         self._negotiated = False
@@ -315,7 +310,7 @@ class RFC2217Serial(SocketSerial):
 
     # -- low-level send/receive helpers -------------------------------------
 
-    def _send_command(self, cmd: BaseCommand) -> None:
+    def _send_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
         """Encode and send a command over the socket."""
         assert self._socket is not None
         data = encode_command(cmd)
@@ -344,7 +339,7 @@ class RFC2217Serial(SocketSerial):
         else:
             return ControlCmdId.USE_NO_FLOW_CONTROL
 
-    def _queue_command(self, cmd: BaseCommand) -> None:
+    def _queue_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
         """Store a parsed command until a caller consumes it."""
         LOGGER.debug("RX cmd queued: %r", cmd)
         self._pending_commands.append(cmd)
@@ -375,7 +370,7 @@ class RFC2217Serial(SocketSerial):
         LOGGER.debug("RX %r -> %s (%s)", cmd, action, type(response).__name__)
         self._send_command(response)
 
-    def _handle_command(self, cmd: BaseCommand) -> None:
+    def _handle_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
         """Update local state, respond to telnet negotiation, or queue the command."""
         if isinstance(cmd, NotifyModemstateCmd):
             LOGGER.debug("RX modemstate notification: %r", cmd)
@@ -393,7 +388,9 @@ class RFC2217Serial(SocketSerial):
 
         self._queue_command(cmd)
 
-    def _dispatch_parser_items(self, items: list[bytes | BaseCommand]) -> None:
+    def _dispatch_parser_items(
+        self, items: list[bytes | TelnetCommand | Rfc2217Command]
+    ) -> None:
         """Route parser output: buffer data, handle notifications, queue cmds."""
         for item in items:
             if isinstance(item, bytes):
@@ -529,8 +526,9 @@ class RFC2217Serial(SocketSerial):
         """Flush write buffers (no-op, TCP handles buffering)."""
 
 
-class RFC2217SerialTransport:
+class RFC2217SerialTransport(BaseSerialTransport):
     """TODO, later."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the RFC 2217 serial transport."""
         pass
