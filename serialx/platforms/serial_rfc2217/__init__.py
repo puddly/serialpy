@@ -22,16 +22,14 @@ from ...common import (
 from ..serial_socket import SocketSerial
 from .types import (
     CMD_ID_TO_CLASS,
-    RFC2217_CMD_CLASSES,
-    TELNET_CMD_MAP,
-    Command,
+    BaseCommand,
     ControlCmdId,
     DoCmd,
     DontCmd,
     FlowcontrolResumeCmd,
     FlowcontrolSuspendCmd,
-    LinestateFlag,
-    ModemstateFlag,
+    LineStateFlag,
+    ModemStateFlag,
     NotifyLinestateCmd,
     NotifyModemstateCmd,
     PurgeDataCmd,
@@ -100,7 +98,7 @@ class TelnetParser:
     """State machine that separates a telnet byte stream into data and commands.
 
     Call ``feed()`` with raw bytes from the socket. It returns a list of items,
-    each either ``bytes`` (serial data) or a parsed ``Command``.
+    each either ``bytes`` (serial data) or a parsed ``BaseCommand``.
     """
 
     def __init__(self) -> None:
@@ -109,10 +107,10 @@ class TelnetParser:
         self._subneg_option: int = 0
         self._subneg_buffer = bytearray()
 
-    def feed(self, data: bytes) -> list[bytes | Command]:
+    def feed(self, data: bytes) -> list[bytes | BaseCommand]:
         """Process raw bytes and return data chunks and commands."""
         LOGGER.debug("Parser feed: %d bytes: %s", len(data), data.hex(" "))
-        result: list[bytes | Command] = []
+        result: list[bytes | BaseCommand] = []
         data_buf = bytearray()
 
         for byte in data:
@@ -145,9 +143,9 @@ class TelnetParser:
 
             elif self._state == TelnetParserState.OPTION_CMD:
                 cmd_cls = OPTION_CMD_TO_TYPE[self._pending_cmd]
-                cmd = cmd_cls(option=TelnetOption(byte))
-                LOGGER.debug("Parsed telnet command: %r", cmd)
-                result.append(cmd)
+                option_cmd = cmd_cls(option=TelnetOption(byte))
+                LOGGER.debug("Parsed telnet command: %r", option_cmd)
+                result.append(option_cmd)
                 self._state = TelnetParserState.NORMAL
 
             elif self._state == TelnetParserState.SUBNEG_OPTION:
@@ -185,7 +183,7 @@ class TelnetParser:
 
         return result
 
-    def _finish_subneg(self) -> Command | None:
+    def _finish_subneg(self) -> Rfc2217Command | None:
         """Parse a completed subnegotiation."""
         option = self._subneg_option
         payload = bytes(self._subneg_buffer)
@@ -244,9 +242,9 @@ class RFC2217Serial(SocketSerial):
 
         self._parser = TelnetParser()
         self._data_buffer = bytearray()
-        self._pending_commands: list[Command] = []
-        self._modemstate = ModemstateFlag(0)
-        self._linestate = LinestateFlag(0)
+        self._pending_commands: list[BaseCommand] = []
+        self._modemstate = ModemStateFlag(0)
+        self._linestate = LineStateFlag(0)
         self._negotiated = False
 
     # -- connection lifecycle -----------------------------------------------
@@ -300,8 +298,8 @@ class RFC2217Serial(SocketSerial):
             SetParityCmd(parity=RFC2217_PARITY_MAP[self._parity]),
             SetStopsizeCmd(size=RFC2217_STOPBITS_MAP[self._stopbits]),
             SetControlCmd(control=self._get_flow_control_command()),
-            SetModemstateMaskCmd(mask=ModemstateFlag(255)),
-            SetLinestateMaskCmd(mask=LinestateFlag(0)),
+            SetModemstateMaskCmd(mask=ModemStateFlag(255)),
+            SetLinestateMaskCmd(mask=LineStateFlag(0)),
         ):
             self._send_and_wait(cmd)
 
@@ -317,7 +315,7 @@ class RFC2217Serial(SocketSerial):
 
     # -- low-level send/receive helpers -------------------------------------
 
-    def _send_command(self, cmd: Command) -> None:
+    def _send_command(self, cmd: BaseCommand) -> None:
         """Encode and send a command over the socket."""
         assert self._socket is not None
         data = encode_command(cmd)
@@ -346,7 +344,7 @@ class RFC2217Serial(SocketSerial):
         else:
             return ControlCmdId.USE_NO_FLOW_CONTROL
 
-    def _queue_command(self, cmd: Command) -> None:
+    def _queue_command(self, cmd: BaseCommand) -> None:
         """Store a parsed command until a caller consumes it."""
         LOGGER.debug("RX cmd queued: %r", cmd)
         self._pending_commands.append(cmd)
@@ -377,7 +375,7 @@ class RFC2217Serial(SocketSerial):
         LOGGER.debug("RX %r -> %s (%s)", cmd, action, type(response).__name__)
         self._send_command(response)
 
-    def _handle_command(self, cmd: Command) -> None:
+    def _handle_command(self, cmd: BaseCommand) -> None:
         """Update local state, respond to telnet negotiation, or queue the command."""
         if isinstance(cmd, NotifyModemstateCmd):
             LOGGER.debug("RX modemstate notification: %r", cmd)
@@ -395,7 +393,7 @@ class RFC2217Serial(SocketSerial):
 
         self._queue_command(cmd)
 
-    def _dispatch_parser_items(self, items: list[bytes | Command]) -> None:
+    def _dispatch_parser_items(self, items: list[bytes | BaseCommand]) -> None:
         """Route parser output: buffer data, handle notifications, queue cmds."""
         for item in items:
             if isinstance(item, bytes):
@@ -521,10 +519,10 @@ class RFC2217Serial(SocketSerial):
         state = self._modemstate
 
         return ModemPins(
-            cts=(PinState.HIGH if state & ModemstateFlag.CTS else PinState.LOW),
-            dsr=(PinState.HIGH if state & ModemstateFlag.DSR else PinState.LOW),
-            rng=(PinState.HIGH if state & ModemstateFlag.RI else PinState.LOW),
-            car=(PinState.HIGH if state & ModemstateFlag.RLSD else PinState.LOW),
+            cts=(PinState.HIGH if state & ModemStateFlag.CTS else PinState.LOW),
+            dsr=(PinState.HIGH if state & ModemStateFlag.DSR else PinState.LOW),
+            rng=(PinState.HIGH if state & ModemStateFlag.RI else PinState.LOW),
+            car=(PinState.HIGH if state & ModemStateFlag.RLSD else PinState.LOW),
         )
 
     def flush(self) -> None:

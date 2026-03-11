@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import dataclasses
 from enum import IntEnum, IntFlag
-from typing import Union
+import logging
+from typing import ClassVar
+
+from typing_extensions import Self
+
+LOGGER = logging.getLogger(__name__)
 
 
 class TelnetOption(IntEnum):
@@ -22,10 +28,6 @@ class TelnetOption(IntEnum):
         obj._name_ = f"UNKNOWN_{value}"
         obj._value_ = value
         return obj
-
-
-# Server response codes are client codes + this offset
-SERVER_CMD_OFFSET = 100
 
 
 class TelnetCmdId(IntEnum):
@@ -121,7 +123,7 @@ class Rfc2217StopSize(IntEnum):
     ONE_POINT_FIVE = 3
 
 
-class LinestateFlag(IntFlag):
+class LineStateFlag(IntFlag):
     """Bitmask for NOTIFY_LINESTATE and SET_LINESTATE_MASK."""
 
     DATA_READY = 1
@@ -134,7 +136,7 @@ class LinestateFlag(IntFlag):
     TIMEOUT_ERROR = 128
 
 
-class ModemstateFlag(IntFlag):
+class ModemStateFlag(IntFlag):
     """Bitmask for NOTIFY_MODEMSTATE and SET_MODEMSTATE_MASK."""
 
     DELTA_CTS = 1
@@ -155,37 +157,74 @@ class PurgeDataValue(IntEnum):
     BOTH = 3
 
 
+class BaseCommand(ABC):
+    """Base class for commands."""
+
+    CMD_ID: ClassVar[int]
+
+    @abstractmethod
+    def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
+        raise NotImplementedError
+
+    @abstractmethod
+    @classmethod
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
+        raise NotImplementedError
+
+
 # ---------------------------------------------------------------------------
 # Telnet-level commands (IAC <cmd> <option>)
 # ---------------------------------------------------------------------------
 
 
+class TelnetCommand(BaseCommand):
+    """Base class for telnet commands."""
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class WillCmd:
+class TelnetOptionCommand(TelnetCommand, ABC):
+    """Base class for telnet option negotiation commands (WILL/WONT/DO/DONT)."""
+
+    option: TelnetOption
+
+    def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
+        return bytes([self.option])
+
+    @classmethod
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
+        return cls(option=TelnetOption(payload[0]))
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class WillCmd(TelnetOptionCommand):
     """IAC WILL <option> — offer to perform an option."""
 
-    option: TelnetOption
+    CMD_ID = TelnetCmdId.WILL
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class WontCmd:
+class WontCmd(TelnetOptionCommand):
     """IAC WONT <option> — refuse to perform an option."""
 
-    option: TelnetOption
+    CMD_ID = TelnetCmdId.WONT
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class DoCmd:
+class DoCmd(TelnetOptionCommand):
     """IAC DO <option> — request the other side perform an option."""
 
-    option: TelnetOption
+    CMD_ID = TelnetCmdId.DO
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class DontCmd:
+class DontCmd(TelnetOptionCommand):
     """IAC DONT <option> — demand the other side stop performing an option."""
 
-    option: TelnetOption
+    CMD_ID = TelnetCmdId.DONT
 
 
 # ---------------------------------------------------------------------------
@@ -193,245 +232,246 @@ class DontCmd:
 # ---------------------------------------------------------------------------
 
 
+class Rfc2217Command(BaseCommand):
+    """Base class for RFC 2217 subnegotiation commands."""
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SignatureCmd:
+class SignatureCmd(Rfc2217Command):
     """Exchange signature/identity strings. Empty = request."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SIGNATURE
+    CMD_ID = Rfc2217CmdId.SIGNATURE
     signature: bytes = b""
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.signature
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SignatureCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls(signature=payload)
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetBaudrateCmd:
+class SetBaudrateCmd(Rfc2217Command):
     """Set baud rate. 0 = query current value."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SET_BAUDRATE
+    CMD_ID = Rfc2217CmdId.SET_BAUDRATE
     baudrate: int
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.baudrate.to_bytes(4, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SetBaudrateCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls(baudrate=int.from_bytes(payload, "big"))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetDatasizeCmd:
+class SetDatasizeCmd(Rfc2217Command):
     """Set data bit size. 0 = query, 5-8 = actual size."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SET_DATASIZE
+    CMD_ID = Rfc2217CmdId.SET_DATASIZE
     size: int
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.size.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SetDatasizeCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls(size=payload[0])
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetParityCmd:
+class SetParityCmd(Rfc2217Command):
     """Set parity."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SET_PARITY
+    CMD_ID = Rfc2217CmdId.SET_PARITY
     parity: Rfc2217Parity
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.parity.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SetParityCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls(parity=Rfc2217Parity(payload[0]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetStopsizeCmd:
+class SetStopsizeCmd(Rfc2217Command):
     """Set stop bits."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SET_STOPSIZE
+    CMD_ID = Rfc2217CmdId.SET_STOPSIZE
     size: Rfc2217StopSize
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.size.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SetStopsizeCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls(size=Rfc2217StopSize(payload[0]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetControlCmd:
+class SetControlCmd(Rfc2217Command):
     """Set flow control, break, DTR, or RTS."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SET_CONTROL
+    CMD_ID = Rfc2217CmdId.SET_CONTROL
     control: ControlCmdId
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.control.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SetControlCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls(control=ControlCmdId(payload[0]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class NotifyLinestateCmd:
+class NotifyLinestateCmd(Rfc2217Command):
     """Server notification of UART line state change."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.NOTIFY_LINESTATE
-    linestate: LinestateFlag
+    CMD_ID = Rfc2217CmdId.NOTIFY_LINESTATE
+    linestate: LineStateFlag
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.linestate.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> NotifyLinestateCmd:
-        return cls(linestate=LinestateFlag(payload[0]))
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
+        return cls(linestate=LineStateFlag(payload[0]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class NotifyModemstateCmd:
+class NotifyModemstateCmd(Rfc2217Command):
     """Server notification of modem state change."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.NOTIFY_MODEMSTATE
-    modemstate: ModemstateFlag
+    CMD_ID = Rfc2217CmdId.NOTIFY_MODEMSTATE
+    modemstate: ModemStateFlag
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.modemstate.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> NotifyModemstateCmd:
-        return cls(modemstate=ModemstateFlag(payload[0]))
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
+        return cls(modemstate=ModemStateFlag(payload[0]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class FlowcontrolSuspendCmd:
+class FlowcontrolSuspendCmd(Rfc2217Command):
     """Request the receiver suspend transmission."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.FLOWCONTROL_SUSPEND
+    CMD_ID = Rfc2217CmdId.FLOWCONTROL_SUSPEND
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return b""
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> FlowcontrolSuspendCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class FlowcontrolResumeCmd:
+class FlowcontrolResumeCmd(Rfc2217Command):
     """Request the receiver resume transmission."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.FLOWCONTROL_RESUME
+    CMD_ID = Rfc2217CmdId.FLOWCONTROL_RESUME
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return b""
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> FlowcontrolResumeCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls()
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetLinestateMaskCmd:
+class SetLinestateMaskCmd(Rfc2217Command):
     """Set which line state changes trigger NOTIFY_LINESTATE. Default: 0."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SET_LINESTATE_MASK
-    mask: LinestateFlag
+    CMD_ID = Rfc2217CmdId.SET_LINESTATE_MASK
+    mask: LineStateFlag
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.mask.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SetLinestateMaskCmd:
-        return cls(mask=LinestateFlag(payload[0]))
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
+        return cls(mask=LineStateFlag(payload[0]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class SetModemstateMaskCmd:
+class SetModemstateMaskCmd(Rfc2217Command):
     """Set which modem state changes trigger NOTIFY_MODEMSTATE. Default: 255."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.SET_MODEMSTATE_MASK
-    mask: ModemstateFlag
+    CMD_ID = Rfc2217CmdId.SET_MODEMSTATE_MASK
+    mask: ModemStateFlag
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.mask.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> SetModemstateMaskCmd:
-        return cls(mask=ModemstateFlag(payload[0]))
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
+        return cls(mask=ModemStateFlag(payload[0]))
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class PurgeDataCmd:
+class PurgeDataCmd(Rfc2217Command):
     """Purge access server data buffers."""
 
-    CMD_ID: dataclasses.ClassVar[int] = Rfc2217CmdId.PURGE_DATA
+    CMD_ID = Rfc2217CmdId.PURGE_DATA
     what: PurgeDataValue
 
     def to_bytes(self) -> bytes:
+        """Serialize to bytes."""
         return self.what.to_bytes(1, "big")
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> PurgeDataCmd:
+    def from_bytes(cls, payload: bytes) -> Self:
+        """Parse from bytes."""
         return cls(what=PurgeDataValue(payload[0]))
 
 
-TelnetCommand = Union[WillCmd, WontCmd, DoCmd, DontCmd]
-
-Rfc2217Command = Union[
-    SignatureCmd,
-    SetBaudrateCmd,
-    SetDatasizeCmd,
-    SetParityCmd,
-    SetStopsizeCmd,
-    SetControlCmd,
-    NotifyLinestateCmd,
-    NotifyModemstateCmd,
-    FlowcontrolSuspendCmd,
-    FlowcontrolResumeCmd,
-    SetLinestateMaskCmd,
-    SetModemstateMaskCmd,
-    PurgeDataCmd,
-]
-
-Command = Union[TelnetCommand, Rfc2217Command]
-
-# All RFC 2217 command classes, used to build lookup tables
-RFC2217_CMD_CLASSES: list[type] = [
-    SignatureCmd,
-    SetBaudrateCmd,
-    SetDatasizeCmd,
-    SetParityCmd,
-    SetStopsizeCmd,
-    SetControlCmd,
-    NotifyLinestateCmd,
-    NotifyModemstateCmd,
-    FlowcontrolSuspendCmd,
-    FlowcontrolResumeCmd,
-    SetLinestateMaskCmd,
-    SetModemstateMaskCmd,
-    PurgeDataCmd,
-]
-
 CMD_ID_TO_CLASS: dict[int, type[Rfc2217Command]] = {
-    cls.CMD_ID: cls for cls in _RFC2217_CMD_CLASSES
-}
-
-TELNET_CMD_MAP: dict[type, TelnetCmdId] = {
-    WillCmd: TelnetCmdId.WILL,
-    WontCmd: TelnetCmdId.WONT,
-    DoCmd: TelnetCmdId.DO,
-    DontCmd: TelnetCmdId.DONT,
+    cls.CMD_ID: cls
+    for cls in (
+        SignatureCmd,
+        SetBaudrateCmd,
+        SetDatasizeCmd,
+        SetParityCmd,
+        SetStopsizeCmd,
+        SetControlCmd,
+        NotifyLinestateCmd,
+        NotifyModemstateCmd,
+        FlowcontrolSuspendCmd,
+        FlowcontrolResumeCmd,
+        SetLinestateMaskCmd,
+        SetModemstateMaskCmd,
+        PurgeDataCmd,
+    )
 }
 
 
@@ -440,28 +480,27 @@ def iac_escape(data: bytes) -> bytes:
     return data.replace(b"\xff", b"\xff\xff")
 
 
-def encode_command(cmd: Command, *, server: bool = False) -> bytes:
+def encode_command(cmd: BaseCommand) -> bytes:
     """Encode a command to its wire representation.
 
     For telnet commands: IAC <cmd> <option>
     For RFC 2217 commands: IAC SB 44 <cmd_id> <payload> IAC SE
     """
 
-    # Telnet option negotiation commands
-    telnet_cmd_id = TELNET_CMD_MAP.get(type(cmd))
-    if telnet_cmd_id is not None:
-        encoded = bytes([TelnetCmdId.IAC, telnet_cmd_id, cmd.option])
-        LOGGER.debug("Encode telnet %r -> %s", cmd, encoded.hex(" "))
-        return encoded
+    if isinstance(cmd, TelnetCommand):
+        encoded = bytes([TelnetCmdId.IAC, cmd.CMD_ID]) + cmd.to_bytes()
+    else:
+        encoded = (
+            bytes(
+                [
+                    TelnetCmdId.IAC,
+                    TelnetCmdId.SB,
+                    TelnetOption.COM_PORT_OPTION,
+                    cmd.CMD_ID,
+                ]
+            )
+            + iac_escape(cmd.to_bytes())
+            + bytes([TelnetCmdId.IAC, TelnetCmdId.SE])
+        )
 
-    # RFC 2217 subnegotiation commands
-    code = cmd.CMD_ID + SERVER_CMD_OFFSET if server else cmd.CMD_ID
-    payload = cmd.to_bytes()
-
-    encoded = (
-        bytes([TelnetCmdId.IAC, TelnetCmdId.SB, TelnetOption.COM_PORT_OPTION, code])
-        + iac_escape(payload)
-        + bytes([TelnetCmdId.IAC, TelnetCmdId.SE])
-    )
-    LOGGER.debug("Encode RFC2217 %r -> %s", cmd, encoded.hex(" "))
     return encoded
