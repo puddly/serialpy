@@ -26,6 +26,7 @@ from .types import (
     ModemStateFlag,
     NotifyLinestateCmd,
     NotifyModemstateCmd,
+    Rfc2217CmdId,
     Rfc2217Command,
     Rfc2217Parity,
     Rfc2217StopSize,
@@ -117,7 +118,7 @@ class TelnetParser:
 
             elif self._state == TelnetParserState.IAC_SEEN:
                 if byte == TelnetCmdId.IAC:
-                    # Escaped IAC → literal 0xFF data byte
+                    # Escaped IAC -> literal 0xFF data byte
                     data_buf.append(0xFF)
                     self._state = TelnetParserState.NORMAL
                 elif byte == TelnetCmdId.SB:
@@ -237,7 +238,8 @@ class RFC2217Serial(SocketSerial):
 
         self._parser = TelnetParser()
         self._data_buffer = bytearray()
-        self._pending_commands: list[TelnetCommand | Rfc2217Command] = []
+        self._pending_telnet: dict[TelnetCmdId, TelnetCommand] = {}
+        self._pending_rfc2217: dict[Rfc2217CmdId, Rfc2217Command] = {}
         self._modemstate = ModemStateFlag(0)
         self._linestate = LineStateFlag(0)
         self._negotiated = False
@@ -304,7 +306,8 @@ class RFC2217Serial(SocketSerial):
         """Close the connection and reset state."""
         self._negotiated = False
         self._data_buffer.clear()
-        self._pending_commands.clear()
+        self._pending_telnet.clear()
+        self._pending_rfc2217.clear()
         LOGGER.debug("Closing RFC 2217 connection")
         super()._close()
 
@@ -339,22 +342,19 @@ class RFC2217Serial(SocketSerial):
         else:
             return ControlCmdId.USE_NO_FLOW_CONTROL
 
-    def _queue_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
-        """Store a parsed command until a caller consumes it."""
-        LOGGER.debug("RX cmd queued: %r", cmd)
-        self._pending_commands.append(cmd)
+    def _build_negotiation_response(self, cmd: WillCmd | DoCmd) -> TelnetCommand | None:
+        """Build a response to a telnet option negotiation command.
 
-    def _handle_negotiation_command(self, cmd: WillCmd | DoCmd) -> None:
-        """Respond to telnet option negotiation or queue COM-PORT-OPTION."""
+        Returns None for COM-PORT-OPTION (queued instead), otherwise the response.
+        """
         if cmd.option == TelnetOption.COM_PORT_OPTION:
-            self._queue_command(cmd)
-            return
+            self._pending_telnet[cmd.CMD_ID] = cmd
+            return None
 
         accepts_option = cmd.option in self._ACCEPTED_OPTIONS
-        response: TelnetCommand
 
         if isinstance(cmd, WillCmd):
-            response = (
+            response: TelnetCommand = (
                 DoCmd(option=cmd.option)
                 if accepts_option
                 else DontCmd(option=cmd.option)
@@ -368,48 +368,54 @@ class RFC2217Serial(SocketSerial):
 
         action = "accepting" if accepts_option else "refusing"
         LOGGER.debug("RX %r -> %s (%s)", cmd, action, type(response).__name__)
-        self._send_command(response)
-
-    def _handle_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
-        """Update local state, respond to telnet negotiation, or queue the command."""
-        if isinstance(cmd, NotifyModemstateCmd):
-            LOGGER.debug("RX modemstate notification: %r", cmd)
-            self._modemstate = cmd.modemstate
-            return
-
-        if isinstance(cmd, NotifyLinestateCmd):
-            LOGGER.debug("RX linestate notification: %r", cmd)
-            self._linestate = cmd.linestate
-            return
-
-        if isinstance(cmd, (WillCmd, DoCmd)):
-            self._handle_negotiation_command(cmd)
-            return
-
-        self._queue_command(cmd)
+        return response
 
     def _dispatch_parser_items(
         self, items: list[bytes | TelnetCommand | Rfc2217Command]
     ) -> None:
         """Route parser output: buffer data, handle notifications, queue cmds."""
+
+        # Negotiation responses are deferred until after all items are processed so that
+        # the full batch is parsed before any replies are sent.
+        responses: list[TelnetCommand] = []
+
         for item in items:
             if isinstance(item, bytes):
                 LOGGER.debug("RX data: %d bytes  [%s]", len(item), item.hex(" "))
                 self._data_buffer.extend(item)
+            elif isinstance(item, NotifyModemstateCmd):
+                LOGGER.debug("RX modemstate notification: %r", item)
+                self._modemstate = item.modemstate
+            elif isinstance(item, NotifyLinestateCmd):
+                LOGGER.debug("RX linestate notification: %r", item)
+                self._linestate = item.linestate
+            elif isinstance(item, (WillCmd, DoCmd)):
+                response = self._build_negotiation_response(item)
+                if response is not None:
+                    responses.append(response)
+            elif isinstance(item, Rfc2217Command):
+                LOGGER.debug("RX rfc2217 cmd queued: %r", item)
+                self._pending_rfc2217[item.CMD_ID] = item
             else:
-                self._handle_command(item)
+                LOGGER.debug("RX telnet cmd queued: %r", item)
+                self._pending_telnet[item.CMD_ID] = item
+
+        for response in responses:
+            self._send_command(response)
 
     def _check_negotiation_response(self) -> bool:
         """Consume COM-PORT-OPTION negotiation responses when present."""
-        for i, cmd in enumerate(self._pending_commands):
-            if isinstance(cmd, DoCmd) and cmd.option == TelnetOption.COM_PORT_OPTION:
-                self._pending_commands.pop(i)
-                self._negotiated = True
-                LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
-                return True
+        if TelnetCmdId.DO in self._pending_telnet:
+            cmd = self._pending_telnet.pop(TelnetCmdId.DO)
+            assert isinstance(cmd, DoCmd)
+            assert cmd.option == TelnetOption.COM_PORT_OPTION
+            self._negotiated = True
+            LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
+            return True
 
-            if isinstance(cmd, DontCmd) and cmd.option == TelnetOption.COM_PORT_OPTION:
-                raise SerialException("Server refused COM-PORT-OPTION (sent DONT 44)")
+        if TelnetCmdId.DONT in self._pending_telnet:
+            self._pending_telnet.pop(TelnetCmdId.DONT)
+            raise SerialException("Server refused COM-PORT-OPTION (sent DONT 44)")
 
         return False
 
@@ -426,20 +432,14 @@ class RFC2217Serial(SocketSerial):
 
     def _send_and_wait(self, cmd: Rfc2217Command) -> Rfc2217Command:
         """Send a command and block until the matching server ack arrives."""
-        cmd_type = type(cmd)
+        cmd_id = cmd.CMD_ID
         self._send_command(cmd)
-        LOGGER.debug("Waiting for %s ack...", cmd_type.__name__)
+        LOGGER.debug("Waiting for %s ack...", type(cmd).__name__)
 
         while True:
-            for i, pending in enumerate(self._pending_commands):
-                if isinstance(pending, cmd_type):
-                    self._pending_commands.pop(i)
-                    break
-            else:
-                pending = None
+            pending = self._pending_rfc2217.pop(cmd_id, None)
 
             if pending is not None:
-                assert not isinstance(pending, (WillCmd, WontCmd, DoCmd, DontCmd))
                 LOGGER.debug("RX ack: %r", pending)
                 return pending
 
@@ -528,7 +528,3 @@ class RFC2217Serial(SocketSerial):
 
 class RFC2217SerialTransport(BaseSerialTransport):
     """TODO, later."""
-
-    def __init__(self, *args, **kwargs):
-        """Initialize the RFC 2217 serial transport."""
-        pass

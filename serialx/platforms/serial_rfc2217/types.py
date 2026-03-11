@@ -14,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TelnetOption(IntEnum):
-    """Telnet option codes (the byte following WILL/WONT/DO/DONT)."""  # codespell:ignore wont
+    """Telnet option codes."""
 
     BINARY = 0
     ECHO = 1
@@ -23,8 +23,8 @@ class TelnetOption(IntEnum):
 
     @classmethod
     def _missing_(cls, value: object) -> Self:
-        assert isinstance(value, int)
         """Allow unknown option codes to pass through as int values."""
+        assert isinstance(value, int)
         obj = int.__new__(cls, value)
         obj._name_ = f"UNKNOWN_{value}"
         obj._value_ = value
@@ -168,8 +168,8 @@ class BaseCommand(ABC):
         """Serialize to bytes."""
         raise NotImplementedError
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def from_bytes(cls, payload: bytes) -> Self:
         """Parse from bytes."""
         raise NotImplementedError
@@ -183,10 +183,12 @@ class BaseCommand(ABC):
 class TelnetCommand(BaseCommand):
     """Base class for telnet commands."""
 
+    CMD_ID: ClassVar[TelnetCmdId]
+
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class TelnetOptionCommand(TelnetCommand, ABC):
-    """Base class for telnet option negotiation commands (WILL/WONT/DO/DONT)."""  # codespell:ignore wont
+    """Base class for telnet option negotiation commands."""
 
     option: TelnetOption
 
@@ -235,6 +237,8 @@ class DontCmd(TelnetOptionCommand):
 
 class Rfc2217Command(BaseCommand):
     """Base class for RFC 2217 subnegotiation commands."""
+
+    CMD_ID: ClassVar[Rfc2217CmdId]
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
