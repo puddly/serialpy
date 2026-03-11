@@ -26,6 +26,7 @@ except ImportError:
     aioesphomeapi = None
 
 COM0COM_RE = re.compile(r"^CNC[A-Z]\d+$", re.IGNORECASE)
+TTY0TTY_RE = re.compile(r"^/dev/tnt\d+$")
 
 
 def _get_posix_serial_classes() -> list[str]:
@@ -61,10 +62,6 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line(
         "markers",
         "skip_backends(*backends): skip test for the listed serial_pair backends",
-    )
-    config.addinivalue_line(
-        "markers",
-        "require_backends(*backends): only run test for the listed serial_pair backends",
     )
 
 
@@ -125,6 +122,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         for left, right in _get_adapter_pairs(metafunc.config):
             if COM0COM_RE.match(left) or COM0COM_RE.match(right):
                 backend = "com0com"
+            elif TTY0TTY_RE.match(left) or TTY0TTY_RE.match(right):
+                backend = "tty0tty"
             else:
                 backend = "adapter"
 
@@ -168,10 +167,6 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
         if backend in marker.args:
             pytest.skip(f"Skipped for backend {backend!r}")
 
-    for marker in request.node.iter_markers("require_backends"):
-        if backend not in marker.args:
-            pytest.skip(f"Requires backend in {marker.args!r}, got {backend!r}")
-
     # Check if a serial class override is requested (e.g. "PosixSerial")
     serial_class_override = (
         backend_info[1]
@@ -210,7 +205,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     elif backend == "socket":
         with create_socket_pair() as (left, right):
             yield SerialPair(left, right, "socket")
-    elif backend in ("adapter", "com0com"):
+    elif backend in ("adapter", "com0com", "tty0tty"):
         yield SerialPair(backend_info[1], backend_info[2], backend)
 
 

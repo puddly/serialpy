@@ -695,7 +695,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
-@pytest.mark.skip_backends("socket", "com0com", "socat", "esphome")
+@pytest.mark.skip_backends("socket", "com0com", "socat", "esphome", "tty0tty")
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -874,7 +874,7 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.require_backends("adapter")
+@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
 async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
 
@@ -910,7 +910,7 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.require_backends("adapter")
+@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
 async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
 
@@ -957,7 +957,7 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.require_backends("adapter")
+@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
