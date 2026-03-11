@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 from enum import IntEnum
 import logging
+import sys
+
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as asyncio_timeout
+else:
+    from async_timeout import timeout as asyncio_timeout
 
 from typing_extensions import Buffer
 
@@ -230,11 +237,13 @@ class RFC2217Serial(SocketSerial):
         self,
         *args,
         receive_buffer_size: int = 4096,
+        connect_timeout: float = 5.0,
         **kwargs,
     ) -> None:
         """Initialize the RFC 2217 serial port."""
         super().__init__(*args, **kwargs)
         self._receive_buffer_size = receive_buffer_size
+        self._connect_timeout = connect_timeout
 
         self._parser = TelnetParser()
         self._data_buffer = bytearray()
@@ -526,5 +535,351 @@ class RFC2217Serial(SocketSerial):
         """Flush write buffers (no-op, TCP handles buffering)."""
 
 
+class _RFC2217ProxyProtocol(asyncio.Protocol):
+    """Bridge protocol between asyncio TCP transport and RFC2217SerialTransport."""
+
+    def __init__(self, serial_transport: RFC2217SerialTransport) -> None:
+        """Initialize the proxy protocol."""
+        self._serial_transport = serial_transport
+
+    def data_received(self, data: bytes) -> None:
+        """Forward received data to the serial transport for parsing."""
+        self._serial_transport._data_received(data)
+
+    def pause_writing(self) -> None:
+        """Propagate backpressure from TCP transport to serial protocol."""
+        self._serial_transport._protocol.pause_writing()
+
+    def resume_writing(self) -> None:
+        """Propagate resume signal from TCP transport to serial protocol."""
+        self._serial_transport._protocol.resume_writing()
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        """Handle TCP connection loss."""
+        self._serial_transport._tcp_connection_lost(exc)
+
+
 class RFC2217SerialTransport(BaseSerialTransport):
-    """TODO, later."""
+    """Async RFC 2217 serial transport over TCP."""
+
+    transport_name = "rfc2217"
+    _serial: RFC2217Serial
+
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
+    ) -> None:
+        """Initialize the RFC 2217 serial transport."""
+        super().__init__(loop, protocol)
+        self._tcp_transport: asyncio.Transport | None = None
+        self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
+        self._connection_lost_called = False
+        self._telnet_waiters: dict[TelnetCmdId, asyncio.Future[TelnetCommand]] = {}
+        self._rfc2217_waiters: dict[Rfc2217CmdId, asyncio.Future[Rfc2217Command]] = {}
+
+    # -- connection lifecycle -----------------------------------------------
+
+    async def _connect(  # type: ignore[override]
+        self,
+        *,
+        path: str,
+        baudrate: int,
+        parity: Parity = Parity.NONE,
+        stopbits: StopBits | int | float = StopBits.ONE,
+        xonxoff: bool = False,
+        rtscts: bool = False,
+        byte_size: int = 8,
+        **kwargs,
+    ) -> None:
+        """Connect to the RFC 2217 server and negotiate COM-PORT-OPTION."""
+        self._serial = RFC2217Serial(
+            path=path,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            byte_size=byte_size,
+        )
+        self._extra["serial"] = self._serial
+
+        self._tcp_connection_lost_waiter = self._loop.create_future()
+
+        async with asyncio_timeout(self._serial._connect_timeout):
+            tcp_transport, _ = await self._loop.create_connection(
+                lambda: _RFC2217ProxyProtocol(self),
+                host=self._serial._host,
+                port=self._serial._port,
+            )
+            self._tcp_transport = tcp_transport
+
+            if self._connection_lost_called:
+                tcp_transport.close()
+                if self._tcp_connection_lost_waiter is not None:
+                    await self._tcp_connection_lost_waiter
+                self._tcp_transport = None
+                return
+
+            await self._negotiate()
+            await self._configure_port()
+
+        self._protocol.connection_made(self)
+
+    async def _negotiate(self) -> None:
+        """Perform the initial WILL/DO handshake for COM-PORT-OPTION."""
+        LOGGER.debug("Starting RFC 2217 negotiation: sending WILL COM-PORT-OPTION")
+        self._send_command(WillCmd(option=TelnetOption.COM_PORT_OPTION))
+
+        negotiation_waiter: asyncio.Future[TelnetCommand] = self._loop.create_future()
+        self._telnet_waiters[TelnetCmdId.DO] = negotiation_waiter
+
+        cmd = await negotiation_waiter
+        assert isinstance(cmd, DoCmd)
+        assert cmd.option == TelnetOption.COM_PORT_OPTION
+        LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
+
+    async def _configure_port(self) -> None:
+        """Send serial port configuration to the access server."""
+        serial = self._serial
+
+        LOGGER.debug(
+            "Configuring port: baudrate=%d byte_size=%d parity=%s stopbits=%s "
+            "rtscts=%s xonxoff=%s",
+            serial._baudrate,
+            serial._byte_size,
+            serial._parity,
+            serial._stopbits,
+            serial._rtscts,
+            serial._xonxoff,
+        )
+
+        if serial._rtscts and serial._xonxoff:
+            raise UnsupportedSetting(
+                "Cannot enable both RTS/CTS and XON/XOFF flow control"
+            )
+
+        flow_control = serial._get_flow_control_command()
+
+        for cmd in (
+            SetBaudrateCmd(baudrate=serial._baudrate),
+            SetDatasizeCmd(size=serial._byte_size),
+            SetParityCmd(parity=RFC2217_PARITY_MAP[serial._parity]),
+            SetStopsizeCmd(size=RFC2217_STOPBITS_MAP[serial._stopbits]),
+            SetControlCmd(control=flow_control),
+            SetModemstateMaskCmd(mask=ModemStateFlag(255)),
+            SetLinestateMaskCmd(mask=LineStateFlag(0)),
+        ):
+            await self._send_and_wait(cmd)
+
+        LOGGER.debug("Port configuration complete")
+
+    # -- low-level send/receive helpers -------------------------------------
+
+    def _send_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
+        """Encode and send a command over the TCP transport."""
+        assert self._tcp_transport is not None
+        data = encode_command(cmd)
+        LOGGER.debug("TX cmd: %r  [%s]", cmd, data.hex(" "))
+        self._tcp_transport.write(data)
+
+    def _data_received(self, data: bytes) -> None:
+        """Handle raw data from the TCP transport."""
+        LOGGER.debug("RX raw: %d bytes  [%s]", len(data), data.hex(" "))
+        items = self._serial._parser.feed(data)
+        self._dispatch_parser_items(items)
+
+    def _build_negotiation_response(self, cmd: WillCmd | DoCmd) -> TelnetCommand | None:
+        """Build a response to a telnet option negotiation command.
+
+        Returns None for COM-PORT-OPTION (resolved via waiter), otherwise the
+        response.
+        """
+        if cmd.option == TelnetOption.COM_PORT_OPTION:
+            # Resolve the negotiation waiter if one exists
+            waiter = self._telnet_waiters.pop(cmd.CMD_ID, None)
+            if waiter is not None and not waiter.done():
+                waiter.set_result(cmd)
+            else:
+                self._serial._pending_telnet[cmd.CMD_ID] = cmd
+            return None
+
+        accepts_option = cmd.option in self._serial._ACCEPTED_OPTIONS
+
+        if isinstance(cmd, WillCmd):
+            response: TelnetCommand = (
+                DoCmd(option=cmd.option)
+                if accepts_option
+                else DontCmd(option=cmd.option)
+            )
+        else:
+            response = (
+                WillCmd(option=cmd.option)
+                if accepts_option
+                else WontCmd(option=cmd.option)
+            )
+
+        action = "accepting" if accepts_option else "refusing"
+        LOGGER.debug("RX %r -> %s (%s)", cmd, action, type(response).__name__)
+        return response
+
+    def _dispatch_parser_items(
+        self, items: list[bytes | TelnetCommand | Rfc2217Command]
+    ) -> None:
+        """Route parser output: buffer data, handle notifications, queue cmds."""
+        # Negotiation responses are deferred until after all items are processed
+        # so that the full batch is parsed before any replies are sent.
+        responses: list[TelnetCommand] = []
+        serial_data = bytearray()
+
+        for item in items:
+            if isinstance(item, bytes):
+                LOGGER.debug("RX data: %d bytes  [%s]", len(item), item.hex(" "))
+                serial_data.extend(item)
+            elif isinstance(item, NotifyModemstateCmd):
+                LOGGER.debug("RX modemstate notification: %r", item)
+                self._serial._modemstate = item.modemstate
+            elif isinstance(item, NotifyLinestateCmd):
+                LOGGER.debug("RX linestate notification: %r", item)
+                self._serial._linestate = item.linestate
+            elif isinstance(item, (WillCmd, DoCmd)):
+                response = self._build_negotiation_response(item)
+                if response is not None:
+                    responses.append(response)
+            elif isinstance(item, Rfc2217Command):
+                LOGGER.debug("RX rfc2217 cmd: %r", item)
+                waiter = self._rfc2217_waiters.pop(item.CMD_ID, None)
+                if waiter is not None and not waiter.done():
+                    waiter.set_result(item)
+                else:
+                    self._serial._pending_rfc2217[item.CMD_ID] = item
+            else:
+                LOGGER.debug("RX telnet cmd queued: %r", item)
+                self._serial._pending_telnet[item.CMD_ID] = item
+
+        for response in responses:
+            self._send_command(response)
+
+        if serial_data:
+            self._protocol.data_received(bytes(serial_data))
+
+    async def _send_and_wait(self, cmd: Rfc2217Command) -> Rfc2217Command:
+        """Send a command and wait for the matching server ack."""
+        cmd_id = cmd.CMD_ID
+
+        # Check if an ack already arrived
+        pending = self._serial._pending_rfc2217.pop(cmd_id, None)
+        if pending is not None:
+            self._send_command(cmd)
+            LOGGER.debug("RX ack (already pending): %r", pending)
+            return pending
+
+        waiter: asyncio.Future[Rfc2217Command] = self._loop.create_future()
+        self._rfc2217_waiters[cmd_id] = waiter
+        self._send_command(cmd)
+        LOGGER.debug("Waiting for %s ack...", type(cmd).__name__)
+
+        result = await waiter
+        LOGGER.debug("RX ack: %r", result)
+        return result
+
+    # -- write --------------------------------------------------------------
+
+    def write(self, data: bytes | bytearray | memoryview) -> None:
+        """Write data to the serial port, escaping IAC bytes."""
+        assert self._tcp_transport is not None
+        escaped = iac_escape(bytes(data))
+        LOGGER.debug("TX data: %d bytes (%d on wire)", len(data), len(escaped))
+        self._tcp_transport.write(escaped)
+
+    # -- modem pins ---------------------------------------------------------
+
+    async def get_modem_pins(self) -> ModemPins:
+        """Return modem pin state from the last NOTIFY-MODEMSTATE."""
+        return self._serial._get_modem_pins()
+
+    async def set_modem_pins(
+        self,
+        modem_pins: ModemPins | None = None,
+        **kwargs,
+    ) -> None:
+        """Set DTR/RTS via SET_CONTROL commands."""
+        if modem_pins is None:
+            return
+
+        LOGGER.debug("Setting modem pins: %r", modem_pins)
+
+        if modem_pins.dtr is PinState.HIGH:
+            await self._send_and_wait(SetControlCmd(control=ControlCmdId.SET_DTR_ON))
+        elif modem_pins.dtr is PinState.LOW:
+            await self._send_and_wait(SetControlCmd(control=ControlCmdId.SET_DTR_OFF))
+
+        if modem_pins.rts is PinState.HIGH:
+            await self._send_and_wait(SetControlCmd(control=ControlCmdId.SET_RTS_ON))
+        elif modem_pins.rts is PinState.LOW:
+            await self._send_and_wait(SetControlCmd(control=ControlCmdId.SET_RTS_OFF))
+
+    # -- transport lifecycle ------------------------------------------------
+
+    def _tcp_connection_lost(self, exc: Exception | None) -> None:
+        """Handle TCP connection loss."""
+        if (
+            self._tcp_connection_lost_waiter is not None
+            and not self._tcp_connection_lost_waiter.done()
+        ):
+            self._tcp_connection_lost_waiter.set_result(None)
+
+        if self._connection_lost_called:
+            return
+        self._connection_lost_called = True
+        self._closing = True
+        self._tcp_transport = None
+
+        # Fail any pending waiters
+        waiter_exc = exc or SerialException("RFC 2217 connection closed by server")
+        for waiters in (self._telnet_waiters, self._rfc2217_waiters):
+            for waiter in waiters.values():
+                if not waiter.done():
+                    waiter.set_exception(waiter_exc)
+            waiters.clear()
+
+        self._call_protocol_connection_lost(exc)
+
+    def pause_reading(self) -> None:
+        """Pause reading from the TCP transport."""
+        assert self._tcp_transport is not None
+        self._tcp_transport.pause_reading()
+
+    def resume_reading(self) -> None:
+        """Resume reading from the TCP transport."""
+        assert self._tcp_transport is not None
+        self._tcp_transport.resume_reading()
+
+    def close(self) -> None:
+        """Close the transport."""
+        if self._connection_lost_called:
+            return
+        self._closing = True
+
+        if self._tcp_transport is not None:
+            self._tcp_transport.close()
+        else:
+            self._tcp_connection_lost(None)
+
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        if self._connection_lost_called:
+            return
+        self._closing = True
+
+        if self._tcp_transport is not None:
+            self._tcp_transport.abort()
+        else:
+            self._tcp_connection_lost(None)
+
+    async def flush(self) -> None:
+        """Flush write buffers (no-op, TCP transport handles buffering)."""
+
+    def get_write_buffer_size(self) -> int:
+        """Get the number of bytes currently in the write buffer."""
+        if self._tcp_transport is not None:
+            return self._tcp_transport.get_write_buffer_size()
+        return 0
