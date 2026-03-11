@@ -721,6 +721,13 @@ def get_serial_classes(
         )
 
         return SocketSerial, SocketSerialTransport
+    elif parsed_path.scheme == "rfc2217":
+        from .platforms.serial_rfc2217 import (  # noqa: PLC0415
+            RFC2217Serial,
+            RFC2217SerialTransport,
+        )
+
+        return RFC2217Serial, RFC2217SerialTransport
     elif parsed_path.scheme == "esphome":
         try:
             from .platforms.serial_esphome import (  # noqa: PLC0415

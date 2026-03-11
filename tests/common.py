@@ -168,23 +168,20 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
 def create_ser2net_pair(
     left_adapter: str, right_adapter: str
 ) -> Iterator[tuple[str, str]]:
-    """Create a pair of virtual RFC2217 sockets using ser2net."""
+    """Create a pair of independent RFC2217 sockets using ser2net."""
 
     left_port = _pick_free_port()
     right_port = _pick_free_port()
 
     config = {
         "connections": {
-            "server_side": {
+            "left_adapter": {
                 "accepter": f"telnet(rfc2217),tcp,{left_port}",
-                "connector": f"serialdev,{left_adapter},115200n81,rtscts",
+                "connector": f"serialdev,{left_adapter},115200n81",
             },
-            "client_side": {
+            "right_adapter": {
                 "accepter": f"telnet(rfc2217),tcp,127.0.0.1,{right_port}",
-                "connector": f"serialdev,{right_adapter},115200n81,rtscts",
-                "options": {
-                    "connback": f"telnet(rfc2217),tcp,127.0.0.1,{left_port}",
-                },
+                "connector": f"serialdev,{right_adapter},115200n81",
             },
         }
     }
@@ -196,7 +193,6 @@ def create_ser2net_pair(
             "-Y",
             json.dumps(config),
         ],
-        stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
     )
 
