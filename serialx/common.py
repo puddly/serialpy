@@ -86,21 +86,6 @@ class ModemPins:
     rng: PinState = PinState.UNDEFINED
     dsr: PinState = PinState.UNDEFINED
 
-    @classmethod
-    def all_off(cls) -> Self:
-        """Create instance with all bits set to off."""
-        return cls(
-            le=PinState.LOW,
-            dtr=PinState.LOW,
-            rts=PinState.LOW,
-            st=PinState.LOW,
-            sr=PinState.LOW,
-            cts=PinState.LOW,
-            car=PinState.LOW,
-            rng=PinState.LOW,
-            dsr=PinState.LOW,
-        )
-
     def __repr__(self) -> str:
         """Return string representation of modem pins."""
 
