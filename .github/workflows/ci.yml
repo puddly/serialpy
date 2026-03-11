@@ -169,7 +169,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y socat libudev-dev
+          sudo apt-get install -y socat libudev-dev linux-headers-$(uname -r)
+      - name: Build and load tty0tty kernel module
+        run: |
+          git clone https://github.com/lcgamboa/tty0tty /tmp/tty0tty
+          git -C /tmp/tty0tty checkout dac0a105bee6997ebb3a06441c7befe3164c9fd1
+          make -C /tmp/tty0tty/module
+          sudo insmod /tmp/tty0tty/module/tty0tty.ko
+          sudo chmod 666 /dev/tnt0 /dev/tnt1
       - name: Set up uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -192,6 +199,7 @@ jobs:
             --cov=serialx \
             -o console_output_style=count \
             -p no:sugar \
+            --adapter-pair /dev/tnt0:/dev/tnt1 \
             tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
