@@ -49,6 +49,11 @@ class SocketSerial(BaseSerial):
         )
 
     @property
+    def is_open(self) -> bool:
+        """Check if the serial port is open."""
+        return self._socket is not None
+
+    @property
     def connect_timeout(self) -> float | None:
         """Get the connection timeout in seconds."""
         return self._connect_timeout
@@ -83,20 +88,38 @@ class SocketSerial(BaseSerial):
     def _get_modem_pins(self) -> ModemPins:
         return ModemPins()
 
+    def num_unread_bytes(self) -> int:
+        """Return the number of bytes waiting to be read."""
+        return 0
+
+    def num_unwritten_bytes(self) -> int:
+        """Return the number of bytes waiting to be written."""
+        return 0
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+
     def flush(self) -> None:
         """Flush write buffers (no-op for sockets)."""
 
-    def write(self, b: Buffer) -> int:
+    def _write(self, b: Buffer, *, timeout: float | None) -> int:
         """Write bytes to socket."""
         assert self._socket is not None
+
+        self._socket.settimeout(timeout)
 
         data = bytes(b)
         self._socket.sendall(data)
         return len(data)
 
-    def readinto(self, b: Buffer) -> int:
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
         """Read bytes from socket into buffer."""
         assert self._socket is not None
+
+        self._socket.settimeout(timeout)
 
         m = memoryview(b).cast("B")
         try:
@@ -167,6 +190,8 @@ class SocketSerialTransport(BaseSerialTransport):
             rtscts=rtscts,
             byte_size=byte_size,
         )
+        self._extra["serial"] = self._serial
+
         self._tcp_connection_lost_waiter = self._loop.create_future()
 
         tcp_transport, _ = await self._loop.create_connection(

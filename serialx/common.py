@@ -5,16 +5,19 @@ from __future__ import annotations
 from abc import abstractmethod
 import asyncio
 from asyncio import IncompleteReadError
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 import dataclasses
 from enum import Enum
 import io
 import os
 from pathlib import Path
+import time
 from typing import Any
 import urllib.parse
 import warnings
 
-from typing_extensions import Self
+from typing_extensions import Buffer, Self
 
 
 class SerialException(Exception):
@@ -83,37 +86,12 @@ class ModemPins:
     rng: PinState = PinState.UNDEFINED
     dsr: PinState = PinState.UNDEFINED
 
-    @classmethod
-    def all_off(cls) -> Self:
-        """Create instance with all bits set to off."""
-        return cls(
-            le=PinState.LOW,
-            dtr=PinState.LOW,
-            rts=PinState.LOW,
-            st=PinState.LOW,
-            sr=PinState.LOW,
-            cts=PinState.LOW,
-            car=PinState.LOW,
-            rng=PinState.LOW,
-            dsr=PinState.LOW,
-        )
-
     def __repr__(self) -> str:
         """Return string representation of modem pins."""
 
         bits = []
 
-        for bit in (
-            "le",
-            "dtr",
-            "rts",
-            "st",
-            "sr",
-            "cts",
-            "car",
-            "rng",
-            "dsr",
-        ):
+        for bit in ("le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"):
             value = getattr(self, bit)
 
             if value is PinState.UNDEFINED:
@@ -126,24 +104,50 @@ class ModemPins:
         return f"{self.__class__.__name__}[{' '.join(bits)}]"
 
 
+@contextmanager
+def measure_time() -> Iterator[Callable[[], float]]:
+    """Measure elapsed time in a context."""
+    start = time.monotonic()
+    end = None
+
+    def get_result() -> float:
+        if end is None:
+            raise RuntimeError("Context has not exited yet")
+
+        return end - start
+
+    try:
+        yield get_result
+    finally:
+        end = time.monotonic()
+
+
 class BaseSerial(io.RawIOBase):
     """Base class for serial port communication."""
 
     def __init__(
         self,
-        path: str | Path,
-        baudrate: int,
+        path: str | Path | None = None,
+        baudrate: int = 9600,
+        *,
         parity: Parity | None = Parity.NONE,
         stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
+        dsrdtr: bool = False,
         byte_size: int = 8,
-        *,
         read_timeout: float | None = None,
         write_timeout: float | None = None,
         rtsdtr_on_open: PinState = PinState.HIGH,
         rtsdtr_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
+        # pyserial compatibility kwargs
+        port: str | None = None,
+        timeout: float | None = None,
+        bytesize: int | None = None,
+        do_not_open: bool | None = None,
+        writeTimeout: float | None = None,
+        inter_byte_timeout: int | None = None,
     ) -> None:
         """Initialize serial port configuration."""
         super().__init__()
@@ -159,6 +163,7 @@ class BaseSerial(io.RawIOBase):
         self._stopbits = stopbits
         self._xonxoff = xonxoff
         self._rtscts = rtscts
+        self._dsrdtr = dsrdtr
         self._parity = parity
         self._byte_size = byte_size
         self._exclusive = exclusive
@@ -169,6 +174,22 @@ class BaseSerial(io.RawIOBase):
         self._rtsdtr_on_close = rtsdtr_on_close
 
         self._auto_close = False
+
+        # Compatibility kwargs
+        if port is not None:
+            self._path = port
+
+        if timeout is not None:
+            self._read_timeout = timeout
+
+        if bytesize is not None:
+            self._byte_size = bytesize
+
+        if writeTimeout is not None:
+            self._write_timeout = writeTimeout
+
+        if do_not_open is False:
+            raise RuntimeError("do_not_open=False is not supported")
 
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
@@ -263,13 +284,33 @@ class BaseSerial(io.RawIOBase):
         """Set modem control bits, internal."""
         raise NotImplementedError
 
+    def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
+        """Read bytes from serial port into buffer."""
+        timeout = self._read_timeout if timeout is None else timeout
+        return self._readinto(b, timeout=timeout)
+
+    @abstractmethod
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
+        """Read bytes from serial port into buffer, internal."""
+        raise NotImplementedError
+
+    def write(self, data: Buffer, *, timeout: float | None = None) -> int:
+        """Write bytes to serial port."""
+        timeout = self._write_timeout if timeout is None else timeout
+        return self._write(data, timeout=timeout)
+
+    @abstractmethod
+    def _write(self, data: Buffer, *, timeout: float | None) -> int:
+        """Write bytes to serial port, internal."""
+        raise NotImplementedError
+
     @abstractmethod
     def flush(self) -> None:
         """Flush write buffers."""
         raise NotImplementedError
 
     @property
-    def path(self) -> str | Path:
+    def path(self) -> str | Path | None:
         """Get the serial port path."""
         return self._path
 
@@ -277,6 +318,12 @@ class BaseSerial(io.RawIOBase):
     def baudrate(self) -> int:
         """Get the baud rate."""
         return self._baudrate
+
+    @baudrate.setter
+    def baudrate(self, value: int) -> None:
+        """Set baud rate (deprecated)."""
+        self._baudrate = value
+        self._configure_port()
 
     @property
     def parity(self) -> Parity:
@@ -308,38 +355,20 @@ class BaseSerial(io.RawIOBase):
         """Get the exclusive setting."""
         return self._exclusive
 
-    # Deprecated alias
-    @property
-    def dtr(self) -> bool | None:
-        """Get DTR modem bit."""
-        return self.get_modem_pins().dtr.to_bool()
-
-    # Deprecated alias
-    @dtr.setter
-    def dtr(self, value: bool) -> None:
-        """Set DTR modem bit."""
-        self.set_modem_pins(dtr=bool(value))
-
-    # Deprecated alias
-    @property
-    def rts(self) -> bool | None:
-        """Get RTS modem bit."""
-        return self.get_modem_pins().rts.to_bool()
-
-    # Deprecated alias
-    @rts.setter
-    def rts(self, value: bool) -> None:
-        """Set RTS modem bit."""
-        self.set_modem_pins(rts=bool(value))
-
-    def readexactly(self, n: int) -> bytes:
+    def readexactly(self, n: int, *, timeout: float | None = None) -> bytes:
         """Read exactly n bytes."""
         buffer = bytearray(n)
         view = memoryview(buffer)
         remaining = n
+        timeout = self.read_timeout if timeout is None else timeout
 
         while remaining > 0:
-            read = self.readinto(view)
+            with measure_time() as get_elapsed:
+                read = self.readinto(view, timeout=timeout)
+
+            if timeout is not None:
+                timeout -= get_elapsed()
+
             view = view[read:]
             remaining -= read
 
@@ -348,6 +377,38 @@ class BaseSerial(io.RawIOBase):
                 raise IncompleteReadError(
                     expected=n, partial=bytes(buffer[: n - remaining])
                 )
+
+        return bytes(buffer)
+
+    def read_until(
+        self,
+        expected: bytes = b"\n",
+        size: int | None = None,
+        *,
+        timeout: float | None = None,
+    ) -> bytes:
+        """Read until the expected sequence is found."""
+        buffer = bytearray()
+        expected_len = len(expected)
+        timeout = self.read_timeout if timeout is None else timeout
+
+        while True:
+            with measure_time() as get_elapsed:
+                byte = self.readexactly(1, timeout=timeout)
+
+            if timeout is not None:
+                timeout -= get_elapsed()
+
+            if not byte:
+                break
+
+            buffer += byte
+
+            if buffer[-expected_len:] == expected:
+                break
+
+            if size is not None and len(buffer) >= size:
+                break
 
         return bytes(buffer)
 
@@ -364,6 +425,122 @@ class BaseSerial(io.RawIOBase):
         """Cleanup on deletion."""
         if getattr(self, "_auto_close", False):
             self.close()
+
+    @abstractmethod
+    def num_unread_bytes(self) -> int:
+        """Return the number of bytes waiting to be read."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def num_unwritten_bytes(self) -> int:
+        """Return the number of bytes waiting to be written."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def is_open(self) -> bool:
+        """Return whether the serial port is open."""
+        raise NotImplementedError
+
+    # Deprecated aliases
+    @property
+    def port(self) -> str | None:
+        """Deprecated: use `path` instead."""
+        return str(self.path) if self.path is not None else None
+
+    @property
+    def timeout(self) -> float | None:
+        """Deprecated: use `read_timeout` instead."""
+        return self.read_timeout
+
+    @timeout.setter
+    def timeout(self, value: float) -> None:
+        self._read_timeout = value
+
+    @property
+    def bytesize(self) -> int:
+        """Deprecated: use `byte_size` instead."""
+        return self.byte_size
+
+    @property
+    def writeTimeout(self) -> float | None:
+        """Deprecated: use `write_timeout` instead."""
+        return self.write_timeout
+
+    def reset_input_buffer(self) -> None:
+        """Reset the read buffer (deprecated: use `reset_read_buffer`)."""
+        self.reset_read_buffer()
+
+    def reset_output_buffer(self) -> None:
+        """Reset the write buffer (deprecated: use `reset_write_buffer`)."""
+        self.reset_write_buffer()
+
+    def flushInput(self) -> None:
+        """Reset the read buffer (deprecated: use `reset_read_buffer`)."""
+        self.reset_read_buffer()
+
+    def flushOutput(self) -> None:
+        """Reset the write buffer (deprecated: use `reset_write_buffer`)."""
+        self.reset_write_buffer()
+
+    @property
+    def in_waiting(self) -> int:
+        """Deprecated: use `num_unread_bytes` instead."""
+        return self.num_unread_bytes()
+
+    @property
+    def out_waiting(self) -> int:
+        """Deprecated: use `num_unwritten_bytes` instead."""
+        return self.num_unwritten_bytes()
+
+    @property
+    def inWaiting(self) -> int:
+        """Deprecated: use `num_unread_bytes` instead."""
+        return self.in_waiting
+
+    def isOpen(self) -> bool:
+        """Return whether the serial port is open (deprecated: use `is_open`)."""
+        return self.is_open
+
+    @property
+    def dtr(self) -> bool | None:
+        """Get DTR modem bit."""
+        return self.get_modem_pins().dtr.to_bool()
+
+    @dtr.setter
+    def dtr(self, value: bool) -> None:
+        """Set DTR modem bit."""
+        self.set_modem_pins(dtr=bool(value))
+
+    @property
+    def rts(self) -> bool | None:
+        """Get RTS modem bit."""
+        return self.get_modem_pins().rts.to_bool()
+
+    @rts.setter
+    def rts(self, value: bool) -> None:
+        """Set RTS modem bit."""
+        self.set_modem_pins(rts=bool(value))
+
+    @property
+    def cts(self) -> bool | None:
+        """Get CTS modem bit."""
+        return self.get_modem_pins().cts.to_bool()
+
+    @cts.setter
+    def cts(self, value: bool) -> None:
+        """Set CTS modem bit."""
+        self.set_modem_pins(cts=bool(value))
 
 
 class BaseSerialTransport(asyncio.Transport):
@@ -578,6 +755,15 @@ class SerialPortInfo:
     bcd_device: int | None
     interface_description: str | None
     interface_num: int | None
+
+    def __getitem__(self, key: int | slice) -> str | None:
+        """Compatibility shim for `serial.tools.list_ports_common.ListPortInfo`."""
+        warnings.warn(
+            "Slicing `SerialPortInfo` is deprecated, use attributes instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return (str(self.device), self.description, "")[key]
 
     @property
     def description(self) -> str | None:

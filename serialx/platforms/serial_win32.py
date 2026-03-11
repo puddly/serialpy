@@ -11,6 +11,7 @@ import pywintypes
 from typing_extensions import Buffer
 from win32con import (
     DTR_CONTROL_ENABLE,
+    DTR_CONTROL_HANDSHAKE,
     EVENPARITY,
     FILE_ATTRIBUTE_NORMAL,
     FILE_FLAG_OVERLAPPED,
@@ -128,12 +129,16 @@ class Win32Serial(BaseSerial):
         *args,
         handle: int | None = None,
         inter_byte_timeout: float = 0.01,
+        read_buffer_size: int = 4096,
+        write_buffer_size: int = 4096,
         **kwargs,
     ):
         """Initialize the Windows serial port."""
         super().__init__(*args, **kwargs)
         self._handle = handle
         self._inter_byte_timeout = inter_byte_timeout
+        self._read_buffer_size = read_buffer_size
+        self._write_buffer_size = write_buffer_size
         self._overlapped_read: OVERLAPPED | None = None
         self._overlapped_write: OVERLAPPED | None = None
 
@@ -144,6 +149,7 @@ class Win32Serial(BaseSerial):
         if self._handle is not None:
             raise ValueError("Serial port is already open")
 
+        assert self._path is not None
         path = _normalize_windows_port_path(self._path)
 
         share_mode = 0 if self._exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
@@ -168,6 +174,11 @@ class Win32Serial(BaseSerial):
 
         self._auto_close = True
 
+    @property
+    def is_open(self) -> bool:
+        """Check if the serial port is open."""
+        return self._handle is not None
+
     def _configure_port(self) -> None:
         """Configure the serial port settings."""
         try:
@@ -189,8 +200,8 @@ class Win32Serial(BaseSerial):
             )
             SetCommTimeouts(self._handle, timeouts)
 
-            # Setup buffers (input, output) - standard pyserial size
-            SetupComm(self._handle, 4096, 4096)
+            # Setup buffers
+            SetupComm(self._handle, self._read_buffer_size, self._write_buffer_size)
 
             # Clear buffers
             PurgeComm(
@@ -221,11 +232,13 @@ class Win32Serial(BaseSerial):
                 dcb.fOutX = 0
                 dcb.fInX = 0
 
-            # Always enable DTR by default (similar to pyserial)
-            dcb.fDtrControl = DTR_CONTROL_ENABLE
+            if self._dsrdtr:
+                dcb.fDtrControl = DTR_CONTROL_HANDSHAKE
+                dcb.fOutxDsrFlow = 1
+            else:
+                dcb.fDtrControl = DTR_CONTROL_ENABLE
+                dcb.fOutxDsrFlow = 0
 
-            # Explicitly disable DSR sensitivity and other flags that might block IO
-            dcb.fOutxDsrFlow = 0
             dcb.fDsrSensitivity = 0
             dcb.fErrorChar = 0
             dcb.fNull = 0
@@ -303,11 +316,33 @@ class Win32Serial(BaseSerial):
                 self._handle, (SETDTR if modem_pins.dtr is PinState.HIGH else CLRDTR)
             )
 
+    def num_unread_bytes(self) -> int:
+        """Return the number of bytes waiting to be read."""
+        assert self._handle is not None
+        _flags, comstat = ClearCommError(self._handle)
+        return comstat.cbInQue
+
+    def num_unwritten_bytes(self) -> int:
+        """Return the number of bytes waiting to be written."""
+        assert self._handle is not None
+        _flags, comstat = ClearCommError(self._handle)
+        return comstat.cbOutQue
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        assert self._handle is not None
+        PurgeComm(self._handle, PURGE_RXABORT | PURGE_RXCLEAR)
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+        assert self._handle is not None
+        PurgeComm(self._handle, PURGE_TXABORT | PURGE_TXCLEAR)
+
     def flush(self) -> None:
         """Flush write buffers."""
         FlushFileBuffers(self._handle)
 
-    def readinto(self, b: Buffer) -> int:
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
         """Read data into the provided bytearray."""
         assert self._overlapped_read is not None
         ResetEvent(self._overlapped_read.hEvent)
@@ -319,10 +354,7 @@ class Win32Serial(BaseSerial):
 
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
-            timeout_ms = INFINITE
-            if self._read_timeout is not None:
-                timeout_ms = int(self._read_timeout * 1000)
-
+            timeout_ms = int(timeout * 1000) if timeout is not None else INFINITE
             res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
 
             if res == WAIT_TIMEOUT:
@@ -339,7 +371,7 @@ class Win32Serial(BaseSerial):
 
         return n
 
-    def write(self, data: Buffer) -> int:
+    def _write(self, data: Buffer, *, timeout: float | None) -> int:
         """Write data to the serial port synchronously."""
         assert self._overlapped_write is not None
         ResetEvent(self._overlapped_write.hEvent)
@@ -350,11 +382,12 @@ class Win32Serial(BaseSerial):
             raise OSError(e.winerror, e.strerror) from e
 
         if err == ERROR_IO_PENDING:
-            # IO is pending, wait for it
-            timeout_ms = INFINITE
-            if self._write_timeout is not None:
-                timeout_ms = int(self._write_timeout * 1000)
+            if timeout == 0:
+                # Non-blocking: the kernel accepted the whole write
+                return memoryview(data).nbytes
 
+            # IO is pending, wait for it
+            timeout_ms = int(timeout * 1000) if timeout is not None else INFINITE
             res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
 
             if res == WAIT_TIMEOUT:

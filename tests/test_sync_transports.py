@@ -1,7 +1,6 @@
 """Sync transport tests."""
 
 from asyncio import IncompleteReadError
-from collections.abc import Iterator
 import logging
 import os
 import sys
@@ -10,25 +9,9 @@ import time
 import pytest
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
-from serialx.common import BaseSerial
 from tests.common import SerialPair, measure_time
 
 LOGGER = logging.getLogger(__name__)
-
-
-@pytest.fixture
-def serial_opened_pair(
-    serial_pair: SerialPair,
-) -> Iterator[tuple[BaseSerial, BaseSerial]]:
-    """Yield a connected pair of opened Serial objects with default settings."""
-    with (
-        Serial.from_url(serial_pair.left, baudrate=115200) as left,
-        Serial.from_url(serial_pair.right, baudrate=115200) as right,
-    ):
-        yield left, right
-
-
-# --- Data transmission ---
 
 
 def test_sync_all_bytes(serial_pair: SerialPair) -> None:
@@ -582,6 +565,53 @@ def test_sync_readexactly_partial_timeout(serial_pair: SerialPair) -> None:
         assert elapsed() == pytest.approx(0.5, abs=0.1)
 
 
+def test_sync_read_until(serial_pair: SerialPair) -> None:
+    """Test that read_until returns data up to and including the delimiter."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=1.0) as right,
+    ):
+        left.write(b"hello\nworld\n")
+
+        assert right.read_until(b"\n") == b"hello\n"
+        assert right.read_until(b"\n") == b"world\n"
+
+
+def test_sync_readexactly_total_timeout(serial_pair: SerialPair) -> None:
+    """Test that readexactly bounds total wall-clock time, not per-read time."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.5) as right,
+    ):
+        # Write partial data so readexactly loops: first readinto returns 5 bytes,
+        # second readinto blocks until timeout expires
+        left.write(b"hello")
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError) as exc_info:
+                right.readexactly(10)
+
+        assert exc_info.value.partial == b"hello"
+        assert elapsed() == pytest.approx(0.5, abs=0.15)
+
+
+def test_sync_read_until_total_timeout(serial_pair: SerialPair) -> None:
+    """Test that read_until bounds total wall-clock time across many 1-byte reads."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.5) as right,
+    ):
+        # Write data without a newline; read_until calls readexactly(1) per byte,
+        # then blocks on the next one. Total time must still be ~0.5s.
+        left.write(b"no newline here")
+
+        with measure_time() as elapsed:
+            with pytest.raises(IncompleteReadError):
+                right.read_until(b"\n")
+
+        assert elapsed() == pytest.approx(0.5, abs=0.15)
+
+
 @pytest.mark.skip_backends("socket", "esphome")
 @pytest.mark.xfail(
     sys.platform.startswith("freebsd"),
@@ -596,6 +626,80 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
         with pytest.raises(TimeoutError):
             for _ in range(1000):
                 serial.write(data)
+
+
+# --- Buffer inspection and reset ---
+
+
+@pytest.mark.skip_backends("socket", "esphome")
+def test_sync_num_unread_bytes(serial_pair: SerialPair) -> None:
+    """Test that num_unread_bytes reflects pending data."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        assert right.num_unread_bytes() == 0
+
+        left.write(b"hello")
+        left.flush()
+        time.sleep(0.05)
+
+        assert right.num_unread_bytes() == 5
+
+        right.readexactly(5)
+        assert right.num_unread_bytes() == 0
+
+
+@pytest.mark.skip_backends("socket", "esphome")
+def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
+    """Test that num_unwritten_bytes returns an integer."""
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
+        # After flush, unwritten bytes should be zero
+        left.flush()
+        assert left.num_unwritten_bytes() == 0
+
+
+@pytest.mark.skip_backends("socket", "esphome")
+def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
+    """Test that reset_read_buffer discards pending input."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.2) as right,
+    ):
+        left.write(b"discard me")
+        left.flush()
+        time.sleep(0.05)
+
+        assert right.num_unread_bytes() > 0
+        right.reset_read_buffer()
+        assert right.num_unread_bytes() == 0
+
+        # Confirm read returns nothing after flush
+        assert right.read(1024) == b""
+
+
+@pytest.mark.skip_backends("socket", "esphome", "socat")
+def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
+    """Test that reset_write_buffer discards pending output."""
+    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0) as left:
+        left.write(b"x" * 1024)
+
+        assert left.num_unwritten_bytes() > 0
+        left.reset_write_buffer()
+        assert left.num_unwritten_bytes() == 0
+
+
+def test_sync_buffer_methods(serial_pair: SerialPair) -> None:
+    """Test that buffer inspection and reset methods."""
+    with Serial.from_url(serial_pair.left, baudrate=115200) as left:
+        assert left.num_unread_bytes() >= 0
+        assert left.num_unwritten_bytes() >= 0
+
+        left.reset_read_buffer()
+        assert left.num_unread_bytes() == 0
+
+        left.reset_write_buffer()
+        assert left.num_unwritten_bytes() == 0
 
 
 # --- Adapter-pair-specific tests ---

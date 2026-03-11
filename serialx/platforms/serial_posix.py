@@ -114,6 +114,7 @@ class PosixSerial(BaseSerial):
         if self._fileno is not None:
             raise ValueError("Serial port is already open")
 
+        assert self._path is not None
         self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
         self._auto_close = True
 
@@ -121,6 +122,11 @@ class PosixSerial(BaseSerial):
             self._lock()
 
         time.sleep(AFTER_OPEN_DELAY)
+
+    @property
+    def is_open(self) -> bool:
+        """Check if the serial port is open."""
+        return self._fileno is not None
 
     def _lock(self) -> None:
         """Lock the serial port for exclusive access."""
@@ -187,6 +193,11 @@ class PosixSerial(BaseSerial):
         if self._rtscts:
             raise UnsupportedSetting(
                 "RTS/CTS hardware flow control is not supported on this POSIX platform"
+            )
+
+        if self._dsrdtr:
+            raise UnsupportedSetting(
+                "DSR/DTR hardware flow control is not supported on this POSIX platform"
             )
 
         return (iflag, cflag)
@@ -392,12 +403,12 @@ class PosixSerial(BaseSerial):
     # `io.IOBase` implements `read`, `readline`, using `readinto`
     if sys.version_info >= (3, 14):
 
-        def readinto(self, b: Buffer) -> int:
+        def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
 
-            if self._read_timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
+            if timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], timeout)
                 if not ready:
                     return 0
 
@@ -408,12 +419,12 @@ class PosixSerial(BaseSerial):
 
     else:
 
-        def readinto(self, b: Buffer) -> int:
+        def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
 
-            if self._read_timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], self._read_timeout)
+            if timeout is not None:
+                ready, _, _ = select.select([self._fileno], [], [], timeout)
                 if not ready:
                     return 0
 
@@ -429,17 +440,45 @@ class PosixSerial(BaseSerial):
 
             return n
 
-    def write(self, data: Buffer) -> int:
+    def _write(self, data: Buffer, *, timeout: float | None) -> int:
         """Write bytes to serial port."""
         LOGGER.debug("Writing %d bytes: %r", len(data), data)  # type: ignore[arg-type]
         assert self._fileno is not None
 
-        if self._write_timeout is not None:
-            _, ready, _ = select.select([], [self._fileno], [], self._write_timeout)
+        if timeout is not None:
+            _, ready, _ = select.select([], [self._fileno], [], timeout)
             if not ready:
                 raise TimeoutError("Write timeout")
 
         return os.write(self._fileno, data)  # type: ignore[arg-type]
+
+    def num_unread_bytes(self) -> int:
+        """Return the number of bytes waiting to be read."""
+        assert self._fileno is not None
+        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+
+        fcntl.ioctl(self._fileno, termios.FIONREAD, buffer)
+
+        return int.from_bytes(buffer, "little")
+
+    def num_unwritten_bytes(self) -> int:
+        """Return the number of bytes waiting to be written."""
+        assert self._fileno is not None
+        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+
+        fcntl.ioctl(self._fileno, termios.TIOCOUTQ, buffer)
+
+        return int.from_bytes(buffer, "little")
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        assert self._fileno is not None
+        termios.tcflush(self._fileno, termios.TCIFLUSH)
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+        assert self._fileno is not None
+        termios.tcflush(self._fileno, termios.TCOFLUSH)
 
 
 class PosixSerialTransport(DescriptorTransport):

@@ -133,6 +133,11 @@ class ESPHomeSerial(BaseSerial):
         self._call_on_loop(self._async_open())
         self._call_on_loop(self._async_subscribe())
 
+    @property
+    def is_open(self) -> bool:
+        """Return whether the serial port is open."""
+        return self._api is not None
+
     async def _async_open(self) -> None:
         self._api = aioesphomeapi.APIClient(
             self._host,
@@ -206,6 +211,21 @@ class ESPHomeSerial(BaseSerial):
             rts=PinState.convert(rsp.line_states & LineStateFlag.RTS),
         )
 
+    def num_unread_bytes(self) -> int:
+        """Return the number of bytes waiting to be read."""
+        return len(self._read_buffer)
+
+    def num_unwritten_bytes(self) -> int:
+        """Return the number of bytes waiting to be written."""
+        return 0
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        self._read_buffer.clear()
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+
     async def _async_flush(self) -> None:
         """Flush write buffers."""
         assert self._api is not None
@@ -215,17 +235,17 @@ class ESPHomeSerial(BaseSerial):
         """Flush write buffers."""
         self._call_on_loop(self._async_flush())
 
-    def write(self, b: Buffer) -> int:
+    def _write(self, b: Buffer, *, timeout: float | None) -> int:
         """Write bytes to serial port."""
         assert self._api is not None
         data = bytes(b)
         self._api.serial_proxy_write(instance=self.instance, data=data)
         return len(data)
 
-    def readinto(self, b: Buffer) -> int:
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
         """Read bytes from serial port into buffer."""
         try:
-            return self._call_on_loop(self._async_readinto(b, self._read_timeout))
+            return self._call_on_loop(self._async_readinto(b, timeout))
         except TimeoutError:
             return 0
 
@@ -275,6 +295,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     async def _connect(self, **kwargs) -> None:
         self._serial = ESPHomeSerial(loop=self._loop, **kwargs)
+        self._extra["serial"] = self._serial
 
         await self._serial._async_open()
         self._serial.configure_port()
