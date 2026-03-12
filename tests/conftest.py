@@ -41,8 +41,16 @@ SERIAL_PAIR_DEFAULT_FEATURES: dict[SerialPairBackend, frozenset[SerialPairFeatur
             SerialPairFeature.WRITE_TIMEOUT,
         }
     ),
-    SerialPairBackend.SOCKET: frozenset({SerialPairFeature.RXTX}),
-    SerialPairBackend.ESPHOME: frozenset({SerialPairFeature.RXTX}),
+    SerialPairBackend.SOCKET: frozenset(
+        {
+            SerialPairFeature.RXTX,
+        }
+    ),
+    SerialPairBackend.ESPHOME: frozenset(
+        {
+            SerialPairFeature.RXTX,
+        }
+    ),
     SerialPairBackend.ADAPTER: frozenset(
         {
             SerialPairFeature.RXTX,
@@ -66,7 +74,11 @@ SERIAL_PAIR_DEFAULT_FEATURES: dict[SerialPairBackend, frozenset[SerialPairFeatur
             SerialPairFeature.READ_BUFFER,
         }
     ),
-    SerialPairBackend.RFC2217: frozenset({SerialPairFeature.RXTX}),
+    SerialPairBackend.RFC2217: frozenset(
+        {
+            SerialPairFeature.RXTX,
+        }
+    ),
 }
 
 SERIAL_PAIR_FEATURE_ALIASES: dict[str, tuple[str, ...]] = {

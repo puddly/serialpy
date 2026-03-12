@@ -94,8 +94,18 @@ Serialx relies on automated testing. CI runs tests using both `socat` virtual PT
 pass CLI flags to `pytest`:
 
 ```bash
-pytest --adapter-pair=/dev/serial/by-id/left1:/dev/serial/by-id/right1 \
-       --adapter-pair=/dev/serial/by-id/left2:/dev/serial/by-id/right2
+pytest --adapter-pair=/dev/serial/by-id/left1,/dev/serial/by-id/right1 \
+       --adapter-pair=/dev/serial/by-id/left2,/dev/serial/by-id/right2,hw \
+       --adapter-pair=rfc2217://localhost:1234,rfc2217://localhost:5678 \
 ```
 
-By default, tests run in parallel. You can disable this by passing `-n 0` to `pytest`.
+Adapter pairs have varying features on different platforms (or inherent limitations) and
+can be chained at the end of the pair definition as follows:
+- `rxtx`: TX and RX are connected. The default.
+- `hw`: Hardware flow control pins are connected.
+- `readbuf`: Reads are buffered, allowing for resetting the read buffer and peeking at its size.
+- `writebuf`: Writes are buffered, allowing for flushing and peeking at the size of the write buffer.
+- `writetimeout`: Writes block until an OS-internal threshold is reached.
+
+By default, tests communicating with independent hardware run in parallel. You can
+disable this by passing `-n 0` to `pytest`.
