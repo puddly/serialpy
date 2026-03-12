@@ -100,6 +100,7 @@ class SerialPairSpec:
     serial_class_override: str | None = None
     esphome_program: str | None = None
     pair_label: str | None = None
+    wrapped_backend: SerialPairBackend | None = None
 
 
 def _get_posix_serial_classes() -> list[str]:
@@ -269,21 +270,40 @@ def _derive_rfc2217_features(
     )
 
 
+def _build_rfc2217_spec(spec: SerialPairSpec) -> SerialPairSpec:
+    """Build an RFC2217 variant that wraps an existing serial pair spec."""
+    return dataclasses.replace(
+        spec,
+        backend=SerialPairBackend.RFC2217,
+        features=_derive_rfc2217_features(spec.features),
+        wrapped_backend=spec.backend,
+    )
+
+
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Parametrize tests based on available backends."""
     if "serial_pair" in metafunc.fixturenames:
         params: list[pytest.ParameterSet] = []
 
         if SOCAT_BINARY:
+            socat_spec = SerialPairSpec(
+                backend=SerialPairBackend.SOCAT,
+                features=SERIAL_PAIR_DEFAULT_FEATURES[SerialPairBackend.SOCAT],
+            )
             params.append(
                 pytest.param(
-                    SerialPairSpec(
-                        backend=SerialPairBackend.SOCAT,
-                        features=SERIAL_PAIR_DEFAULT_FEATURES[SerialPairBackend.SOCAT],
-                    ),
+                    socat_spec,
                     id="socat",
                 )
             )
+
+            if SER2NET_BINARY is not None:
+                params.append(
+                    pytest.param(
+                        _build_rfc2217_spec(socat_spec),
+                        id="rfc2217+socat",
+                    )
+                )
 
             if (
                 sys.version_info >= (3, 11)
@@ -356,11 +376,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             if SER2NET_BINARY is not None:
                 params.append(
                     pytest.param(
-                        dataclasses.replace(
-                            spec,
-                            backend=SerialPairBackend.RFC2217,
-                            features=_derive_rfc2217_features(spec.features),
-                        ),
+                        _build_rfc2217_spec(spec),
                         marks=[
                             pytest.mark.xdist_group(
                                 name=f"rfc2217:{spec.left}:{spec.right}"
@@ -395,7 +411,8 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     """Yield a connected serial port pair with backend metadata.
 
     Parametrized over all available backends: socat, esphome, socket,
-    and any physical adapter pairs passed via --adapter-pair.
+    ser2net-backed RFC2217 variants, and any physical adapter pairs passed via
+    --adapter-pair.
     """
     spec: SerialPairSpec = request.param
     backend = spec.backend
@@ -473,10 +490,19 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             yield SerialPair(left, right, SerialPairBackend.SOCKET, features=features)
     elif backend is SerialPairBackend.RFC2217:
         assert SER2NET_BINARY is not None
-        assert spec.left is not None
-        assert spec.right is not None
-        with create_ser2net_pair(spec.left, spec.right) as (left, right):
-            yield SerialPair(left, right, SerialPairBackend.RFC2217, features=features)
+        if spec.left is not None and spec.right is not None:
+            with create_ser2net_pair(spec.left, spec.right) as (left, right):
+                yield SerialPair(
+                    left, right, SerialPairBackend.RFC2217, features=features
+                )
+        elif spec.wrapped_backend is SerialPairBackend.SOCAT:
+            with create_socat_pair() as (adapter_left, adapter_right):
+                with create_ser2net_pair(adapter_left, adapter_right) as (left, right):
+                    yield SerialPair(
+                        left, right, SerialPairBackend.RFC2217, features=features
+                    )
+        else:
+            raise AssertionError(f"Unsupported RFC2217 source spec: {spec!r}")
     elif backend in (
         SerialPairBackend.ADAPTER,
         SerialPairBackend.COM0COM,
