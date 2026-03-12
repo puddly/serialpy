@@ -26,7 +26,7 @@ from tests.common import (
     SOCAT_BINARY,
     SerialPair,
     SerialPairBackend,
-    SerialPairQuirk,
+    SerialQuirk,
     async_create_bridged_socat_pair,
     async_create_reader_writer,
     async_create_reader_writer_pair,
@@ -422,7 +422,7 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await writer_left.wait_closed()
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_PAUSE_READING)
+@pytest.mark.skip_quirks(SerialQuirk.NO_PAUSE_READING)
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
     async with async_create_reader_writer_pair(
@@ -541,7 +541,7 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
         assert transport.get_write_buffer_size() == 0
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_WRITE_LIMITS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_WRITE_LIMITS)
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
@@ -573,7 +573,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
         assert result == b"flush test data"
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_PAUSE_READING)
+@pytest.mark.skip_quirks(SerialQuirk.NO_PAUSE_READING)
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
     async with async_create_reader_writer_pair(
@@ -688,7 +688,7 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_PIN_READBACK)
+@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
@@ -717,7 +717,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_PAUSE_WRITING_CALLBACKS)
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -896,7 +896,7 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
 
@@ -932,7 +932,7 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
 
@@ -979,7 +979,7 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [

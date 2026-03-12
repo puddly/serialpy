@@ -17,7 +17,7 @@ from tests.common import (
     SOCAT_BINARY,
     SerialPair,
     SerialPairBackend,
-    SerialPairQuirk,
+    SerialQuirk,
     create_esphome_pair,
     create_ser2net_pair,
     create_socat_pair,
@@ -35,99 +35,99 @@ TTY0TTY_RE = re.compile(r"^/dev/tnt\d+$")
 
 RFC2217_WRAPPER_QUIRKS = frozenset(
     {
-        SerialPairQuirk.NO_NUM_UNREAD_BYTES,
-        SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
-        SerialPairQuirk.NO_RESET_WRITE_BUFFER,
-        SerialPairQuirk.NO_WRITE_TIMEOUT,
-        SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+        SerialQuirk.NO_NUM_UNREAD_BYTES,
+        SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+        SerialQuirk.NO_RESET_WRITE_BUFFER,
+        SerialQuirk.NO_WRITE_TIMEOUT,
+        SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
     }
 )
 
-SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialPairQuirk]] = {
+SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.SOCAT: frozenset(
         {
-            SerialPairQuirk.NO_PIN_READBACK,
-            SerialPairQuirk.NO_DTR_CTS,
-            SerialPairQuirk.NO_FLOW_CONTROL,
-            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
-            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+            SerialQuirk.NO_PIN_READBACK,
+            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.SOCKET: frozenset(
         {
-            SerialPairQuirk.NO_PIN_READBACK,
-            SerialPairQuirk.NO_DTR_CTS,
-            SerialPairQuirk.NO_FLOW_CONTROL,
-            SerialPairQuirk.NO_NUM_UNREAD_BYTES,
-            SerialPairQuirk.NO_RESET_READ_BUFFER,
-            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
-            SerialPairQuirk.NO_WRITE_TIMEOUT,
-            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+            SerialQuirk.NO_PIN_READBACK,
+            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_RESET_READ_BUFFER,
+            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.ESPHOME: frozenset(
         {
-            SerialPairQuirk.NO_PIN_READBACK,
-            SerialPairQuirk.NO_DTR_CTS,
-            SerialPairQuirk.NO_FLOW_CONTROL,
-            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
-            SerialPairQuirk.NO_WRITE_LIMITS,
-            SerialPairQuirk.NO_WRITE_TIMEOUT,
-            SerialPairQuirk.NO_PAUSE_READING,
-            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+            SerialQuirk.NO_PIN_READBACK,
+            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_WRITE_LIMITS,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+            SerialQuirk.NO_PAUSE_READING,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.ADAPTER: frozenset(
         {
-            SerialPairQuirk.NO_DTR_CTS,
-            SerialPairQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_FLOW_CONTROL,
         }
     ),
     SerialPairBackend.COM0COM: frozenset(
         {
-            SerialPairQuirk.NO_PIN_READBACK,
-            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+            SerialQuirk.NO_PIN_READBACK,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.TTY0TTY: frozenset(
         {
-            SerialPairQuirk.NO_PIN_READBACK,
-            SerialPairQuirk.NO_DTR_CTS,
-            SerialPairQuirk.NO_FLOW_CONTROL,
-            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
-            SerialPairQuirk.NO_WRITE_TIMEOUT,
-            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+            SerialQuirk.NO_PIN_READBACK,
+            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.RFC2217: frozenset(
         {
-            SerialPairQuirk.NO_PIN_READBACK,
-            SerialPairQuirk.NO_DTR_CTS,
-            SerialPairQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_PIN_READBACK,
+            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_FLOW_CONTROL,
         }
         | RFC2217_WRAPPER_QUIRKS
     ),
 }
 
-SERIAL_PAIR_QUIRK_FLAG_NAMES: dict[str, SerialPairQuirk] = {
-    "pin-readback": SerialPairQuirk.NO_PIN_READBACK,
-    "dtr-cts": SerialPairQuirk.NO_DTR_CTS,
-    "flow-control": SerialPairQuirk.NO_FLOW_CONTROL,
-    "num-unread-bytes": SerialPairQuirk.NO_NUM_UNREAD_BYTES,
-    "reset-read-buffer": SerialPairQuirk.NO_RESET_READ_BUFFER,
-    "num-unwritten-bytes": SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
-    "reset-write-buffer": SerialPairQuirk.NO_RESET_WRITE_BUFFER,
-    "write-timeout": SerialPairQuirk.NO_WRITE_TIMEOUT,
-    "pause-reading": SerialPairQuirk.NO_PAUSE_READING,
-    "pause-writing-callbacks": SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+SERIAL_PAIR_QUIRK_FLAG_NAMES: dict[str, SerialQuirk] = {
+    "pin-readback": SerialQuirk.NO_PIN_READBACK,
+    "dtr-cts": SerialQuirk.NO_DTR_CTS,
+    "flow-control": SerialQuirk.NO_FLOW_CONTROL,
+    "num-unread-bytes": SerialQuirk.NO_NUM_UNREAD_BYTES,
+    "reset-read-buffer": SerialQuirk.NO_RESET_READ_BUFFER,
+    "num-unwritten-bytes": SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+    "reset-write-buffer": SerialQuirk.NO_RESET_WRITE_BUFFER,
+    "write-timeout": SerialQuirk.NO_WRITE_TIMEOUT,
+    "pause-reading": SerialQuirk.NO_PAUSE_READING,
+    "pause-writing-callbacks": SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
 }
 
 SERIAL_PAIR_QUIRK_OPERATIONS: dict[
-    str, tuple[frozenset[SerialPairQuirk], frozenset[SerialPairQuirk]]
+    str, tuple[frozenset[SerialQuirk], frozenset[SerialQuirk]]
 ] = {
     token: (frozenset(), frozenset({quirk}))
     for token, quirk in SERIAL_PAIR_QUIRK_FLAG_NAMES.items()
@@ -146,7 +146,7 @@ class SerialPairSpec:
 
     left_backend: SerialPairBackend
     right_backend: SerialPairBackend
-    quirks: frozenset[SerialPairQuirk]
+    quirks: frozenset[SerialQuirk]
     left: str | None = None
     right: str | None = None
     serial_class_override: str | None = None
@@ -256,16 +256,16 @@ def _coerce_serial_pair_backend(value: object) -> SerialPairBackend:
     raise TypeError(f"Unsupported backend marker value: {value!r}")
 
 
-def _coerce_serial_pair_quirk(value: object) -> SerialPairQuirk:
-    """Normalize a quirk marker value to SerialPairQuirk."""
-    if isinstance(value, SerialPairQuirk):
+def _coerce_serial_pair_quirk(value: object) -> SerialQuirk:
+    """Normalize a quirk marker value to SerialQuirk."""
+    if isinstance(value, SerialQuirk):
         return value
     if isinstance(value, str):
-        return SerialPairQuirk(value)
+        return SerialQuirk(value)
     raise TypeError(f"Unsupported quirk marker value: {value!r}")
 
 
-def _format_serial_pair_quirks(quirks: Collection[SerialPairQuirk]) -> str:
+def _format_serial_pair_quirks(quirks: Collection[SerialQuirk]) -> str:
     """Render a quirk set as comma-separated CLI tokens."""
     return ", ".join(sorted(quirk.value for quirk in quirks))
 
@@ -274,7 +274,7 @@ def _resolve_serial_pair_quirks(
     left_backend: SerialPairBackend,
     right_backend: SerialPairBackend,
     raw_flags: list[str],
-) -> frozenset[SerialPairQuirk]:
+) -> frozenset[SerialQuirk]:
     """Resolve normalized quirks for a backend pair plus explicit flags."""
     quirks = set(
         SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
@@ -346,8 +346,8 @@ def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
 
 
 def _derive_rfc2217_quirks(
-    quirks: frozenset[SerialPairQuirk],
-) -> frozenset[SerialPairQuirk]:
+    quirks: frozenset[SerialQuirk],
+) -> frozenset[SerialQuirk]:
     """Apply RFC2217 transport limitations on top of an adapter pair."""
     return frozenset(set(quirks) | RFC2217_WRAPPER_QUIRKS)
 

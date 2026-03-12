@@ -9,7 +9,7 @@ import time
 import pytest
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
-from tests.common import SerialPair, SerialPairBackend, SerialPairQuirk, measure_time
+from tests.common import SerialPair, SerialPairBackend, SerialQuirk, measure_time
 
 LOGGER = logging.getLogger(__name__)
 
@@ -508,7 +508,7 @@ def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_PIN_READBACK)
+@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
@@ -532,7 +532,7 @@ def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_PIN_READBACK)
+@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
     """Test DTR property (deprecated alias)."""
 
@@ -547,7 +547,7 @@ def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_PIN_READBACK)
+@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 def test_sync_deprecated_rts_property(serial_pair: SerialPair) -> None:
     """Test RTS property (deprecated alias)."""
 
@@ -652,7 +652,7 @@ def test_sync_read_until_total_timeout(serial_pair: SerialPair) -> None:
         assert elapsed() == pytest.approx(0.5, abs=0.15)
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_WRITE_TIMEOUT)
+@pytest.mark.skip_quirks(SerialQuirk.NO_WRITE_TIMEOUT)
 @pytest.mark.xfail(
     sys.platform.startswith("freebsd"),
     reason="FreeBSD ucom driver does not enforce write buffer limits",
@@ -671,7 +671,7 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
 # --- Buffer inspection and reset ---
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_NUM_UNREAD_BYTES)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NUM_UNREAD_BYTES)
 def test_sync_num_unread_bytes(serial_pair: SerialPair) -> None:
     """Test that num_unread_bytes reflects pending data."""
     with (
@@ -690,7 +690,7 @@ def test_sync_num_unread_bytes(serial_pair: SerialPair) -> None:
         assert right.num_unread_bytes() == 0
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NUM_UNWRITTEN_BYTES)
 def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
     """Test that num_unwritten_bytes returns an integer."""
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
@@ -700,8 +700,8 @@ def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skip_quirks(
-    SerialPairQuirk.NO_NUM_UNREAD_BYTES,
-    SerialPairQuirk.NO_RESET_READ_BUFFER,
+    SerialQuirk.NO_NUM_UNREAD_BYTES,
+    SerialQuirk.NO_RESET_READ_BUFFER,
 )
 def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_read_buffer discards pending input."""
@@ -722,8 +722,8 @@ def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skip_quirks(
-    SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
-    SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+    SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+    SerialQuirk.NO_RESET_WRITE_BUFFER,
 )
 def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_write_buffer discards pending output."""
@@ -753,7 +753,7 @@ def test_sync_buffer_methods(serial_pair: SerialPair) -> None:
 # and verify cross-port behavior that virtual backends can't emulate.
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 def test_dtr_cts(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls CTS on the other."""
 
@@ -781,7 +781,7 @@ def test_dtr_cts(serial_pair: SerialPair) -> None:
         assert left.get_modem_pins().cts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
     """Test DTR/CTS cross-port behavior via deprecated property aliases."""
 
@@ -822,7 +822,7 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 def test_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
 
@@ -858,7 +858,7 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
 
@@ -902,7 +902,7 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialPairQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -946,8 +946,8 @@ def test_deassert_on_open_with_rtscts(
 
 
 @pytest.mark.skip_quirks(
-    SerialPairQuirk.NO_DTR_CTS,
-    SerialPairQuirk.NO_FLOW_CONTROL,
+    SerialQuirk.NO_DTR_CTS,
+    SerialQuirk.NO_FLOW_CONTROL,
 )
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""

@@ -48,8 +48,8 @@ class SerialPairBackend(str, enum.Enum):
     RFC2217 = "rfc2217"
 
 
-class SerialPairQuirk(str, enum.Enum):
-    """Quirks carried by a generated serial test pair."""
+class SerialQuirk(str, enum.Enum):
+    """Quirks carried by a serial transport."""
 
     NO_PIN_READBACK = "no-pin-readback"
     NO_DTR_CTS = "no-dtr-cts"
@@ -72,7 +72,7 @@ class SerialPair(NamedTuple):
     left_backend: SerialPairBackend
     right_backend: SerialPairBackend
     serial_class: str = serialx.Serial.__name__
-    quirks: frozenset[SerialPairQuirk] = frozenset()
+    quirks: frozenset[SerialQuirk] = frozenset()
     spawned_ser2net: bool = False
 
     @property
