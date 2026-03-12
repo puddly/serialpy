@@ -199,7 +199,7 @@ jobs:
             --cov=serialx \
             -o console_output_style=count \
             -p no:sugar \
-            --adapter-pair /dev/tnt0:/dev/tnt1 \
+            --adapter-pair /dev/tnt0,/dev/tnt1,no-pin-readback,no-dtr-cts,no-flow-control,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-pause-writing-callbacks \
             tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -285,7 +285,7 @@ jobs:
         shell: pwsh
         run: |
           python -m serialx.tools.list_ports
-          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0:CNCB0
+          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0,no-pin-readback,no-write-limits,no-pause-writing-callbacks
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:

@@ -48,14 +48,20 @@ class SerialPairBackend(str, enum.Enum):
     RFC2217 = "rfc2217"
 
 
-class SerialPairFeature(str, enum.Enum):
-    """Capability flags carried by a generated serial test pair."""
+class SerialPairQuirk(str, enum.Enum):
+    """Quirks carried by a generated serial test pair."""
 
-    RXTX = "rxtx"
-    HW = "hw"
-    READ_BUFFER = "readbuf"
-    WRITE_BUFFER = "writebuf"
-    WRITE_TIMEOUT = "writetimeout"
+    NO_PIN_READBACK = "no-pin-readback"
+    NO_DTR_CTS = "no-dtr-cts"
+    NO_FLOW_CONTROL = "no-flow-control"
+    NO_NUM_UNREAD_BYTES = "no-num-unread-bytes"
+    NO_RESET_READ_BUFFER = "no-reset-read-buffer"
+    NO_NUM_UNWRITTEN_BYTES = "no-num-unwritten-bytes"
+    NO_RESET_WRITE_BUFFER = "no-reset-write-buffer"
+    NO_WRITE_TIMEOUT = "no-write-timeout"
+    NO_PAUSE_READING = "no-pause-reading"
+    NO_WRITE_LIMITS = "no-write-limits"
+    NO_PAUSE_WRITING_CALLBACKS = "no-pause-writing-callbacks"
 
 
 class SerialPair(NamedTuple):
@@ -66,7 +72,7 @@ class SerialPair(NamedTuple):
     left_backend: SerialPairBackend
     right_backend: SerialPairBackend
     serial_class: str = serialx.Serial.__name__
-    features: frozenset[SerialPairFeature] = frozenset()
+    quirks: frozenset[SerialPairQuirk] = frozenset()
     spawned_ser2net: bool = False
 
     @property

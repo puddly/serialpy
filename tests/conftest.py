@@ -17,7 +17,7 @@ from tests.common import (
     SOCAT_BINARY,
     SerialPair,
     SerialPairBackend,
-    SerialPairFeature,
+    SerialPairQuirk,
     create_esphome_pair,
     create_ser2net_pair,
     create_socat_pair,
@@ -33,72 +33,118 @@ except ImportError:
 COM0COM_RE = re.compile(r"^CNC[A-Z]\d+$", re.IGNORECASE)
 TTY0TTY_RE = re.compile(r"^/dev/tnt\d+$")
 
-SERIAL_PAIR_DEFAULT_FEATURES: dict[SerialPairBackend, frozenset[SerialPairFeature]] = {
+RFC2217_WRAPPER_QUIRKS = frozenset(
+    {
+        SerialPairQuirk.NO_NUM_UNREAD_BYTES,
+        SerialPairQuirk.NO_RESET_READ_BUFFER,
+        SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
+        SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+        SerialPairQuirk.NO_WRITE_TIMEOUT,
+        SerialPairQuirk.NO_WRITE_LIMITS,
+        SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
+    }
+)
+
+SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialPairQuirk]] = {
     SerialPairBackend.SOCAT: frozenset(
         {
-            SerialPairFeature.RXTX,
-            SerialPairFeature.READ_BUFFER,
-            SerialPairFeature.WRITE_TIMEOUT,
+            SerialPairQuirk.NO_PIN_READBACK,
+            SerialPairQuirk.NO_DTR_CTS,
+            SerialPairQuirk.NO_FLOW_CONTROL,
+            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.SOCKET: frozenset(
         {
-            SerialPairFeature.RXTX,
+            SerialPairQuirk.NO_PIN_READBACK,
+            SerialPairQuirk.NO_DTR_CTS,
+            SerialPairQuirk.NO_FLOW_CONTROL,
+            SerialPairQuirk.NO_NUM_UNREAD_BYTES,
+            SerialPairQuirk.NO_RESET_READ_BUFFER,
+            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+            SerialPairQuirk.NO_WRITE_TIMEOUT,
+            SerialPairQuirk.NO_WRITE_LIMITS,
+            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.ESPHOME: frozenset(
         {
-            SerialPairFeature.RXTX,
+            SerialPairQuirk.NO_PIN_READBACK,
+            SerialPairQuirk.NO_DTR_CTS,
+            SerialPairQuirk.NO_FLOW_CONTROL,
+            SerialPairQuirk.NO_NUM_UNREAD_BYTES,
+            SerialPairQuirk.NO_RESET_READ_BUFFER,
+            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+            SerialPairQuirk.NO_WRITE_TIMEOUT,
+            SerialPairQuirk.NO_PAUSE_READING,
+            SerialPairQuirk.NO_WRITE_LIMITS,
+            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.ADAPTER: frozenset(
         {
-            SerialPairFeature.RXTX,
-            SerialPairFeature.READ_BUFFER,
-            SerialPairFeature.WRITE_BUFFER,
-            SerialPairFeature.WRITE_TIMEOUT,
+            SerialPairQuirk.NO_DTR_CTS,
+            SerialPairQuirk.NO_FLOW_CONTROL,
         }
     ),
     SerialPairBackend.COM0COM: frozenset(
         {
-            SerialPairFeature.RXTX,
-            SerialPairFeature.HW,
-            SerialPairFeature.READ_BUFFER,
-            SerialPairFeature.WRITE_BUFFER,
-            SerialPairFeature.WRITE_TIMEOUT,
+            SerialPairQuirk.NO_PIN_READBACK,
+            SerialPairQuirk.NO_WRITE_LIMITS,
+            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.TTY0TTY: frozenset(
         {
-            SerialPairFeature.RXTX,
-            SerialPairFeature.READ_BUFFER,
+            SerialPairQuirk.NO_PIN_READBACK,
+            SerialPairQuirk.NO_DTR_CTS,
+            SerialPairQuirk.NO_FLOW_CONTROL,
+            SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+            SerialPairQuirk.NO_WRITE_TIMEOUT,
+            SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.RFC2217: frozenset(
         {
-            SerialPairFeature.RXTX,
+            SerialPairQuirk.NO_PIN_READBACK,
+            SerialPairQuirk.NO_DTR_CTS,
+            SerialPairQuirk.NO_FLOW_CONTROL,
         }
+        | RFC2217_WRAPPER_QUIRKS
     ),
 }
 
-SERIAL_PAIR_FEATURE_ALIASES: dict[str, tuple[str, ...]] = {
-    "buf": ("readbuf", "writebuf"),
-    "nobuf": ("noreadbuf", "nowritebuf"),
+SERIAL_PAIR_QUIRK_FLAG_NAMES: dict[str, SerialPairQuirk] = {
+    "pin-readback": SerialPairQuirk.NO_PIN_READBACK,
+    "dtr-cts": SerialPairQuirk.NO_DTR_CTS,
+    "flow-control": SerialPairQuirk.NO_FLOW_CONTROL,
+    "num-unread-bytes": SerialPairQuirk.NO_NUM_UNREAD_BYTES,
+    "reset-read-buffer": SerialPairQuirk.NO_RESET_READ_BUFFER,
+    "num-unwritten-bytes": SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
+    "reset-write-buffer": SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+    "write-timeout": SerialPairQuirk.NO_WRITE_TIMEOUT,
+    "pause-reading": SerialPairQuirk.NO_PAUSE_READING,
+    "write-limits": SerialPairQuirk.NO_WRITE_LIMITS,
+    "pause-writing-callbacks": SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
 }
 
-SERIAL_PAIR_FEATURE_OPERATIONS: dict[
-    str, tuple[frozenset[SerialPairFeature], frozenset[SerialPairFeature]]
+SERIAL_PAIR_QUIRK_OPERATIONS: dict[
+    str, tuple[frozenset[SerialPairQuirk], frozenset[SerialPairQuirk]]
 ] = {
-    "rxtx": (frozenset({SerialPairFeature.RXTX}), frozenset()),
-    "hw": (frozenset({SerialPairFeature.HW}), frozenset()),
-    "nohw": (frozenset(), frozenset({SerialPairFeature.HW})),
-    "readbuf": (frozenset({SerialPairFeature.READ_BUFFER}), frozenset()),
-    "noreadbuf": (frozenset(), frozenset({SerialPairFeature.READ_BUFFER})),
-    "writebuf": (frozenset({SerialPairFeature.WRITE_BUFFER}), frozenset()),
-    "nowritebuf": (frozenset(), frozenset({SerialPairFeature.WRITE_BUFFER})),
-    "writetimeout": (frozenset({SerialPairFeature.WRITE_TIMEOUT}), frozenset()),
-    "nowritetimeout": (frozenset(), frozenset({SerialPairFeature.WRITE_TIMEOUT})),
+    token: (frozenset(), frozenset({quirk}))
+    for token, quirk in SERIAL_PAIR_QUIRK_FLAG_NAMES.items()
 }
+SERIAL_PAIR_QUIRK_OPERATIONS.update(
+    {
+        quirk.value: (frozenset({quirk}), frozenset())
+        for quirk in SERIAL_PAIR_QUIRK_FLAG_NAMES.values()
+    }
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -107,7 +153,7 @@ class SerialPairSpec:
 
     left_backend: SerialPairBackend
     right_backend: SerialPairBackend
-    features: frozenset[SerialPairFeature]
+    quirks: frozenset[SerialPairQuirk]
     left: str | None = None
     right: str | None = None
     serial_class_override: str | None = None
@@ -167,11 +213,7 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line(
         "markers",
-        "require_features(*features): skip test unless serial_pair exposes all listed features",
-    )
-    config.addinivalue_line(
-        "markers",
-        "skip_features(*features): skip test when serial_pair exposes any listed feature",
+        "skip_quirks(*quirks): skip test when serial_pair exposes any listed quirk",
     )
 
 
@@ -183,8 +225,10 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=[],
         help=(
             "Pair of serial endpoints in format LEFT,RIGHT[,FLAG...] "
-            "(for example /dev/ttyUSB1,/dev/ttyUSB2,rxtx,hw,nobuf or "
-            "rfc2217://127.0.0.1:5001,rfc2217://127.0.0.1:5002,rxtx)"
+            "(for example /dev/ttyUSB1,/dev/ttyUSB2,pin-readback,dtr-cts,"
+            "flow-control or /dev/tnt0,/dev/tnt1,no-pin-readback,no-dtr-cts,"
+            "no-flow-control or rfc2217://127.0.0.1:5001,"
+            "rfc2217://127.0.0.1:5002,no-write-timeout)"
         ),
     )
 
@@ -219,29 +263,29 @@ def _coerce_serial_pair_backend(value: object) -> SerialPairBackend:
     raise TypeError(f"Unsupported backend marker value: {value!r}")
 
 
-def _coerce_serial_pair_feature(value: object) -> SerialPairFeature:
-    """Normalize a feature marker value to SerialPairFeature."""
-    if isinstance(value, SerialPairFeature):
+def _coerce_serial_pair_quirk(value: object) -> SerialPairQuirk:
+    """Normalize a quirk marker value to SerialPairQuirk."""
+    if isinstance(value, SerialPairQuirk):
         return value
     if isinstance(value, str):
-        return SerialPairFeature(value)
-    raise TypeError(f"Unsupported feature marker value: {value!r}")
+        return SerialPairQuirk(value)
+    raise TypeError(f"Unsupported quirk marker value: {value!r}")
 
 
-def _format_serial_pair_features(features: Collection[SerialPairFeature]) -> str:
-    """Render a feature set as comma-separated CLI tokens."""
-    return ", ".join(sorted(feature.value for feature in features))
+def _format_serial_pair_quirks(quirks: Collection[SerialPairQuirk]) -> str:
+    """Render a quirk set as comma-separated CLI tokens."""
+    return ", ".join(sorted(quirk.value for quirk in quirks))
 
 
-def _resolve_serial_pair_features(
+def _resolve_serial_pair_quirks(
     left_backend: SerialPairBackend,
     right_backend: SerialPairBackend,
     raw_flags: list[str],
-) -> frozenset[SerialPairFeature]:
-    """Resolve normalized feature tags for a backend plus explicit flags."""
-    features = set(
-        SERIAL_PAIR_DEFAULT_FEATURES[left_backend]
-        & SERIAL_PAIR_DEFAULT_FEATURES[right_backend]
+) -> frozenset[SerialPairQuirk]:
+    """Resolve normalized quirks for a backend pair plus explicit flags."""
+    quirks = set(
+        SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
+        | SERIAL_PAIR_DEFAULT_QUIRKS[right_backend]
     )
     unknown_flags: list[str] = []
 
@@ -250,31 +294,24 @@ def _resolve_serial_pair_features(
         if not flag:
             continue
 
-        expanded = SERIAL_PAIR_FEATURE_ALIASES.get(flag, (flag,))
-        for expanded_flag in expanded:
-            operation = SERIAL_PAIR_FEATURE_OPERATIONS.get(expanded_flag)
-            if operation is None:
-                unknown_flags.append(raw_flag)
-                continue
+        operation = SERIAL_PAIR_QUIRK_OPERATIONS.get(flag)
+        if operation is None:
+            unknown_flags.append(raw_flag)
+            continue
 
-            adds, removes = operation
-            features.difference_update(removes)
-            features.update(adds)
+        adds, removes = operation
+        quirks.difference_update(removes)
+        quirks.update(adds)
 
     if unknown_flags:
         raise ValueError(
-            "Unknown adapter feature flag(s): "
+            "Unknown adapter quirk flag(s): "
             + ", ".join(sorted(set(unknown_flags)))
             + ". Supported flags: "
-            + ", ".join(
-                sorted(
-                    set(SERIAL_PAIR_FEATURE_ALIASES)
-                    | set(SERIAL_PAIR_FEATURE_OPERATIONS)
-                )
-            )
+            + ", ".join(sorted(SERIAL_PAIR_QUIRK_OPERATIONS))
         )
 
-    return frozenset(features)
+    return frozenset(quirks)
 
 
 def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
@@ -300,14 +337,14 @@ def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
             )
         left_backend = _classify_endpoint_backend(left)
         right_backend = _classify_endpoint_backend(right)
-        features = _resolve_serial_pair_features(left_backend, right_backend, raw_flags)
+        quirks = _resolve_serial_pair_quirks(left_backend, right_backend, raw_flags)
         pairs.append(
             SerialPairSpec(
                 left_backend=left_backend,
                 right_backend=right_backend,
                 left=left,
                 right=right,
-                features=features,
+                quirks=quirks,
                 pair_label=pair,
             )
         )
@@ -315,15 +352,11 @@ def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
     return pairs
 
 
-def _derive_rfc2217_features(
-    features: frozenset[SerialPairFeature],
-) -> frozenset[SerialPairFeature]:
+def _derive_rfc2217_quirks(
+    quirks: frozenset[SerialPairQuirk],
+) -> frozenset[SerialPairQuirk]:
     """Apply RFC2217 transport limitations on top of an adapter pair."""
-    return frozenset(
-        feature
-        for feature in features
-        if feature in (SerialPairFeature.RXTX, SerialPairFeature.HW)
-    )
+    return frozenset(set(quirks) | RFC2217_WRAPPER_QUIRKS)
 
 
 def _build_rfc2217_spec(spec: SerialPairSpec) -> SerialPairSpec:
@@ -332,7 +365,7 @@ def _build_rfc2217_spec(spec: SerialPairSpec) -> SerialPairSpec:
         spec,
         left_backend=SerialPairBackend.RFC2217,
         right_backend=SerialPairBackend.RFC2217,
-        features=_derive_rfc2217_features(spec.features),
+        quirks=_derive_rfc2217_quirks(spec.quirks),
         wrapped_left_backend=spec.left_backend,
         wrapped_right_backend=spec.right_backend,
     )
@@ -371,7 +404,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             socat_spec = SerialPairSpec(
                 left_backend=SerialPairBackend.SOCAT,
                 right_backend=SerialPairBackend.SOCAT,
-                features=SERIAL_PAIR_DEFAULT_FEATURES[SerialPairBackend.SOCAT],
+                quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCAT],
             )
             params.append(
                 pytest.param(
@@ -399,7 +432,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                             left_backend=SerialPairBackend.ESPHOME,
                             right_backend=SerialPairBackend.ESPHOME,
                             esphome_program=esphome_program,
-                            features=SERIAL_PAIR_DEFAULT_FEATURES[
+                            quirks=SERIAL_PAIR_DEFAULT_QUIRKS[
                                 SerialPairBackend.ESPHOME
                             ],
                         ),
@@ -414,9 +447,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                             left_backend=SerialPairBackend.SOCAT,
                             right_backend=SerialPairBackend.SOCAT,
                             serial_class_override=cls_name,
-                            features=SERIAL_PAIR_DEFAULT_FEATURES[
-                                SerialPairBackend.SOCAT
-                            ],
+                            quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCAT],
                         ),
                         id=f"socat+{cls_name}",
                     )
@@ -427,7 +458,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 SerialPairSpec(
                     left_backend=SerialPairBackend.SOCKET,
                     right_backend=SerialPairBackend.SOCKET,
-                    features=SERIAL_PAIR_DEFAULT_FEATURES[SerialPairBackend.SOCKET],
+                    quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCKET],
                 ),
                 id="socket",
             )
@@ -440,7 +471,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                         left_backend=SerialPairBackend.SOCKET,
                         right_backend=SerialPairBackend.SOCKET,
                         serial_class_override=cls_name,
-                        features=SERIAL_PAIR_DEFAULT_FEATURES[SerialPairBackend.SOCKET],
+                        quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCKET],
                     ),
                     id=f"socket+{cls_name}",
                 )
@@ -499,7 +530,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     """
     spec: SerialPairSpec = request.param
     pair_backends = spec.backends
-    features = spec.features
+    quirks = spec.quirks
 
     for marker in request.node.iter_markers("skip_backends"):
         blocked_backends = {_coerce_serial_pair_backend(arg) for arg in marker.args}
@@ -510,22 +541,13 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                 + ", ".join(sorted(backend.value for backend in present_backends))
             )
 
-    for marker in request.node.iter_markers("require_features"):
-        required = {_coerce_serial_pair_feature(arg) for arg in marker.args}
-        missing = required - features
-        if missing:
+    for marker in request.node.iter_markers("skip_quirks"):
+        blocked = {_coerce_serial_pair_quirk(arg) for arg in marker.args}
+        present_quirks = blocked & quirks
+        if present_quirks:
             pytest.skip(
-                "Skipped because serial_pair lacks features: "
-                + _format_serial_pair_features(missing)
-            )
-
-    for marker in request.node.iter_markers("skip_features"):
-        blocked = {_coerce_serial_pair_feature(arg) for arg in marker.args}
-        present_features = blocked & features
-        if present_features:
-            pytest.skip(
-                "Skipped because serial_pair exposes features: "
-                + _format_serial_pair_features(present_features)
+                "Skipped because serial_pair exposes quirks: "
+                + _format_serial_pair_quirks(present_quirks)
             )
 
     # Check if a serial class override is requested (e.g. "PosixSerial")
@@ -553,7 +575,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                         SerialPairBackend.SOCAT,
                         SerialPairBackend.SOCAT,
                         serial_class,
-                        features,
+                        quirks,
                     )
             elif spec.backends == {SerialPairBackend.SOCKET}:
                 with create_socket_pair() as (left, right):
@@ -563,7 +585,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                         SerialPairBackend.SOCKET,
                         SerialPairBackend.SOCKET,
                         serial_class,
-                        features,
+                        quirks,
                     )
         finally:
             importlib.reload(serialx.platforms)
@@ -574,7 +596,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                 right,
                 SerialPairBackend.SOCAT,
                 SerialPairBackend.SOCAT,
-                features=features,
+                quirks=quirks,
             )
     elif spec.backends == {SerialPairBackend.ESPHOME}:
         assert spec.esphome_program is not None
@@ -584,7 +606,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                 right,
                 SerialPairBackend.ESPHOME,
                 SerialPairBackend.ESPHOME,
-                features=features,
+                quirks=quirks,
             )
     elif spec.backends == {SerialPairBackend.SOCKET}:
         with create_socket_pair() as (left, right):
@@ -593,7 +615,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                 right,
                 SerialPairBackend.SOCKET,
                 SerialPairBackend.SOCKET,
-                features=features,
+                quirks=quirks,
             )
     elif spec.wrapped_backends:
         if spec.left is not None and spec.right is not None:
@@ -604,7 +626,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                     right,
                     spec.left_backend,
                     spec.right_backend,
-                    features=features,
+                    quirks=quirks,
                     spawned_ser2net=True,
                 )
         elif spec.wrapped_backends == {SerialPairBackend.SOCAT}:
@@ -616,7 +638,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                         right,
                         spec.left_backend,
                         spec.right_backend,
-                        features=features,
+                        quirks=quirks,
                         spawned_ser2net=True,
                     )
         else:
@@ -631,7 +653,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                 spec.right,
                 spec.left_backend,
                 spec.right_backend,
-                features=features,
+                quirks=quirks,
             )
         else:
             yield SerialPair(
@@ -639,7 +661,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                 spec.right,
                 spec.left_backend,
                 spec.right_backend,
-                features=features,
+                quirks=quirks,
             )
     else:
         raise AssertionError(f"Unsupported serial pair spec: {spec!r}")
