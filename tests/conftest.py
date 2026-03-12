@@ -63,7 +63,6 @@ SERIAL_PAIR_DEFAULT_FEATURES: dict[SerialPairBackend, frozenset[SerialPairFeatur
     SerialPairBackend.TTY0TTY: frozenset(
         {
             SerialPairFeature.RXTX,
-            SerialPairFeature.HW,
             SerialPairFeature.READ_BUFFER,
         }
     ),
