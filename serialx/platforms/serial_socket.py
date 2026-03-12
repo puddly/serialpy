@@ -306,3 +306,25 @@ class SocketSerialTransport(BaseSerialTransport):
         if self._tcp_transport is not None:
             return self._tcp_transport.get_write_buffer_size()
         return 0
+
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Get the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            return (0, 0)
+
+        return self._tcp_transport.get_write_buffer_limits()
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            raise RuntimeError("Transport not connected")
+
+        self._tcp_transport.set_write_buffer_limits(high=high, low=low)
+
+    def can_write_eof(self) -> bool:
+        """Return whether the underlying TCP transport supports EOF."""
+        return (
+            self._tcp_transport.can_write_eof()
+            if self._tcp_transport is not None
+            else False
+        )

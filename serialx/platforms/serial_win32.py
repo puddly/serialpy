@@ -590,6 +590,13 @@ class Win32SerialTransport(BaseSerialTransport):
 
         self._internal_transport.set_write_buffer_limits(high=high, low=low)
 
+    def can_write_eof(self) -> bool:
+        """Check if the internal transport supports EOF writes."""
+        if self._internal_transport is None:
+            return False
+
+        return self._internal_transport.can_write_eof()
+
     def write(self, data):
         """Write data to the transport."""
         if self._internal_transport is None:

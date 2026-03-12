@@ -534,6 +534,14 @@ class RFC2217Serial(SocketSerial):
 
             self._recv_and_process()
 
+    def num_unread_bytes(self) -> int:
+        """Return the number of buffered serial data bytes waiting to be read."""
+        return len(self._data_buffer)
+
+    def reset_read_buffer(self) -> None:
+        """Discard buffered serial data and drain pending TCP payload."""
+        self._data_buffer.clear()
+
     # -- data read/write (application layer) --------------------------------
 
     def _write(self, b: Buffer, *, timeout: float | None) -> int:
@@ -930,3 +938,25 @@ class RFC2217SerialTransport(BaseSerialTransport):
         if self._tcp_transport is not None:
             return self._tcp_transport.get_write_buffer_size()
         return 0
+
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Get the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            return (0, 0)
+
+        return self._tcp_transport.get_write_buffer_limits()
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            raise RuntimeError("Transport not connected")
+
+        self._tcp_transport.set_write_buffer_limits(high=high, low=low)
+
+    def can_write_eof(self) -> bool:
+        """Return whether the underlying TCP transport supports EOF."""
+        return (
+            self._tcp_transport.can_write_eof()
+            if self._tcp_transport is not None
+            else False
+        )
