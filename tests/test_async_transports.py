@@ -127,7 +127,10 @@ async def test_async_random_large(
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"),
+            serial_pair.spawned_ser2net,
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -176,9 +179,13 @@ async def test_async_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 async def test_async_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
-    if sys.platform == "darwin" and serial_pair.serial_class in (
-        "PosixSerial",
-        "ExtendedPosixSerial",
+    if sys.platform == "darwin" and (
+        serial_pair.serial_class
+        in (
+            "PosixSerial",
+            "ExtendedPosixSerial",
+        )
+        or serial_pair.spawned_ser2net
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -219,7 +226,10 @@ async def test_async_sustained_throughput(
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"),
+            serial_pair.spawned_ser2net,
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -252,7 +262,10 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"),
+            serial_pair.spawned_ser2net,
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -532,7 +545,11 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
     sys.platform == "win32",
     reason="Only DescriptorTransport implements write buffer limits",
 )
-@pytest.mark.skip_backends(SerialPairBackend.SOCKET, SerialPairBackend.ESPHOME)
+@pytest.mark.skip_backends(
+    SerialPairBackend.SOCKET,
+    SerialPairBackend.ESPHOME,
+    SerialPairBackend.RFC2217,
+)
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
@@ -714,6 +731,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     SerialPairBackend.SOCAT,
     SerialPairBackend.ESPHOME,
     SerialPairBackend.TTY0TTY,
+    SerialPairBackend.RFC2217,
 )
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""

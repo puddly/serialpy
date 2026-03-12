@@ -67,6 +67,7 @@ class SerialPair(NamedTuple):
     right_backend: SerialPairBackend
     serial_class: str = serialx.Serial.__name__
     features: frozenset[SerialPairFeature] = frozenset()
+    spawned_ser2net: bool = False
 
     @property
     def backends(self) -> frozenset[SerialPairBackend]:

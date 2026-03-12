@@ -112,6 +112,10 @@ def test_sync_random_large(
     serial_pair: SerialPair, baudrate: int, chunk_size: int
 ) -> None:
     """Test random read/write at various speeds."""
+    if serial_pair.spawned_ser2net and sys.platform == "darwin" and baudrate > 230400:
+        pytest.skip(
+            "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
+        )
     if (
         baudrate > 230400
         and sys.platform == "darwin"
@@ -162,6 +166,10 @@ def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
+    if serial_pair.spawned_ser2net and sys.platform == "darwin":
+        pytest.skip(
+            "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
+        )
     if sys.platform == "darwin" and serial_pair.serial_class in (
         "PosixSerial",
         "ExtendedPosixSerial",
@@ -200,6 +208,10 @@ def test_sync_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
+    if serial_pair.spawned_ser2net and sys.platform == "darwin" and baudrate > 230400:
+        pytest.skip(
+            "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
+        )
     if (
         baudrate > 230400
         and sys.platform == "darwin"
@@ -233,6 +245,10 @@ def test_sync_sustained_throughput(
 )
 def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
+    if serial_pair.spawned_ser2net and sys.platform == "darwin" and baudrate > 230400:
+        pytest.skip(
+            "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
+        )
     if (
         baudrate > 230400
         and sys.platform == "darwin"
@@ -350,6 +366,10 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
     """Test that non-exclusive mode allows multiple opens."""
     if sys.platform == "win32":
         pytest.skip("Windows does not support shared access")
+    if serial_pair.spawned_ser2net:
+        pytest.skip(
+            "fixture-spawned ser2net pairs do not support opening the same endpoint twice"
+        )
 
     with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=False) as serial1:
         assert serial1.exclusive is False
@@ -447,6 +467,10 @@ def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
         "freebsd"
     ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
+    if serial_pair.spawned_ser2net:
+        pytest.skip(
+            "fixture-spawned ser2net PTY pairs do not support modem pin control reliably"
+        )
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
         serial.set_modem_pins(dtr=True, rts=True)

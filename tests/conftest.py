@@ -594,6 +594,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                     spec.left_backend,
                     spec.right_backend,
                     features=features,
+                    spawned_ser2net=True,
                 )
         elif spec.wrapped_backends == {SerialPairBackend.SOCAT}:
             assert SER2NET_BINARY is not None
@@ -605,6 +606,7 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                         spec.left_backend,
                         spec.right_backend,
                         features=features,
+                        spawned_ser2net=True,
                     )
         else:
             raise AssertionError(f"Unsupported wrapped source spec: {spec!r}")
