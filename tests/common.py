@@ -246,7 +246,6 @@ def create_ser2net_pair(
     finally:
         proc.terminate()
         proc.wait()
-        time.sleep(0.1)
 
 
 @contextlib.asynccontextmanager
