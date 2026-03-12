@@ -226,11 +226,6 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def _is_rfc2217_endpoint(path: str) -> bool:
-    """Return True when the endpoint is already an RFC2217 URI."""
-    return path.lower().startswith("rfc2217://")
-
-
 def _classify_endpoint_backend(path: str) -> SerialPairBackend:
     """Classify a single endpoint into a backend family."""
     lower_path = path.lower()
@@ -345,20 +340,13 @@ def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
     return pairs
 
 
-def _derive_rfc2217_quirks(
-    quirks: frozenset[SerialQuirk],
-) -> frozenset[SerialQuirk]:
-    """Apply RFC2217 transport limitations on top of an adapter pair."""
-    return frozenset(set(quirks) | RFC2217_WRAPPER_QUIRKS)
-
-
 def _build_rfc2217_spec(spec: SerialPairSpec) -> SerialPairSpec:
     """Build an RFC2217 variant that wraps an existing serial pair spec."""
     return dataclasses.replace(
         spec,
         left_backend=SerialPairBackend.RFC2217,
         right_backend=SerialPairBackend.RFC2217,
-        quirks=_derive_rfc2217_quirks(spec.quirks),
+        quirks=frozenset(spec.quirks) | RFC2217_WRAPPER_QUIRKS,
         wrapped_left_backend=spec.left_backend,
         wrapped_right_backend=spec.right_backend,
     )

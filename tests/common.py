@@ -111,15 +111,18 @@ def _pick_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _wait_for_esphome_listener(
-    process: subprocess.Popen[Any], port: int, timeout: float = 5.0
+def _wait_for_tcp_listener(
+    process: subprocess.Popen[Any],
+    port: int,
+    timeout: float = 5.0,
+    name: str = "process",
 ) -> None:
     deadline = time.monotonic() + timeout
 
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError(
-                f"ESPHome host daemon exited before listening (code={process.returncode})"
+                f"{name} exited before listening (code={process.returncode})"
             )
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -129,9 +132,7 @@ def _wait_for_esphome_listener(
 
         time.sleep(0.01)
 
-    raise RuntimeError(
-        f"ESPHome host daemon did not start listening on 127.0.0.1:{port}"
-    )
+    raise RuntimeError(f"{name} did not start listening on 127.0.0.1:{port}")
 
 
 @contextlib.contextmanager
@@ -152,7 +153,7 @@ def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
         )
 
         try:
-            _wait_for_esphome_listener(process, api_port)
+            _wait_for_tcp_listener(process, api_port, name="ESPHome host daemon")
             yield (
                 f"esphome://127.0.0.1:{api_port}/0",
                 f"esphome://127.0.0.1:{api_port}/1",
@@ -234,9 +235,8 @@ def create_ser2net_pair(
         stderr=subprocess.PIPE,
     )
 
-    time.sleep(0.1)
-
-    assert proc.returncode is None
+    for port in (left_port, right_port):
+        _wait_for_tcp_listener(proc, port, name="ser2net")
 
     try:
         yield (
