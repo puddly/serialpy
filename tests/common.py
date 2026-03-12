@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
+import enum
 import json
 import os
 from pathlib import Path
@@ -35,13 +36,36 @@ _DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM = (
 )
 
 
+class SerialPairBackend(str, enum.Enum):
+    """Known serial-pair backend families used by the test suite."""
+
+    SOCAT = "socat"
+    SOCKET = "socket"
+    ESPHOME = "esphome"
+    ADAPTER = "adapter"
+    COM0COM = "com0com"
+    TTY0TTY = "tty0tty"
+    RFC2217 = "rfc2217"
+
+
+class SerialPairFeature(str, enum.Enum):
+    """Capability flags carried by a generated serial test pair."""
+
+    RXTX = "rxtx"
+    HW = "hw"
+    READ_BUFFER = "readbuf"
+    WRITE_BUFFER = "writebuf"
+    WRITE_TIMEOUT = "writetimeout"
+
+
 class SerialPair(NamedTuple):
     """A connected pair of serial port paths with backend metadata."""
 
     left: str
     right: str
-    backend: str  # "socat", "socket", "esphome", "adapter", or "com0com"
+    backend: SerialPairBackend
     serial_class: str = serialx.Serial.__name__
+    features: frozenset[SerialPairFeature] = frozenset()
 
 
 class BridgedSocatPair(NamedTuple):

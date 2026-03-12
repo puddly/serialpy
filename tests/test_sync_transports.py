@@ -9,7 +9,7 @@ import time
 import pytest
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
-from tests.common import SerialPair, measure_time
+from tests.common import SerialPair, SerialPairBackend, SerialPairFeature, measure_time
 
 LOGGER = logging.getLogger(__name__)
 
@@ -207,7 +207,10 @@ def test_sync_sustained_throughput(
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    if serial_pair.backend == "esphome" and (baudrate, iterations) == (921600, 512):
+    if serial_pair.backend is SerialPairBackend.ESPHOME and (baudrate, iterations) == (
+        921600,
+        512,
+    ):
         pytest.skip(
             "ESPHome backend is too slow for sustained throughput at 921600/512"
         )
@@ -247,7 +250,10 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
 )
 def test_sync_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.backend == "esphome" and parity in (Parity.MARK, Parity.SPACE):
+    if serial_pair.backend is SerialPairBackend.ESPHOME and parity in (
+        Parity.MARK,
+        Parity.SPACE,
+    ):
         pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
     if serial_pair.serial_class not in ("LinuxSerial", "Win32Serial") and parity in (
         Parity.MARK,
@@ -277,7 +283,10 @@ def test_sync_valid_stopbits(
     expected: StopBits,
 ) -> None:
     """Test that valid stopbits settings are accepted."""
-    if serial_pair.backend == "esphome" and expected is StopBits.ONE_POINT_FIVE:
+    if (
+        serial_pair.backend is SerialPairBackend.ESPHOME
+        and expected is StopBits.ONE_POINT_FIVE
+    ):
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
     if (
         serial_pair.serial_class not in ("Win32Serial",)
@@ -322,10 +331,10 @@ def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
 
 def test_sync_exclusive(serial_pair: SerialPair) -> None:
     """Test that exclusive setting is respected."""
-    if serial_pair.backend == "socket":
+    if serial_pair.backend is SerialPairBackend.SOCKET:
         pytest.skip("Socket backend does not support exclusivity")
 
-    if serial_pair.backend == "esphome":
+    if serial_pair.backend is SerialPairBackend.ESPHOME:
         # TODO: exclusivity needs to be implemented
         pytest.xfail("ESPHome backend does not support exclusivity")
 
@@ -434,7 +443,9 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
 
 def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
-    if serial_pair.backend == "socat" and sys.platform.startswith("freebsd"):
+    if serial_pair.backend is SerialPairBackend.SOCAT and sys.platform.startswith(
+        "freebsd"
+    ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
@@ -468,7 +479,7 @@ def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_backends("socket", "socat")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
@@ -492,7 +503,7 @@ def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_backends("socket", "socat")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
     """Test DTR property (deprecated alias)."""
 
@@ -507,7 +518,7 @@ def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_backends("socket", "socat")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_sync_deprecated_rts_property(serial_pair: SerialPair) -> None:
     """Test RTS property (deprecated alias)."""
 
@@ -612,7 +623,7 @@ def test_sync_read_until_total_timeout(serial_pair: SerialPair) -> None:
         assert elapsed() == pytest.approx(0.5, abs=0.15)
 
 
-@pytest.mark.skip_backends("socket", "esphome", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.WRITE_TIMEOUT)
 @pytest.mark.xfail(
     sys.platform.startswith("freebsd"),
     reason="FreeBSD ucom driver does not enforce write buffer limits",
@@ -631,7 +642,7 @@ def test_sync_write_timeout(serial_pair: SerialPair) -> None:
 # --- Buffer inspection and reset ---
 
 
-@pytest.mark.skip_backends("socket", "esphome")
+@pytest.mark.require_features(SerialPairFeature.READ_BUFFER)
 def test_sync_num_unread_bytes(serial_pair: SerialPair) -> None:
     """Test that num_unread_bytes reflects pending data."""
     with (
@@ -650,7 +661,7 @@ def test_sync_num_unread_bytes(serial_pair: SerialPair) -> None:
         assert right.num_unread_bytes() == 0
 
 
-@pytest.mark.skip_backends("socket", "esphome")
+@pytest.mark.require_features(SerialPairFeature.WRITE_BUFFER)
 def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
     """Test that num_unwritten_bytes returns an integer."""
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
@@ -659,7 +670,7 @@ def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
         assert left.num_unwritten_bytes() == 0
 
 
-@pytest.mark.skip_backends("socket", "esphome")
+@pytest.mark.require_features(SerialPairFeature.READ_BUFFER)
 def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_read_buffer discards pending input."""
     with (
@@ -678,7 +689,7 @@ def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
         assert right.read(1024) == b""
 
 
-@pytest.mark.skip_backends("socket", "esphome", "socat", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.WRITE_BUFFER)
 def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_write_buffer discards pending output."""
     with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0) as left:
@@ -707,7 +718,7 @@ def test_sync_buffer_methods(serial_pair: SerialPair) -> None:
 # and verify cross-port behavior that virtual backends can't emulate.
 
 
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_dtr_cts(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls CTS on the other."""
 
@@ -735,7 +746,7 @@ def test_dtr_cts(serial_pair: SerialPair) -> None:
         assert left.get_modem_pins().cts is PinState.LOW
 
 
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
     """Test DTR/CTS cross-port behavior via deprecated property aliases."""
 
@@ -776,7 +787,7 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
 
@@ -812,7 +823,7 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
 
@@ -856,7 +867,7 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -899,7 +910,7 @@ def test_deassert_on_open_with_rtscts(
             assert left.get_modem_pins().cts is expected_state
 
 
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
 

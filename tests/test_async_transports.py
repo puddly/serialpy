@@ -25,6 +25,8 @@ from serialx import (
 from tests.common import (
     SOCAT_BINARY,
     SerialPair,
+    SerialPairBackend,
+    SerialPairFeature,
     async_create_bridged_socat_pair,
     async_create_reader_writer,
     async_create_reader_writer_pair,
@@ -264,7 +266,10 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
 )
 async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.backend == "esphome" and parity in (Parity.MARK, Parity.SPACE):
+    if serial_pair.backend is SerialPairBackend.ESPHOME and parity in (
+        Parity.MARK,
+        Parity.SPACE,
+    ):
         pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
 
     if serial_pair.serial_class not in ("LinuxSerial", "Win32Serial") and parity in (
@@ -297,7 +302,10 @@ async def test_async_valid_stopbits(
     expected: StopBits,
 ) -> None:
     """Test that valid stopbits settings are accepted."""
-    if serial_pair.backend == "esphome" and expected is StopBits.ONE_POINT_FIVE:
+    if (
+        serial_pair.backend is SerialPairBackend.ESPHOME
+        and expected is StopBits.ONE_POINT_FIVE
+    ):
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
 
     if (
@@ -398,7 +406,7 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await writer_left.wait_closed()
 
 
-@pytest.mark.skip_backends("esphome")
+@pytest.mark.skip_backends(SerialPairBackend.ESPHOME)
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
     async with async_create_reader_writer_pair(
@@ -521,7 +529,7 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
     sys.platform == "win32",
     reason="Only DescriptorTransport implements write buffer limits",
 )
-@pytest.mark.skip_backends("socket", "esphome")
+@pytest.mark.skip_backends(SerialPairBackend.SOCKET, SerialPairBackend.ESPHOME)
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
@@ -553,7 +561,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
         assert result == b"flush test data"
 
 
-@pytest.mark.skip_backends("esphome")
+@pytest.mark.skip_backends(SerialPairBackend.ESPHOME)
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
     async with async_create_reader_writer_pair(
@@ -629,7 +637,9 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
-    if serial_pair.backend == "socat" and sys.platform.startswith("freebsd"):
+    if serial_pair.backend is SerialPairBackend.SOCAT and sys.platform.startswith(
+        "freebsd"
+    ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
@@ -666,7 +676,7 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(
     sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
 )
-@pytest.mark.skip_backends("socket", "socat")
+@pytest.mark.require_features(SerialPairFeature.HW)
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
@@ -695,7 +705,13 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
 # trigger backpressure conditions.
 
 
-@pytest.mark.skip_backends("socket", "com0com", "socat", "esphome", "tty0tty")
+@pytest.mark.skip_backends(
+    SerialPairBackend.SOCKET,
+    SerialPairBackend.COM0COM,
+    SerialPairBackend.SOCAT,
+    SerialPairBackend.ESPHOME,
+    SerialPairBackend.TTY0TTY,
+)
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -765,7 +781,7 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     await asyncio.gather(input_lost, output_lost)
 
 
-@pytest.mark.skip_backends("socket", "com0com")
+@pytest.mark.skip_backends(SerialPairBackend.SOCKET, SerialPairBackend.COM0COM)
 async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 
@@ -874,7 +890,7 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test DTR/CTS deassertion on open."""
 
@@ -910,7 +926,7 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test DTR/CTS hang up on close."""
 
@@ -957,7 +973,7 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.require_features(SerialPairFeature.HW)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
