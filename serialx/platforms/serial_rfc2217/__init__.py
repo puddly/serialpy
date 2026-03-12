@@ -22,6 +22,7 @@ from ...common import (
     SerialException,
     StopBits,
     UnsupportedSetting,
+    measure_time,
 )
 from ..serial_socket import SocketSerial
 from .types import (
@@ -561,31 +562,40 @@ class RFC2217Serial(SocketSerial):
 
         # Read from socket and feed through parser
         assert self._socket is not None
-        self._socket.settimeout(timeout)
         buf = bytearray(max(len(m), self._receive_buffer_size))
 
-        try:
-            n = self._socket.recv_into(buf)
-        except TimeoutError:
-            return 0
+        # Individual RFC2217 socket reads may not always translate into real serial data
+        # we need to loop until it actually produces some, or we hit the timeout limit
+        while True:
+            if timeout is not None and timeout <= 0:
+                return 0
 
-        if n == 0:
-            return 0
+            self._socket.settimeout(timeout)
 
-        raw = bytes(buf[:n])
-        LOGGER.debug("RX raw (readinto): %d bytes  [%s]", n, raw.hex(" "))
-        serial_data, responses = self._engine.feed(raw)
-        self._data_buffer.extend(serial_data)
+            with measure_time() as get_elapsed:
+                try:
+                    n = self._socket.recv_into(buf)
+                except TimeoutError:
+                    return 0
 
-        for response in responses:
-            self._send_command(response)
+            if timeout is not None:
+                timeout -= get_elapsed()
 
-        # Serve whatever data the parser produced
-        n = self._drain_data_buffer(m)
-        if n:
-            return n
+            if n == 0:
+                return 0
 
-        return 0
+            raw = bytes(buf[:n])
+            LOGGER.debug("RX raw (readinto): %d bytes  [%s]", n, raw.hex(" "))
+            serial_data, responses = self._engine.feed(raw)
+            self._data_buffer.extend(serial_data)
+
+            for response in responses:
+                self._send_command(response)
+
+            # Serve whatever data the parser produced
+            n = self._drain_data_buffer(m)
+            if n:
+                return n
 
     # -- modem pins ---------------------------------------------------------
 
