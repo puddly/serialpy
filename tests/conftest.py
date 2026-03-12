@@ -280,6 +280,14 @@ def _build_rfc2217_spec(spec: SerialPairSpec) -> SerialPairSpec:
     )
 
 
+def _serial_pair_resource_group(spec: SerialPairSpec) -> pytest.mark.xdist_group:
+    """Return an xdist group key for specs that share one underlying resource."""
+    if spec.left is not None and spec.right is not None:
+        return [pytest.mark.xdist_group(name=f"pair:{spec.left}:{spec.right}")]
+    else:
+        return []
+
+
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Parametrize tests based on available backends."""
     if "serial_pair" in metafunc.fixturenames:
@@ -363,25 +371,23 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             assert spec.left is not None
             assert spec.right is not None
             assert spec.pair_label is not None
+
+            resource_group = _serial_pair_resource_group(spec)
+
             params.append(
                 pytest.param(
                     spec,
-                    marks=[
-                        pytest.mark.xdist_group(name=f"pair:{spec.left}:{spec.right}")
-                    ],
+                    marks=resource_group,
                     id=spec.pair_label,
                 )
             )
 
             if SER2NET_BINARY is not None:
+                rfc2217_spec = _build_rfc2217_spec(spec)
                 params.append(
                     pytest.param(
-                        _build_rfc2217_spec(spec),
-                        marks=[
-                            pytest.mark.xdist_group(
-                                name=f"rfc2217:{spec.left}:{spec.right}"
-                            )
-                        ],
+                        rfc2217_spec,
+                        marks=resource_group,
                         id=f"rfc2217+{spec.pair_label}",
                     )
                 )
@@ -396,9 +402,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             [
                 pytest.param(
                     (spec.left, spec.right),
-                    marks=[
-                        pytest.mark.xdist_group(name=f"pair:{spec.left}:{spec.right}")
-                    ],
+                    marks=_serial_pair_resource_group(spec),
                     id=spec.pair_label,
                 )
                 for spec in pairs
