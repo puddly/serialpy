@@ -69,9 +69,15 @@ class DescriptorTransport(BaseSerialTransport):
         self._connection_made: bool = False
 
     async def _open(self, path: os.PathLike) -> None:
-        self._fileno = await self._loop.run_in_executor(
+        fileno = await self._loop.run_in_executor(
             None, os.open, path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
         )
+
+        if self._closing:
+            await self._loop.run_in_executor(None, _safe_close, fileno)
+            return
+
+        self._fileno = fileno
 
     async def _connect(self, **_kwargs) -> None:
         assert self._fileno is not None
