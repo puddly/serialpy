@@ -547,8 +547,10 @@ class RFC2217Serial(SocketSerial):
             len(escaped),
             escaped.hex(" "),
         )
-        self._socket.settimeout(timeout)
-        self._socket.sendall(escaped)
+
+        with self._socket_timeout(timeout):
+            self._socket.sendall(escaped)
+
         return len(data)
 
     def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
@@ -570,11 +572,10 @@ class RFC2217Serial(SocketSerial):
             if timeout is not None and timeout <= 0:
                 return 0
 
-            self._socket.settimeout(timeout)
-
             with measure_time() as get_elapsed:
                 try:
-                    n = self._socket.recv_into(buf)
+                    with self._socket_timeout(timeout):
+                        n = self._socket.recv_into(buf)
                 except TimeoutError:
                     return 0
 
