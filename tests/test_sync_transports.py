@@ -354,6 +354,11 @@ def test_sync_exclusive(serial_pair: SerialPair) -> None:
         # TODO: exclusivity needs to be implemented
         pytest.xfail("ESPHome backend does not support exclusivity")
 
+    if serial_pair.spawned_ser2net:
+        pytest.skip(
+            "fixture-spawned ser2net pairs do not support opening the same endpoint twice"
+        )
+
     with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True) as serial:
         assert serial.exclusive is True
 
