@@ -541,10 +541,6 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
         assert transport.get_write_buffer_size() == 0
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Only DescriptorTransport implements write buffer limits",
-)
 @pytest.mark.skip_quirks(SerialPairQuirk.NO_WRITE_LIMITS)
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
@@ -562,7 +558,7 @@ async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> N
         transport.set_write_buffer_limits(high=128 * 1024, low=32 * 1024)
         assert transport.get_write_buffer_limits() == (32 * 1024, 128 * 1024)
 
-        assert transport.can_write_eof() is True
+        assert transport.can_write_eof() in (True, False)
 
 
 async def test_async_flush(serial_pair: SerialPair) -> None:

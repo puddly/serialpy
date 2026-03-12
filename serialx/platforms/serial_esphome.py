@@ -358,3 +358,15 @@ class ESPHomeSerialTransport(BaseSerialTransport):
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
         return 0
+
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Return the write buffer limits."""
+        return (0, 0)
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer limits."""
+        pass
+
+    def can_write_eof(self) -> bool:
+        """Check if the internal transport supports EOF writes."""
+        return False

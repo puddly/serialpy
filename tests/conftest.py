@@ -36,11 +36,9 @@ TTY0TTY_RE = re.compile(r"^/dev/tnt\d+$")
 RFC2217_WRAPPER_QUIRKS = frozenset(
     {
         SerialPairQuirk.NO_NUM_UNREAD_BYTES,
-        SerialPairQuirk.NO_RESET_READ_BUFFER,
         SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
         SerialPairQuirk.NO_RESET_WRITE_BUFFER,
         SerialPairQuirk.NO_WRITE_TIMEOUT,
-        SerialPairQuirk.NO_WRITE_LIMITS,
         SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
     }
 )
@@ -66,7 +64,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialPairQuirk]] 
             SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialPairQuirk.NO_RESET_WRITE_BUFFER,
             SerialPairQuirk.NO_WRITE_TIMEOUT,
-            SerialPairQuirk.NO_WRITE_LIMITS,
             SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
@@ -75,13 +72,11 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialPairQuirk]] 
             SerialPairQuirk.NO_PIN_READBACK,
             SerialPairQuirk.NO_DTR_CTS,
             SerialPairQuirk.NO_FLOW_CONTROL,
-            SerialPairQuirk.NO_NUM_UNREAD_BYTES,
-            SerialPairQuirk.NO_RESET_READ_BUFFER,
             SerialPairQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialPairQuirk.NO_RESET_WRITE_BUFFER,
+            SerialPairQuirk.NO_WRITE_LIMITS,
             SerialPairQuirk.NO_WRITE_TIMEOUT,
             SerialPairQuirk.NO_PAUSE_READING,
-            SerialPairQuirk.NO_WRITE_LIMITS,
             SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
@@ -94,7 +89,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialPairQuirk]] 
     SerialPairBackend.COM0COM: frozenset(
         {
             SerialPairQuirk.NO_PIN_READBACK,
-            SerialPairQuirk.NO_WRITE_LIMITS,
             SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
@@ -129,7 +123,6 @@ SERIAL_PAIR_QUIRK_FLAG_NAMES: dict[str, SerialPairQuirk] = {
     "reset-write-buffer": SerialPairQuirk.NO_RESET_WRITE_BUFFER,
     "write-timeout": SerialPairQuirk.NO_WRITE_TIMEOUT,
     "pause-reading": SerialPairQuirk.NO_PAUSE_READING,
-    "write-limits": SerialPairQuirk.NO_WRITE_LIMITS,
     "pause-writing-callbacks": SerialPairQuirk.NO_PAUSE_WRITING_CALLBACKS,
 }
 

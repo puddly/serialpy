@@ -214,11 +214,11 @@ def create_ser2net_pair(
         "connections": {
             "left_adapter": {
                 "accepter": f"telnet(rfc2217),tcp,{left_port}",
-                "connector": f"serialdev,{left_adapter},115200n81",
+                "connector": f"serialdev(),{left_adapter},speed=115200n81",
             },
             "right_adapter": {
                 "accepter": f"telnet(rfc2217),tcp,127.0.0.1,{right_port}",
-                "connector": f"serialdev,{right_adapter},115200n81",
+                "connector": f"serialdev(),{right_adapter},speed=115200n81",
             },
         }
     }
@@ -230,7 +230,8 @@ def create_ser2net_pair(
             "-Y",
             json.dumps(config),
         ],
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
 
     time.sleep(0.1)
