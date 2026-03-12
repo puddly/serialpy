@@ -63,9 +63,15 @@ class SerialPair(NamedTuple):
 
     left: str
     right: str
-    backend: SerialPairBackend
+    left_backend: SerialPairBackend
+    right_backend: SerialPairBackend
     serial_class: str = serialx.Serial.__name__
     features: frozenset[SerialPairFeature] = frozenset()
+
+    @property
+    def backends(self) -> frozenset[SerialPairBackend]:
+        """Return the distinct backend families used by this endpoint pair."""
+        return frozenset({self.left_backend, self.right_backend})
 
 
 class BridgedSocatPair(NamedTuple):

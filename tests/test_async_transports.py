@@ -223,7 +223,10 @@ async def test_async_sustained_throughput(
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    if (serial_pair.backend, baudrate, iterations) == ("esphome", 921600, 512):
+    if SerialPairBackend.ESPHOME in serial_pair.backends and (baudrate, iterations) == (
+        921600,
+        512,
+    ):
         pytest.skip(
             "ESPHome backend is too slow for sustained throughput at 921600/512"
         )
@@ -266,7 +269,7 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
 )
 async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.backend is SerialPairBackend.ESPHOME and parity in (
+    if serial_pair.left_backend is SerialPairBackend.ESPHOME and parity in (
         Parity.MARK,
         Parity.SPACE,
     ):
@@ -303,7 +306,7 @@ async def test_async_valid_stopbits(
 ) -> None:
     """Test that valid stopbits settings are accepted."""
     if (
-        serial_pair.backend is SerialPairBackend.ESPHOME
+        serial_pair.left_backend is SerialPairBackend.ESPHOME
         and expected is StopBits.ONE_POINT_FIVE
     ):
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
@@ -637,7 +640,7 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
-    if serial_pair.backend is SerialPairBackend.SOCAT and sys.platform.startswith(
+    if serial_pair.left_backend is SerialPairBackend.SOCAT and sys.platform.startswith(
         "freebsd"
     ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
