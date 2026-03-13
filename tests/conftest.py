@@ -80,10 +80,8 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     ),
     SerialPairBackend.RFC2217: frozenset(
         {
-            SerialQuirk.NO_PIN_READBACK,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }

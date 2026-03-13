@@ -36,6 +36,8 @@ from .types import (
     ModemStateFlag,
     NotifyLinestateCmd,
     NotifyModemstateCmd,
+    PurgeDataCmd,
+    PurgeDataValue,
     Rfc2217CmdId,
     Rfc2217Command,
     Rfc2217Parity,
@@ -527,11 +529,14 @@ class RFC2217Serial(SocketSerial):
         """Return the number of buffered serial data bytes waiting to be read."""
         return len(self._data_buffer)
 
-    def reset_read_buffer(self) -> None:
-        """Discard buffered serial data and drain pending TCP payload."""
-        self._data_buffer.clear()
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+        self._send_and_wait(PurgeDataCmd(what=PurgeDataValue.RECEIVE))
 
-    # -- data read/write (application layer) --------------------------------
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        self._send_and_wait(PurgeDataCmd(what=PurgeDataValue.TRANSMIT))
+        self._data_buffer.clear()
 
     def _write(self, b: Buffer, *, timeout: float | None) -> int:
         """Write data bytes to socket, escaping any 0xFF."""
