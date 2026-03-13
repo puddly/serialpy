@@ -686,9 +686,6 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
             assert pins_low.rts is PinState.LOW
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
-)
 @pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""

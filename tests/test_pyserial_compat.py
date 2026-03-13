@@ -1,5 +1,7 @@
 """Tests for pyserial API compatibility shims."""
 
+import time
+
 import pytest
 
 from serialx import Serial, SerialPortInfo
@@ -36,6 +38,15 @@ def test_compat_deprecated_aliases(serial_pair: SerialPair) -> None:
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200, timeout=0.2) as right,
     ):
+        # Pins
+        left.rts = True
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert right.cts is True
+
+        left.rts = False
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert right.cts is False
+
         # isOpen
         assert left.isOpen() is True
         assert left.is_open is True

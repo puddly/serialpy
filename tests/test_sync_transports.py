@@ -505,9 +505,6 @@ def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
             assert pins_low.rts is PinState.LOW
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
-)
 @pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
@@ -527,39 +524,6 @@ def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
         modem_pins = serial.get_modem_pins()
         assert modem_pins.dtr is PinState.LOW
         assert modem_pins.rts is PinState.LOW
-
-
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
-)
-@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
-def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
-    """Test DTR property (deprecated alias)."""
-
-    with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
-        serial.dtr = True
-        assert serial.dtr is True
-
-        serial.dtr = False
-        assert serial.dtr is False
-
-
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
-)
-@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
-def test_sync_deprecated_rts_property(serial_pair: SerialPair) -> None:
-    """Test RTS property (deprecated alias)."""
-
-    with Serial.from_url(serial_pair.left, baudrate=115200) as serial:
-        serial.rts = True
-        assert serial.rts is True
-
-        serial.rts = False
-        assert serial.rts is False
-
-
-# --- Timeouts ---
 
 
 def test_sync_read_timeout(serial_pair: SerialPair) -> None:
@@ -746,11 +710,6 @@ def test_sync_buffer_methods(serial_pair: SerialPair) -> None:
 
         left.reset_write_buffer()
         assert left.num_unwritten_bytes() == 0
-
-
-# --- Adapter-pair-specific tests ---
-# These tests require physical adapter pairs (com0com, real hardware)
-# and verify cross-port behavior that virtual backends can't emulate.
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)

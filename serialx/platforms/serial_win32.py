@@ -142,6 +142,9 @@ class Win32Serial(BaseSerial):
         self._overlapped_read: OVERLAPPED | None = None
         self._overlapped_write: OVERLAPPED | None = None
 
+        self._dtr_state: PinState = PinState.UNDEFINED
+        self._rts_state: PinState = PinState.UNDEFINED
+
     def _open(self) -> None:
         """Open the serial port."""
         LOGGER.debug("Opening serial port %r", self._path)
@@ -298,6 +301,8 @@ class Win32Serial(BaseSerial):
         """Get the current modem control bits."""
         stat = GetCommModemStatus(self._handle)
         return ModemPins(
+            rts=self._rts_state,
+            dtr=self._dtr_state,
             cts=PinState.HIGH if stat & MS_CTS_ON else PinState.LOW,
             dsr=PinState.HIGH if stat & MS_DSR_ON else PinState.LOW,
             rng=PinState.HIGH if stat & MS_RING_ON else PinState.LOW,
@@ -310,11 +315,13 @@ class Win32Serial(BaseSerial):
             EscapeCommFunction(
                 self._handle, (SETRTS if modem_pins.rts is PinState.HIGH else CLRRTS)
             )
+            self._rts_state = modem_pins.rts
 
         if modem_pins.dtr is not PinState.UNDEFINED:
             EscapeCommFunction(
                 self._handle, (SETDTR if modem_pins.dtr is PinState.HIGH else CLRDTR)
             )
+            self._dtr_state = modem_pins.dtr
 
     def num_unread_bytes(self) -> int:
         """Return the number of bytes waiting to be read."""
