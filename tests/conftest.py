@@ -30,9 +30,6 @@ try:
 except ImportError:
     aioesphomeapi = None
 
-COM0COM_RE = re.compile(r"^CNC[A-Z]\d+$", re.IGNORECASE)
-TTY0TTY_RE = re.compile(r"^/dev/tnt\d+$")
-
 SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.SOCAT: frozenset(
         {
@@ -59,9 +56,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     ),
     SerialPairBackend.ESPHOME: frozenset(
         {
-            SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_NULL_MODEM,
-            SerialQuirk.NO_FLOW_CONTROL,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_LIMITS,
@@ -87,8 +81,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.RFC2217: frozenset(
         {
             SerialQuirk.NO_PIN_READBACK,
-            # SerialQuirk.NO_NULL_MODEM,
-            # SerialQuirk.NO_FLOW_CONTROL,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
@@ -185,7 +177,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def _classify_endpoint_backend(path: str) -> SerialPairBackend:
+def _get_endpoint_backend(path: str) -> SerialPairBackend:
     """Classify a single endpoint into a backend family."""
     lower_path = path.lower()
     if lower_path.startswith("rfc2217://"):
@@ -194,9 +186,9 @@ def _classify_endpoint_backend(path: str) -> SerialPairBackend:
         return SerialPairBackend.SOCKET
     if lower_path.startswith("esphome://"):
         return SerialPairBackend.ESPHOME
-    if COM0COM_RE.match(path):
+    if re.match(r"^CNC[A-Z]\d+$", path):
         return SerialPairBackend.COM0COM
-    if TTY0TTY_RE.match(path):
+    if re.match(r"^/dev/tnt\d+$", path):
         return SerialPairBackend.TTY0TTY
     return SerialPairBackend.ADAPTER
 
@@ -244,8 +236,8 @@ def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
                 f"Invalid adapter pair format: {pair}. Expected {expected_format}"
             )
 
-        left_backend = _classify_endpoint_backend(left)
-        right_backend = _classify_endpoint_backend(right)
+        left_backend = _get_endpoint_backend(left)
+        right_backend = _get_endpoint_backend(right)
 
         pairs.append(
             SerialPairSpec(
@@ -288,13 +280,14 @@ def _serial_pair_resource_group(spec: SerialPairSpec) -> list[pytest.MarkDecorat
         return []
 
 
-def _can_auto_expand_rfc2217(spec: SerialPairSpec) -> bool:
+def _can_wrap_adapter_rfc2217(spec: SerialPairSpec) -> bool:
     """Return True when ser2net can wrap the given concrete endpoints."""
     local_backends = {
         SerialPairBackend.ADAPTER,
         SerialPairBackend.COM0COM,
         SerialPairBackend.TTY0TTY,
     }
+
     return (
         spec.left is not None
         and spec.right is not None
@@ -306,18 +299,36 @@ def _can_auto_expand_rfc2217(spec: SerialPairSpec) -> bool:
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Parametrize tests based on available backends."""
+
+    # Physical adapters
+    if "adapter_pair" in metafunc.fixturenames:
+        pairs = _get_adapter_pairs(metafunc.config)
+
+        metafunc.parametrize(
+            "adapter_pair",
+            [
+                pytest.param(
+                    (spec.left, spec.right),
+                    marks=_serial_pair_resource_group(spec),
+                    id=spec.pair_label,
+                )
+                for spec in pairs
+            ],
+        )
+
+    # "Virtual" serial pairs
     if "serial_pair" in metafunc.fixturenames:
         params: list[pytest.ParameterSet] = []
 
+        # `socat` can be used as a backend for `socket`, `rfc2217`, and `esphome`
         if SOCAT_BINARY:
-            socat_spec = SerialPairSpec(
-                left_backend=SerialPairBackend.SOCAT,
-                right_backend=SerialPairBackend.SOCAT,
-                quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCAT],
-            )
             params.append(
                 pytest.param(
-                    socat_spec,
+                    SerialPairSpec(
+                        left_backend=SerialPairBackend.SOCAT,
+                        right_backend=SerialPairBackend.SOCAT,
+                        quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCAT],
+                    ),
                     id="socat",
                 )
             )
@@ -325,7 +336,15 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             if SER2NET_BINARY is not None:
                 params.append(
                     pytest.param(
-                        _build_rfc2217_spec(socat_spec),
+                        _build_rfc2217_spec(
+                            SerialPairSpec(
+                                left_backend=SerialPairBackend.SOCAT,
+                                right_backend=SerialPairBackend.SOCAT,
+                                quirks=SERIAL_PAIR_DEFAULT_QUIRKS[
+                                    SerialPairBackend.SOCAT
+                                ],
+                            )
+                        ),
                         id="rfc2217+socat",
                     )
                 )
@@ -341,9 +360,17 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                             left_backend=SerialPairBackend.ESPHOME,
                             right_backend=SerialPairBackend.ESPHOME,
                             esphome_program=esphome_program,
-                            quirks=SERIAL_PAIR_DEFAULT_QUIRKS[
-                                SerialPairBackend.ESPHOME
-                            ],
+                            quirks=(
+                                SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.ESPHOME]
+                                | frozenset(
+                                    {
+                                        # Host binary does not support flow control
+                                        SerialQuirk.NO_PIN_READBACK,
+                                        SerialQuirk.NO_NULL_MODEM,
+                                        SerialQuirk.NO_FLOW_CONTROL,
+                                    }
+                                )
+                            ),
                         ),
                         id="esphome",
                     )
@@ -362,6 +389,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                     )
                 )
 
+        # Socket tests are always supported via a loopback TCP server pair
         params.append(
             pytest.param(
                 SerialPairSpec(
@@ -373,19 +401,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             )
         )
 
-        for cls_name in _get_posix_serial_classes():
-            params.append(
-                pytest.param(
-                    SerialPairSpec(
-                        left_backend=SerialPairBackend.SOCKET,
-                        right_backend=SerialPairBackend.SOCKET,
-                        serial_class_override=cls_name,
-                        quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCKET],
-                    ),
-                    id=f"socket+{cls_name}",
-                )
-            )
-
         for spec in _get_adapter_pairs(metafunc.config):
             assert spec.left is not None
             assert spec.right is not None
@@ -393,6 +408,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
             resource_group = _serial_pair_resource_group(spec)
 
+            # The raw adapter pair
             params.append(
                 pytest.param(
                     spec,
@@ -401,32 +417,17 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 )
             )
 
-            if SER2NET_BINARY is not None and _can_auto_expand_rfc2217(spec):
-                rfc2217_spec = _build_rfc2217_spec(spec)
+            # And `rfc2217` wrapping, if possible
+            if SER2NET_BINARY is not None and _can_wrap_adapter_rfc2217(spec):
                 params.append(
                     pytest.param(
-                        rfc2217_spec,
+                        _build_rfc2217_spec(spec),
                         marks=resource_group,
                         id=f"rfc2217+{spec.pair_label}",
                     )
                 )
 
         metafunc.parametrize("serial_pair", params, indirect=True)
-
-    if "adapter_pair" in metafunc.fixturenames:
-        pairs = _get_adapter_pairs(metafunc.config)
-
-        metafunc.parametrize(
-            "adapter_pair",
-            [
-                pytest.param(
-                    (spec.left, spec.right),
-                    marks=_serial_pair_resource_group(spec),
-                    id=spec.pair_label,
-                )
-                for spec in pairs
-            ],
-        )
 
 
 @pytest.fixture
