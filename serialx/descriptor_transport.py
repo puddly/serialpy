@@ -69,16 +69,12 @@ class DescriptorTransport(BaseSerialTransport):
         self._connection_made: bool = False
 
     async def _open(self, path: os.PathLike) -> None:
-        loop = self._loop
-        fileno = await loop.run_in_executor(
+        self._fileno = await self._loop.run_in_executor(
             None, os.open, path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
         )
 
         if self._closing:
-            await loop.run_in_executor(None, _safe_close, fileno)
-            return
-
-        self._fileno = fileno
+            self._maybe_background_close(None)
 
     async def _connect(self, **_kwargs) -> None:
         assert self._fileno is not None
@@ -314,10 +310,9 @@ class DescriptorTransport(BaseSerialTransport):
         if self._fileno is not None:
             self.write_eof()
         else:
-            # If we haven't opened yet, but close is requested, ensure we notify protocol
-            # or ensure we don't open.
+            # The fd hasn't been opened yet. Just set the flag; _open() will
+            # trigger the close sequence once the executor finishes.
             self._closing = True
-            self._maybe_background_close(None)
 
     def __del__(self) -> None:
         """Clean up transport on deletion."""
@@ -325,7 +320,7 @@ class DescriptorTransport(BaseSerialTransport):
             assert self._fileno is not None
 
             warnings.warn(f"unclosed transport {self!r}", ResourceWarning, source=self)
-            if self._loop is not None:
+            if not self._closing:
                 self._loop.remove_reader(self._fileno)
 
             _safe_close(self._fileno)
@@ -384,7 +379,7 @@ class DescriptorTransport(BaseSerialTransport):
 
         task_exc = task.exception()
         if task_exc is not None:
-            if self._loop is not None:
+            if not self._closed_waiter.done():
                 self._loop.call_exception_handler(
                     {
                         "message": "Unhandled exception in background close task",
@@ -398,37 +393,32 @@ class DescriptorTransport(BaseSerialTransport):
     async def _call_connection_lost(self, exc: Exception | None) -> None:
         LOGGER.debug("Closing connection: %r", exc)
 
-        loop = self._loop
         fileno = self._fileno
 
         try:
             if fileno is not None:
-                loop.remove_reader(fileno)
+                self._loop.remove_reader(fileno)
                 self._fileno = None
 
                 # For serial ports it would make sense to flush here BUT no modern serial
                 # driver requires this: once the data is enqueued, even `os.close` blocks
                 # for the entire transmit duration.
                 LOGGER.debug("Closing file descriptor %s", fileno)
-                await loop.run_in_executor(None, _safe_close, fileno)
+                await self._loop.run_in_executor(None, _safe_close, fileno)
         finally:
-            protocol = self._protocol
-            self._loop = None  # type: ignore[assignment]
-            self._protocol = None  # type: ignore[assignment]
-
             if self._connection_made:
                 LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
                 try:
-                    protocol.connection_lost(exc)
+                    self._protocol.connection_lost(exc)
                 except (SystemExit, KeyboardInterrupt):
                     raise
                 except BaseException as protocol_exc:
-                    loop.call_exception_handler(
+                    self._loop.call_exception_handler(
                         {
                             "message": "protocol.connection_lost() failed",
                             "exception": protocol_exc,
                             "transport": self,
-                            "protocol": protocol,
+                            "protocol": self._protocol,
                         }
                     )
 
