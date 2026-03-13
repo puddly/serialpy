@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SER2NET_VERSION: "4.6.7"
-      GENSIO_VERSION: "2.8.13"
+      GENSIO_VERSION: "3.0.2"
     steps:
       - name: Restore cached ser2net binary
         id: cache-ser2net
@@ -236,7 +236,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ser2net
-          key: ser2net-4.6.7-gensio-2.8.13
+          key: ser2net-4.6.7-gensio-3.0.2
       - name: Install ser2net
         run: |
           sudo install -m 755 ser2net /usr/local/bin/ser2net
