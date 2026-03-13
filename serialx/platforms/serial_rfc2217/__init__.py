@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Generator
 from contextlib import suppress
 from enum import IntEnum
 import logging
@@ -56,11 +57,6 @@ from .types import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-# Server response codes are client codes + this offset
-SERVER_CMD_OFFSET = 100
-
 
 RFC2217_PARITY_MAP = {
     Parity.NONE: Rfc2217Parity.NONE,
@@ -204,8 +200,8 @@ class TelnetParser:
         cmd_payload = payload[1:]
 
         # Server responses use codes offset by +100
-        if cmd_code >= SERVER_CMD_OFFSET:
-            cmd_code -= SERVER_CMD_OFFSET
+        if cmd_code >= 100:
+            cmd_code -= 100
 
         cmd_cls = CMD_ID_TO_CLASS.get(cmd_code)
         if cmd_cls is None:
@@ -297,38 +293,36 @@ class Rfc2217:
                 "Cannot enable both RTS/CTS and XON/XOFF flow control"
             )
 
+        if rtscts:
+            flow_control = ControlCmdId.USE_HARDWARE
+        elif xonxoff:
+            flow_control = ControlCmdId.USE_XON_XOFF
+        else:
+            flow_control = ControlCmdId.USE_NO_FLOW_CONTROL
+
         return (
             SetBaudrateCmd(baudrate=baudrate),
             SetDatasizeCmd(size=byte_size),
             SetParityCmd(parity=RFC2217_PARITY_MAP[parity]),
             SetStopsizeCmd(size=RFC2217_STOPBITS_MAP[stopbits]),
-            SetControlCmd(
-                control=self._get_flow_control_command(
-                    rtscts=rtscts,
-                    xonxoff=xonxoff,
-                )
-            ),
+            SetControlCmd(control=flow_control),
             SetModemstateMaskCmd(mask=ModemStateFlag(255)),
             SetLinestateMaskCmd(mask=LineStateFlag(0)),
         )
 
     def build_modem_pin_commands(
         self, modem_pins: ModemPins
-    ) -> tuple[SetControlCmd, ...]:
+    ) -> Generator[SetControlCmd]:
         """Build SET_CONTROL commands needed to apply modem pin changes."""
-        commands: list[SetControlCmd] = []
-
         if modem_pins.dtr is PinState.HIGH:
-            commands.append(SetControlCmd(control=ControlCmdId.SET_DTR_ON))
+            yield SetControlCmd(control=ControlCmdId.SET_DTR_ON)
         elif modem_pins.dtr is PinState.LOW:
-            commands.append(SetControlCmd(control=ControlCmdId.SET_DTR_OFF))
+            yield SetControlCmd(control=ControlCmdId.SET_DTR_OFF)
 
         if modem_pins.rts is PinState.HIGH:
-            commands.append(SetControlCmd(control=ControlCmdId.SET_RTS_ON))
+            yield SetControlCmd(control=ControlCmdId.SET_RTS_ON)
         elif modem_pins.rts is PinState.LOW:
-            commands.append(SetControlCmd(control=ControlCmdId.SET_RTS_OFF))
-
-        return tuple(commands)
+            yield SetControlCmd(control=ControlCmdId.SET_RTS_OFF)
 
     def get_modem_pins(self) -> ModemPins:
         """Return modem pin state from the last NOTIFY-MODEMSTATE."""
@@ -341,39 +335,27 @@ class Rfc2217:
             car=(PinState.HIGH if state & ModemStateFlag.RLSD else PinState.LOW),
         )
 
-    def _get_flow_control_command(self, *, rtscts: bool, xonxoff: bool) -> ControlCmdId:
-        """Return the RFC2217 control command for the current flow control."""
-        if rtscts:
-            return ControlCmdId.USE_HARDWARE
-        elif xonxoff:
-            return ControlCmdId.USE_XON_XOFF
-        else:
-            return ControlCmdId.USE_NO_FLOW_CONTROL
-
-    def _build_negotiation_response(self, cmd: WillCmd | DoCmd) -> TelnetCommand | None:
-        """Build a response to a telnet option negotiation command."""
+    def _build_do_response(self, cmd: DoCmd) -> WillCmd | WontCmd | None:
+        """Build a response to a telnet DO option negotiation command."""
         if cmd.option == TelnetOption.COM_PORT_OPTION:
             self._pending_telnet[cmd.CMD_ID] = cmd
             return None
 
-        accepts_option = cmd.option in self._ACCEPTED_OPTIONS
-
-        if isinstance(cmd, WillCmd):
-            response: TelnetCommand = (
-                DoCmd(option=cmd.option)
-                if accepts_option
-                else DontCmd(option=cmd.option)
-            )
+        if cmd.option in self._ACCEPTED_OPTIONS:
+            return WillCmd(option=cmd.option)
         else:
-            response = (
-                WillCmd(option=cmd.option)
-                if accepts_option
-                else WontCmd(option=cmd.option)
-            )
+            return WontCmd(option=cmd.option)
 
-        action = "accepting" if accepts_option else "refusing"
-        LOGGER.debug("RX %r -> %s (%s)", cmd, action, type(response).__name__)
-        return response
+    def _build_will_response(self, cmd: WillCmd) -> DoCmd | DontCmd | None:
+        """Build a response to a telnet WILL option negotiation command."""
+        if cmd.option == TelnetOption.COM_PORT_OPTION:
+            self._pending_telnet[cmd.CMD_ID] = cmd
+            return None
+
+        if cmd.option in self._ACCEPTED_OPTIONS:
+            return DoCmd(option=cmd.option)
+        else:
+            return DontCmd(option=cmd.option)
 
     def _dispatch_parser_items(
         self, items: list[bytes | TelnetCommand | Rfc2217Command]
@@ -392,10 +374,16 @@ class Rfc2217:
             elif isinstance(item, NotifyLinestateCmd):
                 LOGGER.debug("RX linestate notification: %r", item)
                 self._linestate = item.linestate
-            elif isinstance(item, (WillCmd, DoCmd)):
-                response = self._build_negotiation_response(item)
-                if response is not None:
-                    responses.append(response)
+            elif isinstance(item, WillCmd):
+                will_rsp = self._build_will_response(item)
+                LOGGER.debug("RX %r -> %r", item, will_rsp)
+                if will_rsp is not None:
+                    responses.append(will_rsp)
+            elif isinstance(item, DoCmd):
+                do_rsp = self._build_do_response(item)
+                LOGGER.debug("RX %r -> %r", item, do_rsp)
+                if do_rsp is not None:
+                    responses.append(do_rsp)
             elif isinstance(item, Rfc2217Command):
                 LOGGER.debug("RX rfc2217 cmd: %r", item)
                 self._pending_rfc2217[item.CMD_ID] = item
@@ -812,15 +800,8 @@ class RFC2217SerialTransport(BaseSerialTransport):
         """Return modem pin state from the last NOTIFY-MODEMSTATE."""
         return self._serial._engine.get_modem_pins()
 
-    async def _set_modem_pins(
-        self,
-        modem_pins: ModemPins | None = None,
-        **kwargs,
-    ) -> None:
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set DTR/RTS via SET_CONTROL commands."""
-        if modem_pins is None:
-            return
-
         LOGGER.debug("Setting modem pins: %r", modem_pins)
 
         for cmd in self._serial._engine.build_modem_pin_commands(modem_pins):
@@ -886,10 +867,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
         # Fail any pending waiters
         waiter_exc = exc or SerialException("RFC 2217 connection closed by server")
-        for waiters in (
-            self._telnet_waiters,
-            self._rfc2217_waiters,
-        ):
+        for waiters in (self._telnet_waiters, self._rfc2217_waiters):
             for waiter in waiters.values():
                 if not waiter.done():
                     waiter.set_exception(waiter_exc)
@@ -936,9 +914,10 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
-        if self._tcp_transport is not None:
-            return self._tcp_transport.get_write_buffer_size()
-        return 0
+        if self._tcp_transport is None:
+            return 0
+
+        return self._tcp_transport.get_write_buffer_size()
 
     def get_write_buffer_limits(self) -> tuple[int, int]:
         """Get the write buffer low and high water marks."""
@@ -956,8 +935,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     def can_write_eof(self) -> bool:
         """Return whether the underlying TCP transport supports EOF."""
-        return (
-            self._tcp_transport.can_write_eof()
-            if self._tcp_transport is not None
-            else False
-        )
+        if self._tcp_transport is None:
+            return False
+
+        return self._tcp_transport.can_write_eof()
