@@ -647,6 +647,7 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
             assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
     if serial_pair.left_backend is SerialPairBackend.SOCAT and sys.platform.startswith(
@@ -697,16 +698,19 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
         writer,
     ):
         await writer.transport.set_modem_pins(dtr=True, rts=True)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         modem_pins = await writer.transport.get_modem_pins()
         assert modem_pins.dtr is PinState.HIGH
         assert modem_pins.rts is PinState.HIGH
 
         await writer.transport.set_modem_pins(dtr=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         modem_pins = await writer.transport.get_modem_pins()
         assert modem_pins.dtr is PinState.LOW
         assert modem_pins.rts is PinState.HIGH
 
         await writer.transport.set_modem_pins(dtr=False, rts=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         modem_pins = await writer.transport.get_modem_pins()
         assert modem_pins.dtr is PinState.LOW
         assert modem_pins.rts is PinState.LOW
@@ -895,10 +899,72 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
     await connection_lost_event.wait()
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+async def test_async_rts_cts(serial_pair: SerialPair) -> None:
+    """Test that RTS on one side controls CTS on the other (null modem)."""
+
+    async with (
+        async_create_reader_writer(serial_pair.left, baudrate=115200) as (_, left),
+        async_create_reader_writer(serial_pair.right, baudrate=115200) as (_, right),
+    ):
+        await left.transport.set_modem_pins(rts=True)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await right.transport.get_modem_pins()).cts is PinState.HIGH
+
+        await right.transport.set_modem_pins(rts=True)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await left.transport.get_modem_pins()).cts is PinState.HIGH
+
+        await left.transport.set_modem_pins(rts=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await right.transport.get_modem_pins()).cts is PinState.LOW
+
+        await right.transport.set_modem_pins(rts=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await left.transport.get_modem_pins()).cts is PinState.LOW
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+async def test_async_dtr_dsr_cd(serial_pair: SerialPair) -> None:
+    """Test that DTR on one side controls DSR and CD on the other (null modem)."""
+
+    async with (
+        async_create_reader_writer(serial_pair.left, baudrate=115200) as (_, left),
+        async_create_reader_writer(serial_pair.right, baudrate=115200) as (_, right),
+    ):
+        await left.transport.set_modem_pins(dtr=True)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await right.transport.get_modem_pins()).dsr is PinState.HIGH
+        assert (await right.transport.get_modem_pins()).car is PinState.HIGH
+
+        await right.transport.set_modem_pins(dtr=True)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await left.transport.get_modem_pins()).dsr is PinState.HIGH
+        assert (await left.transport.get_modem_pins()).car is PinState.HIGH
+
+        await left.transport.set_modem_pins(dtr=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await right.transport.get_modem_pins()).dsr is PinState.LOW
+        assert (await right.transport.get_modem_pins()).car is PinState.LOW
+
+        await right.transport.set_modem_pins(dtr=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
+        assert (await left.transport.get_modem_pins()).dsr is PinState.LOW
+        assert (await left.transport.get_modem_pins()).car is PinState.LOW
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
 async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
-    """Test DTR/CTS deassertion on open."""
+    """Test RTS/CTS deassertion on open."""
+
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
@@ -910,11 +976,11 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(dtr=True)
-            await asyncio.sleep(0.05)
+            await writer_right.transport.set_modem_pins(rts=True)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -923,18 +989,25 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
-            await writer_right.transport.set_modem_pins(dtr=True)
+            await writer_right.transport.set_modem_pins(rts=True)
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
 async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
-    """Test DTR/CTS hang up on close."""
+    """Test RTS/CTS hang up on close."""
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
@@ -946,11 +1019,11 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(dtr=True)
-            await asyncio.sleep(0.05)
+            await writer_right.transport.set_modem_pins(rts=True)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -959,10 +1032,10 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -971,15 +1044,15 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -997,6 +1070,14 @@ async def test_async_deassert_on_open_with_rtscts(
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
 
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
+
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
         writer_left,
@@ -1008,11 +1089,11 @@ async def test_async_deassert_on_open_with_rtscts(
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(dtr=True)
-            await asyncio.sleep(0.05)
+            await writer_right.transport.set_modem_pins(rts=True)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -1021,5 +1102,5 @@ async def test_async_deassert_on_open_with_rtscts(
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is expected_state

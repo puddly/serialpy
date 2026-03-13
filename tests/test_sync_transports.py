@@ -753,59 +753,82 @@ def test_sync_buffer_methods(serial_pair: SerialPair) -> None:
 # and verify cross-port behavior that virtual backends can't emulate.
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
-def test_dtr_cts(serial_pair: SerialPair) -> None:
-    """Test that DTR on one side controls CTS on the other."""
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+def test_rts_cts(serial_pair: SerialPair) -> None:
+    """Test that RTS on one side controls CTS on the other (null modem)."""
 
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
-        left.set_modem_pins(rts=False)
-        right.set_modem_pins(rts=False)
-
-        left.set_modem_pins(dtr=True)
-        time.sleep(0.05)
+        left.set_modem_pins(rts=True)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert right.get_modem_pins().cts is PinState.HIGH
 
-        right.set_modem_pins(dtr=True)
-        time.sleep(0.05)
+        right.set_modem_pins(rts=True)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
-        left.set_modem_pins(dtr=False)
-        time.sleep(0.05)
+        left.set_modem_pins(rts=False)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert right.get_modem_pins().cts is PinState.LOW
 
-        right.set_modem_pins(dtr=False)
-        time.sleep(0.05)
+        right.set_modem_pins(rts=False)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
-def test_deprecated_dtr_cts(serial_pair: SerialPair) -> None:
-    """Test DTR/CTS cross-port behavior via deprecated property aliases."""
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+def test_dtr_dsr_cd(serial_pair: SerialPair) -> None:
+    """Test that DTR on one side controls DSR and CD on the other (null modem)."""
 
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200) as right,
     ):
-        left.set_modem_pins(rts=False)
-        right.set_modem_pins(rts=False)
+        left.set_modem_pins(dtr=True)
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert right.get_modem_pins().dsr is PinState.HIGH
+        assert right.get_modem_pins().car is PinState.HIGH
 
-        left.dtr = True
-        time.sleep(0.05)
+        right.set_modem_pins(dtr=True)
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert left.get_modem_pins().dsr is PinState.HIGH
+        assert left.get_modem_pins().car is PinState.HIGH
+
+        left.set_modem_pins(dtr=False)
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert right.get_modem_pins().dsr is PinState.LOW
+        assert right.get_modem_pins().car is PinState.LOW
+
+        right.set_modem_pins(dtr=False)
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert left.get_modem_pins().dsr is PinState.LOW
+        assert left.get_modem_pins().car is PinState.LOW
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+def test_deprecated_null_modem_pins(serial_pair: SerialPair) -> None:
+    """Test null modem cross-port behavior via deprecated property aliases."""
+
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        left.rts = True
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert right.get_modem_pins().cts is PinState.HIGH
 
-        right.dtr = True
-        time.sleep(0.05)
+        right.rts = True
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
-        left.dtr = False
-        time.sleep(0.05)
+        left.rts = False
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert right.get_modem_pins().cts is PinState.LOW
 
-        right.dtr = False
-        time.sleep(0.05)
+        right.rts = False
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.LOW
 
 
@@ -822,9 +845,16 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
 def test_deassert_on_open(serial_pair: SerialPair) -> None:
-    """Test DTR/CTS deassertion on open."""
+    """Test RTS/CTS deassertion on open."""
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
@@ -833,12 +863,12 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
         ) as right:
-            right.set_modem_pins(dtr=True)
-            time.sleep(0.05)
+            right.set_modem_pins(rts=True)
+            time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
 
-        # rtsdtr_on_close=HIGH keeps DTR asserted
-        time.sleep(0.05)
+        # rtsdtr_on_close=HIGH keeps RTS asserted
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -847,20 +877,27 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
         ) as right:
-            # rtsdtr_on_open=LOW deasserts DTR
-            time.sleep(0.05)
+            # rtsdtr_on_open=LOW deasserts RTS
+            time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.LOW
-            right.set_modem_pins(dtr=True)
+            right.set_modem_pins(rts=True)
 
-        # rtsdtr_on_close=HIGH keeps DTR asserted
-        time.sleep(0.05)
+        # rtsdtr_on_close=HIGH keeps RTS asserted
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
 def test_hang_up_on_close(serial_pair: SerialPair) -> None:
-    """Test DTR/CTS hang up on close."""
+    """Test RTS/CTS hang up on close."""
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
@@ -869,11 +906,11 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as right:
-            right.set_modem_pins(dtr=True)
-            time.sleep(0.05)
+            right.set_modem_pins(rts=True)
+            time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
 
-        time.sleep(0.05)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -882,10 +919,10 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as right:
-            time.sleep(0.05)
+            time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
 
-        time.sleep(0.05)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -894,15 +931,15 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
         ) as right:
-            time.sleep(0.05)
+            time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
 
-        time.sleep(0.05)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.LOW
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -919,6 +956,13 @@ def test_deassert_on_open_with_rtscts(
     expected_state: PinState,
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
 
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(
@@ -928,11 +972,11 @@ def test_deassert_on_open_with_rtscts(
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
         ) as right:
-            right.set_modem_pins(dtr=True)
-            time.sleep(0.05)
+            right.set_modem_pins(rts=True)
+            time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
 
-        time.sleep(0.05)
+        time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
@@ -941,20 +985,17 @@ def test_deassert_on_open_with_rtscts(
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
         ):
-            time.sleep(0.05)
+            time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is expected_state
 
 
-@pytest.mark.skip_quirks(
-    SerialQuirk.NO_DTR_CTS,
-    SerialQuirk.NO_FLOW_CONTROL,
-)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM, SerialQuirk.NO_FLOW_CONTROL)
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
 
     with Serial.from_url(serial_pair.right, baudrate=9600) as right:
-        right.set_modem_pins(dtr=False)
-        time.sleep(0.1)
+        right.set_modem_pins(rts=False)
+        time.sleep(serial_pair.modem_line_propagation_delay)
 
         with Serial.from_url(
             serial_pair.left,

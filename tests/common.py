@@ -52,7 +52,7 @@ class SerialQuirk(str, enum.Enum):
     """Quirks carried by a serial transport."""
 
     NO_PIN_READBACK = "no-pin-readback"
-    NO_DTR_CTS = "no-dtr-cts"
+    NO_NULL_MODEM = "no-null-modem"
     NO_FLOW_CONTROL = "no-flow-control"
     NO_NUM_UNREAD_BYTES = "no-num-unread-bytes"
     NO_RESET_READ_BUFFER = "no-reset-read-buffer"
@@ -74,6 +74,7 @@ class SerialPair(NamedTuple):
     serial_class: str = serialx.Serial.__name__
     quirks: frozenset[SerialQuirk] = frozenset()
     spawned_ser2net: bool = False
+    modem_line_propagation_delay: float = 0.05
 
     @property
     def backends(self) -> frozenset[SerialPairBackend]:
@@ -162,6 +163,7 @@ def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
         finally:
             if process.poll() is None:
                 process.terminate()
+
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
@@ -199,8 +201,9 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
         try:
             yield (in_tty, out_tty)
         finally:
-            proc.terminate()
-            proc.wait()
+            if proc.returncode is None:
+                proc.terminate()
+                proc.wait()
 
 
 @contextlib.contextmanager
@@ -245,8 +248,9 @@ def create_ser2net_pair(
             f"rfc2217://127.0.0.1:{right_port}",
         )
     finally:
-        proc.terminate()
-        proc.wait()
+        if proc.returncode is None:
+            proc.terminate()
+            proc.wait()
 
 
 @contextlib.asynccontextmanager
@@ -268,10 +272,12 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 
         assert proc.returncode is None
 
-        yield (in_tty, out_tty)
-
-        proc.terminate()
-        await proc.wait()
+        try:
+            yield (in_tty, out_tty)
+        finally:
+            if proc.returncode is None:
+                proc.terminate()
+                await proc.wait()
 
 
 @contextlib.asynccontextmanager
@@ -319,19 +325,20 @@ async def async_create_bridged_socat_pair() -> AsyncIterator[BridgedSocatPair]:
         assert listener.returncode is None
         assert connector.returncode is None
 
-        yield BridgedSocatPair(
-            left=left_tty,
-            right=right_tty,
-            left_process=listener,
-            right_process=connector,
-        )
-
-        if connector.returncode is None:
-            connector.terminate()
-            await connector.wait()
-        if listener.returncode is None:
-            listener.terminate()
-            await listener.wait()
+        try:
+            yield BridgedSocatPair(
+                left=left_tty,
+                right=right_tty,
+                left_process=listener,
+                right_process=connector,
+            )
+        finally:
+            if connector.returncode is None:
+                connector.terminate()
+                await connector.wait()
+            if listener.returncode is None:
+                listener.terminate()
+                await listener.wait()
 
 
 @contextlib.asynccontextmanager

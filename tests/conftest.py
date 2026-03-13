@@ -33,21 +33,11 @@ except ImportError:
 COM0COM_RE = re.compile(r"^CNC[A-Z]\d+$", re.IGNORECASE)
 TTY0TTY_RE = re.compile(r"^/dev/tnt\d+$")
 
-RFC2217_WRAPPER_QUIRKS = frozenset(
-    {
-        SerialQuirk.NO_NUM_UNREAD_BYTES,
-        SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-        SerialQuirk.NO_RESET_WRITE_BUFFER,
-        SerialQuirk.NO_WRITE_TIMEOUT,
-        SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
-    }
-)
-
 SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.SOCAT: frozenset(
         {
             SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_NULL_MODEM,
             SerialQuirk.NO_FLOW_CONTROL,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
@@ -57,7 +47,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.SOCKET: frozenset(
         {
             SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_NULL_MODEM,
             SerialQuirk.NO_FLOW_CONTROL,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_RESET_READ_BUFFER,
@@ -70,7 +60,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.ESPHOME: frozenset(
         {
             SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_DTR_CTS,
+            SerialQuirk.NO_NULL_MODEM,
             SerialQuirk.NO_FLOW_CONTROL,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
@@ -80,64 +70,33 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
-    SerialPairBackend.ADAPTER: frozenset(
-        {
-            SerialQuirk.NO_DTR_CTS,
-            SerialQuirk.NO_FLOW_CONTROL,
-        }
-    ),
+    SerialPairBackend.ADAPTER: frozenset({}),
     SerialPairBackend.COM0COM: frozenset(
         {
-            SerialQuirk.NO_PIN_READBACK,
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
     SerialPairBackend.TTY0TTY: frozenset(
         {
-            SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_DTR_CTS,
             SerialQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+        }
+    ),
+    SerialPairBackend.RFC2217: frozenset(
+        {
+            SerialQuirk.NO_PIN_READBACK,
+            # SerialQuirk.NO_NULL_MODEM,
+            # SerialQuirk.NO_FLOW_CONTROL,
+            SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
         }
     ),
-    SerialPairBackend.RFC2217: frozenset(
-        {
-            SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_DTR_CTS,
-            SerialQuirk.NO_FLOW_CONTROL,
-        }
-        | RFC2217_WRAPPER_QUIRKS
-    ),
 }
-
-SERIAL_PAIR_QUIRK_FLAG_NAMES: dict[str, SerialQuirk] = {
-    "pin-readback": SerialQuirk.NO_PIN_READBACK,
-    "dtr-cts": SerialQuirk.NO_DTR_CTS,
-    "flow-control": SerialQuirk.NO_FLOW_CONTROL,
-    "num-unread-bytes": SerialQuirk.NO_NUM_UNREAD_BYTES,
-    "reset-read-buffer": SerialQuirk.NO_RESET_READ_BUFFER,
-    "num-unwritten-bytes": SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-    "reset-write-buffer": SerialQuirk.NO_RESET_WRITE_BUFFER,
-    "write-timeout": SerialQuirk.NO_WRITE_TIMEOUT,
-    "pause-reading": SerialQuirk.NO_PAUSE_READING,
-    "pause-writing-callbacks": SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
-}
-
-SERIAL_PAIR_QUIRK_OPERATIONS: dict[
-    str, tuple[frozenset[SerialQuirk], frozenset[SerialQuirk]]
-] = {
-    token: (frozenset(), frozenset({quirk}))
-    for token, quirk in SERIAL_PAIR_QUIRK_FLAG_NAMES.items()
-}
-SERIAL_PAIR_QUIRK_OPERATIONS.update(
-    {
-        quirk.value: (frozenset({quirk}), frozenset())
-        for quirk in SERIAL_PAIR_QUIRK_FLAG_NAMES.values()
-    }
-)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -218,8 +177,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=[],
         help=(
             "Pair of serial endpoints in format LEFT,RIGHT[,FLAG...] "
-            "(for example /dev/ttyUSB1,/dev/ttyUSB2,pin-readback,dtr-cts,"
-            "flow-control or /dev/tnt0,/dev/tnt1,no-pin-readback,no-dtr-cts,"
+            "(for example /dev/ttyUSB1,/dev/ttyUSB2,pin-readback,null-modem,"
+            "flow-control or /dev/tnt0,/dev/tnt1,no-pin-readback,no-null-modem,"
             "no-flow-control or rfc2217://127.0.0.1:5001,"
             "rfc2217://127.0.0.1:5002,no-write-timeout)"
         ),
@@ -265,74 +224,40 @@ def _format_serial_pair_quirks(quirks: Collection[SerialQuirk]) -> str:
     return ", ".join(sorted(quirk.value for quirk in quirks))
 
 
-def _resolve_serial_pair_quirks(
-    left_backend: SerialPairBackend,
-    right_backend: SerialPairBackend,
-    raw_flags: list[str],
-) -> frozenset[SerialQuirk]:
-    """Resolve normalized quirks for a backend pair plus explicit flags."""
-    quirks = set(
-        SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
-        | SERIAL_PAIR_DEFAULT_QUIRKS[right_backend]
-    )
-    unknown_flags: list[str] = []
-
-    for raw_flag in raw_flags:
-        flag = raw_flag.strip().lower()
-        if not flag:
-            continue
-
-        operation = SERIAL_PAIR_QUIRK_OPERATIONS.get(flag)
-        if operation is None:
-            unknown_flags.append(raw_flag)
-            continue
-
-        adds, removes = operation
-        quirks.difference_update(removes)
-        quirks.update(adds)
-
-    if unknown_flags:
-        raise ValueError(
-            "Unknown adapter quirk flag(s): "
-            + ", ".join(sorted(set(unknown_flags)))
-            + ". Supported flags: "
-            + ", ".join(sorted(SERIAL_PAIR_QUIRK_OPERATIONS))
-        )
-
-    return frozenset(quirks)
-
-
 def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
     """Get parsed adapter pair specifications from config."""
     pairs: list[SerialPairSpec] = []
 
     for pair in config.getoption("--adapter-pair"):
-        if "," in pair:
-            parts = [part.strip() for part in pair.split(",")]
-            expected_format = "LEFT,RIGHT[,FLAG...]"
-        else:
-            parts = pair.split(":")
-            expected_format = "LEFT:RIGHT[:FLAG...]"
+        parts = [part.strip() for part in pair.split(",")]
+        expected_format = "LEFT,RIGHT[,FLAG...]"
+
         if len(parts) < 2:
             raise ValueError(
                 f"Invalid adapter pair format: {pair}. Expected {expected_format}"
             )
 
         left, right, *raw_flags = parts
+
         if not left or not right:
             raise ValueError(
                 f"Invalid adapter pair format: {pair}. Expected {expected_format}"
             )
+
         left_backend = _classify_endpoint_backend(left)
         right_backend = _classify_endpoint_backend(right)
-        quirks = _resolve_serial_pair_quirks(left_backend, right_backend, raw_flags)
+
         pairs.append(
             SerialPairSpec(
                 left_backend=left_backend,
                 right_backend=right_backend,
                 left=left,
                 right=right,
-                quirks=quirks,
+                quirks=(
+                    SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
+                    | SERIAL_PAIR_DEFAULT_QUIRKS[right_backend]
+                    | frozenset({SerialQuirk(raw_flag) for raw_flag in raw_flags})
+                ),
                 pair_label=pair,
             )
         )
@@ -346,7 +271,10 @@ def _build_rfc2217_spec(spec: SerialPairSpec) -> SerialPairSpec:
         spec,
         left_backend=SerialPairBackend.RFC2217,
         right_backend=SerialPairBackend.RFC2217,
-        quirks=frozenset(spec.quirks) | RFC2217_WRAPPER_QUIRKS,
+        quirks=(
+            frozenset(spec.quirks)
+            | SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.RFC2217]
+        ),
         wrapped_left_backend=spec.left_backend,
         wrapped_right_backend=spec.right_backend,
     )
@@ -609,6 +537,8 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                     spec.right_backend,
                     quirks=quirks,
                     spawned_ser2net=True,
+                    # ser2net polls modem lines every 1s
+                    modem_line_propagation_delay=1.1,
                 )
         elif spec.wrapped_backends == {SerialPairBackend.SOCAT}:
             assert SER2NET_BINARY is not None
@@ -621,6 +551,8 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
                         spec.right_backend,
                         quirks=quirks,
                         spawned_ser2net=True,
+                        # ser2net polls modem lines every 1s
+                        modem_line_propagation_delay=1.1,
                     )
         else:
             raise AssertionError(f"Unsupported wrapped source spec: {spec!r}")

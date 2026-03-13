@@ -274,7 +274,7 @@ jobs:
             --cov=serialx \
             -o console_output_style=count \
             -p no:sugar \
-            --adapter-pair /dev/tnt0,/dev/tnt1,no-pin-readback,no-dtr-cts,no-flow-control,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-pause-writing-callbacks \
+            --adapter-pair /dev/tnt0,/dev/tnt1,no-pin-readback,null-modem,no-flow-control,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-pause-writing-callbacks \
             tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -337,7 +337,7 @@ jobs:
         shell: pwsh
         working-directory: C:\Program Files (x86)\com0com
         run: |
-          .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rdtr PortName=-,EmuBR=yes,cts=rdtr
+          .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
