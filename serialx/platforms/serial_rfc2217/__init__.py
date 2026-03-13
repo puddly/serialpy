@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from enum import IntEnum
 import logging
 import sys
@@ -615,6 +616,12 @@ class RFC2217Serial(SocketSerial):
 
     def _get_modem_pins(self) -> ModemPins:
         """Return modem pin state from the last NOTIFY-MODEMSTATE."""
+
+        # Process any pending data to ensure we have the latest modem state
+        with self._socket_timeout(0):  # noqa: SIM117
+            with suppress(BlockingIOError):
+                self._recv_and_process()
+
         return self._engine.get_modem_pins()
 
     def flush(self) -> None:
