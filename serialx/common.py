@@ -668,34 +668,40 @@ class BaseSerialTransport(asyncio.Transport):
         self,
         modem_pins: ModemPins | None = None,
         *,
-        le: bool | None = None,
-        dtr: bool | None = None,
-        rts: bool | None = None,
-        st: bool | None = None,
-        sr: bool | None = None,
-        cts: bool | None = None,
-        car: bool | None = None,
-        rng: bool | None = None,
-        dsr: bool | None = None,
+        le: PinState | bool | None = PinState.UNDEFINED,
+        dtr: PinState | bool | None = PinState.UNDEFINED,
+        rts: PinState | bool | None = PinState.UNDEFINED,
+        st: PinState | bool | None = PinState.UNDEFINED,
+        sr: PinState | bool | None = PinState.UNDEFINED,
+        cts: PinState | bool | None = PinState.UNDEFINED,
+        car: PinState | bool | None = PinState.UNDEFINED,
+        rng: PinState | bool | None = PinState.UNDEFINED,
+        dsr: PinState | bool | None = PinState.UNDEFINED,
     ) -> None:
+        """Set modem control bits."""
+        if modem_pins is None:
+            modem_pins = ModemPins(
+                le=PinState.convert(le),
+                dtr=PinState.convert(dtr),
+                rts=PinState.convert(rts),
+                st=PinState.convert(st),
+                sr=PinState.convert(sr),
+                cts=PinState.convert(cts),
+                car=PinState.convert(car),
+                rng=PinState.convert(rng),
+                dsr=PinState.convert(dsr),
+            )
+
+        return await self._set_modem_pins(modem_pins)
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits."""
         await self._loop.run_in_executor(
             None,
             lambda: (
                 None
                 if self._serial is None
-                else self._serial.set_modem_pins(
-                    modem_pins,
-                    le=le,
-                    dtr=dtr,
-                    rts=rts,
-                    st=st,
-                    sr=sr,
-                    cts=cts,
-                    car=car,
-                    rng=rng,
-                    dsr=dsr,
-                )
+                else self._serial.set_modem_pins(modem_pins)
             ),
         )
 

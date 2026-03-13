@@ -606,8 +606,6 @@ class RFC2217Serial(SocketSerial):
             if n:
                 return n
 
-    # -- modem pins ---------------------------------------------------------
-
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set DTR/RTS via SET_CONTROL commands."""
         LOGGER.debug("Setting modem pins: %r", modem_pins)
@@ -796,8 +794,6 @@ class RFC2217SerialTransport(BaseSerialTransport):
         LOGGER.debug("RX ack: %r", result)
         return result
 
-    # -- write --------------------------------------------------------------
-
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial port, escaping IAC bytes."""
         assert self._tcp_transport is not None
@@ -805,13 +801,11 @@ class RFC2217SerialTransport(BaseSerialTransport):
         LOGGER.debug("TX data: %d bytes (%d on wire)", len(data), len(escaped))
         self._tcp_transport.write(escaped)
 
-    # -- modem pins ---------------------------------------------------------
-
     async def get_modem_pins(self) -> ModemPins:
         """Return modem pin state from the last NOTIFY-MODEMSTATE."""
         return self._serial._engine.get_modem_pins()
 
-    async def set_modem_pins(
+    async def _set_modem_pins(
         self,
         modem_pins: ModemPins | None = None,
         **kwargs,
