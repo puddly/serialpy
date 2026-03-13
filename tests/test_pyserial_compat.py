@@ -7,7 +7,7 @@ import pytest
 from serialx import Serial, SerialPortInfo
 from serialx.tools.list_ports import comports, grep
 from serialx.tools.list_ports_common import ListPortInfo
-from tests.common import SerialPair
+from tests.common import SerialPair, SerialQuirk
 
 
 def test_compat_constructor_kwargs(serial_pair: SerialPair) -> None:
@@ -38,15 +38,6 @@ def test_compat_deprecated_aliases(serial_pair: SerialPair) -> None:
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(serial_pair.right, baudrate=115200, timeout=0.2) as right,
     ):
-        # Pins
-        left.rts = True
-        time.sleep(serial_pair.modem_line_propagation_delay)
-        assert right.cts is True
-
-        left.rts = False
-        time.sleep(serial_pair.modem_line_propagation_delay)
-        assert right.cts is False
-
         # isOpen
         assert left.isOpen() is True
         assert left.is_open is True
@@ -70,6 +61,23 @@ def test_compat_deprecated_aliases(serial_pair: SerialPair) -> None:
         # reset_output_buffer / flushOutput -> reset_write_buffer
         left.reset_output_buffer()
         left.flushOutput()
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
+def test_compat_deprecated_pin_aliases(serial_pair: SerialPair) -> None:
+    """Test deprecated pin property aliases on an opened serial port."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, timeout=0.2) as right,
+    ):
+        # Pins
+        left.rts = True
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert right.cts is True
+
+        left.rts = False
+        time.sleep(serial_pair.modem_line_propagation_delay)
+        assert right.cts is False
 
 
 def test_compat_timeout_setter(serial_pair: SerialPair) -> None:

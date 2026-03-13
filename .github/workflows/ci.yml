@@ -274,7 +274,7 @@ jobs:
             --cov=serialx \
             -o console_output_style=count \
             -p no:sugar \
-            --adapter-pair /dev/tnt0,/dev/tnt1,no-pin-readback,null-modem,no-flow-control,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-pause-writing-callbacks \
+            --adapter-pair /dev/tnt0,/dev/tnt1,no-pin-readback,no-flow-control,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-pause-writing-callbacks \
             tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
