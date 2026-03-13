@@ -154,6 +154,7 @@ def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
 
         try:
             _wait_for_tcp_listener(process, api_port, name="ESPHome host daemon")
+
             yield (
                 f"esphome://127.0.0.1:{api_port}/0",
                 f"esphome://127.0.0.1:{api_port}/1",
@@ -235,10 +236,10 @@ def create_ser2net_pair(
         stderr=subprocess.PIPE,
     )
 
-    for port in (left_port, right_port):
-        _wait_for_tcp_listener(proc, port, name="ser2net")
-
     try:
+        for port in (left_port, right_port):
+            _wait_for_tcp_listener(proc, port, name="ser2net")
+
         yield (
             f"rfc2217://127.0.0.1:{left_port}",
             f"rfc2217://127.0.0.1:{right_port}",
