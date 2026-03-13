@@ -233,6 +233,8 @@ class Rfc2217:
         self._modemstate = ModemStateFlag(0)
         self._linestate = LineStateFlag(0)
         self._negotiated = False
+        self._dtr_state: PinState = PinState.UNDEFINED
+        self._rts_state: PinState = PinState.UNDEFINED
 
     @property
     def negotiated(self) -> bool:
@@ -317,13 +319,17 @@ class Rfc2217:
     ) -> Generator[SetControlCmd]:
         """Build SET_CONTROL commands needed to apply modem pin changes."""
         if modem_pins.dtr is PinState.HIGH:
+            self._dtr_state = PinState.HIGH
             yield SetControlCmd(control=ControlCmdId.SET_DTR_ON)
         elif modem_pins.dtr is PinState.LOW:
+            self._dtr_state = PinState.LOW
             yield SetControlCmd(control=ControlCmdId.SET_DTR_OFF)
 
         if modem_pins.rts is PinState.HIGH:
+            self._rts_state = PinState.HIGH
             yield SetControlCmd(control=ControlCmdId.SET_RTS_ON)
         elif modem_pins.rts is PinState.LOW:
+            self._rts_state = PinState.LOW
             yield SetControlCmd(control=ControlCmdId.SET_RTS_OFF)
 
     def get_modem_pins(self) -> ModemPins:
@@ -331,6 +337,8 @@ class Rfc2217:
         state = self._modemstate
 
         return ModemPins(
+            dtr=self._dtr_state,
+            rts=self._rts_state,
             cts=(PinState.HIGH if state & ModemStateFlag.CTS else PinState.LOW),
             dsr=(PinState.HIGH if state & ModemStateFlag.DSR else PinState.LOW),
             rng=(PinState.HIGH if state & ModemStateFlag.RI else PinState.LOW),
