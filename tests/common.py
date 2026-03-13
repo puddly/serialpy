@@ -228,16 +228,18 @@ def create_ser2net_pair(
         }
     }
 
+    # fmt: off
     proc = subprocess.Popen(
         [
             "ser2net",
-            "-n",
-            "-Y",
-            json.dumps(config),
+            "-n",  # Don't detach from the controlling terminal
+            "-u",  # Disable UUCP locking
+            "-Y", json.dumps(config)
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    # fmt: on
 
     try:
         for port in (left_port, right_port):
