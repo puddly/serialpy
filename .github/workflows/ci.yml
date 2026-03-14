@@ -20,14 +20,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
+          check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
         uses: actions/cache/restore@v4
         with:
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-${{
-            matrix.python-version }}-${{
+            1-${{ runner.os }}-base-venv-${{
+            steps.python.outputs.python-version }}-${{
             hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install system dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -62,6 +63,7 @@ jobs:
         id: python
         with:
           python-version: "3.10"
+          check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
         uses: actions/cache/restore@v4
@@ -69,7 +71,8 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-3.10-${{
+            1-${{ runner.os }}-base-venv-${{
+            steps.python.outputs.python-version }}-${{
             hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
@@ -245,6 +248,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
+          check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
         uses: actions/cache/restore@v4
@@ -252,8 +256,8 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-${{
-            matrix.python-version }}-${{
+            1-${{ runner.os }}-base-venv-${{
+            steps.python.outputs.python-version }}-${{
             hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Restore cached ESPHome binary
         uses: actions/cache/restore@v4
@@ -415,6 +419,7 @@ jobs:
         id: python
         with:
           python-version: "3.10"
+          check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
         uses: actions/cache/restore@v4
@@ -422,7 +427,8 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            2-${{ runner.os }}-base-venv-3.10-${{
+            1-${{ runner.os }}-base-venv-${{
+            steps.python.outputs.python-version }}-${{
             hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Download all coverage artifacts
         uses: actions/download-artifact@v4
