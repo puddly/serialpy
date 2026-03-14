@@ -99,40 +99,39 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     adapters = []
 
     # Physical adapters passed in with a CLI flag
-    if "adapter_pair" in metafunc.fixturenames:
-        for pair in metafunc.config.getoption("--adapter-pair"):
-            parts = [part.strip() for part in pair.split(",")]
-            expected_format = "LEFT,RIGHT[,FLAG...]"
+    for pair in metafunc.config.getoption("--adapter-pair"):
+        parts = [part.strip() for part in pair.split(",")]
+        expected_format = "LEFT,RIGHT[,FLAG...]"
 
-            if len(parts) < 2:
-                raise ValueError(
-                    f"Invalid adapter pair format: {pair}. Expected {expected_format}"
-                )
-
-            left, right, *raw_flags = parts
-
-            if not left or not right:
-                raise ValueError(
-                    f"Invalid adapter pair format: {pair}. Expected {expected_format}"
-                )
-
-            left_backend = _get_endpoint_backend(left)
-            right_backend = _get_endpoint_backend(right)
-
-            adapters.append(
-                UnresolvedSerialPair(
-                    backends=(),
-                    left=left,
-                    right=right,
-                    original_left=left,
-                    original_right=right,
-                    quirks=(
-                        SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
-                        | SERIAL_PAIR_DEFAULT_QUIRKS[right_backend]
-                        | frozenset({SerialQuirk(raw_flag) for raw_flag in raw_flags})
-                    ),
-                )
+        if len(parts) < 2:
+            raise ValueError(
+                f"Invalid adapter pair format: {pair}. Expected {expected_format}"
             )
+
+        left, right, *raw_flags = parts
+
+        if not left or not right:
+            raise ValueError(
+                f"Invalid adapter pair format: {pair}. Expected {expected_format}"
+            )
+
+        left_backend = _get_endpoint_backend(left)
+        right_backend = _get_endpoint_backend(right)
+
+        adapters.append(
+            UnresolvedSerialPair(
+                backends=(),
+                left=left,
+                right=right,
+                original_left=left,
+                original_right=right,
+                quirks=(
+                    SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
+                    | SERIAL_PAIR_DEFAULT_QUIRKS[right_backend]
+                    | frozenset({SerialQuirk(raw_flag) for raw_flag in raw_flags})
+                ),
+            )
+        )
 
     if "serial_pair" in metafunc.fixturenames:
         # `socat` can always be used to create virtual serial port pairs
@@ -164,6 +163,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         )
 
         for adapter_spec in adapters:
+            specs.append(adapter_spec)
+
             if SER2NET_BINARY is not None:
                 ser2net_spec = adapter_spec.chain(SerialBackend.SER2NET)
 
