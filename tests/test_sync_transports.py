@@ -948,7 +948,7 @@ def test_deassert_on_open_with_rtscts(
             assert left.get_modem_pins().cts is expected_state
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM, SerialQuirk.NO_FLOW_CONTROL)
+@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM, SerialQuirk.NO_RTS_CTS)
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
 
