@@ -669,6 +669,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
         self._tcp_transport: asyncio.Transport | None = None
         self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
         self._connection_lost_called = False
+        self._configured = False
 
     # -- connection lifecycle -----------------------------------------------
 
@@ -716,6 +717,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
             await self._negotiate()
             await self._configure_port()
 
+        self._configured = True
         self._protocol.connection_made(self)
 
     async def _negotiate(self) -> None:
@@ -778,7 +780,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
         for response in responses:
             self._send_command(response)
 
-        if serial_data:
+        if serial_data and self._configured:
             self._protocol.data_received(serial_data)
 
     async def _send_and_wait(self, cmd: Rfc2217Command) -> Rfc2217Command:
