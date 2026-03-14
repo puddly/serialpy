@@ -342,9 +342,18 @@ jobs:
           key: >-
             1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
+            hashFiles('pyproject.toml') }}
+      - name: Restore cached Rust extension
+        id: cache-ext
+        uses: actions/cache/restore@v4
+        with:
+          path: serialx/_serialx_rust*
+          key: >-
+            1-${{ runner.os }}-rust-ext-${{
+            steps.python.outputs.python-version }}-${{
+            hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
-        if: steps.cache-venv.outputs.cache-hit != 'true'
+        if: steps.cache-ext.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@stable
       - name: Create Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -352,12 +361,23 @@ jobs:
           python -m venv venv
           . venv/bin/activate
           pip install -e .[dev] pytest-cov
+      - name: Rebuild Rust extension
+        if: steps.cache-venv.outputs.cache-hit == 'true' && steps.cache-ext.outputs.cache-hit != 'true'
+        run: |
+          . venv/bin/activate
+          python setup.py build_ext --inplace
       - name: Cache base Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: venv
           key: ${{ steps.cache-venv.outputs.cache-primary-key }}
+      - name: Cache Rust extension
+        if: steps.cache-ext.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: serialx/_serialx_rust*
+          key: ${{ steps.cache-ext.outputs.cache-primary-key }}
       - name: Run tests
         run: |
           . venv/bin/activate
@@ -404,9 +424,18 @@ jobs:
           key: >-
             1-${{ runner.os }}-base-venv-${{
             steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
+            hashFiles('pyproject.toml') }}
+      - name: Restore cached Rust extension
+        id: cache-ext
+        uses: actions/cache/restore@v4
+        with:
+          path: serialx/_serialx_rust*
+          key: >-
+            1-${{ runner.os }}-rust-ext-${{
+            steps.python.outputs.python-version }}-${{
+            hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
-        if: steps.cache-venv.outputs.cache-hit != 'true'
+        if: steps.cache-ext.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@stable
       - name: Create Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
@@ -414,12 +443,23 @@ jobs:
           python -m venv venv
           venv\Scripts\activate
           pip install -e .[dev] pytest-cov
+      - name: Rebuild Rust extension
+        if: steps.cache-venv.outputs.cache-hit == 'true' && steps.cache-ext.outputs.cache-hit != 'true'
+        run: |
+          venv\Scripts\activate
+          python setup.py build_ext --inplace
       - name: Cache base Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: venv
           key: ${{ steps.cache-venv.outputs.cache-primary-key }}
+      - name: Cache Rust extension
+        if: steps.cache-ext.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: serialx/_serialx_rust*
+          key: ${{ steps.cache-ext.outputs.cache-primary-key }}
       - name: Run tests
         shell: pwsh
         run: |
