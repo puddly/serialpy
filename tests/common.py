@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
+import dataclasses
 import enum
 import json
 import os
@@ -14,38 +15,36 @@ import tempfile
 import time
 from typing import Any, NamedTuple
 
-import pytest
+from typing_extensions import Self
 
 import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
 SER2NET_BINARY = shutil.which("ser2net")
-
-_SERIALX_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM = (
-    _SERIALX_ROOT
-    / "tests"
-    / "esphome"
-    / ".esphome"
-    / "build"
-    / "serialx-host-daemon"
-    / ".pioenvs"
-    / "serialx-host-daemon"
-    / "program"
+ESPHOME_HOST_BINARY = shutil.which(
+    "program",
+    path=(
+        Path(__file__).resolve().parent
+        / "esphome"
+        / ".esphome"
+        / "build"
+        / "serialx-host-daemon"
+        / ".pioenvs"
+        / "serialx-host-daemon"
+    ),
 )
 
 
-class SerialPairBackend(str, enum.Enum):
+class SerialBackend(str, enum.Enum):
     """Known serial-pair backend families used by the test suite."""
 
     SOCAT = "socat"
     SOCKET = "socket"
     ESPHOME = "esphome"
+    ESPHOME_HOST = "esphome_host"
     ADAPTER = "adapter"
-    COM0COM = "com0com"
-    TTY0TTY = "tty0tty"
-    RFC2217 = "rfc2217"
+    SER2NET = "rfc2217"
 
 
 class SerialQuirk(str, enum.Enum):
@@ -54,31 +53,106 @@ class SerialQuirk(str, enum.Enum):
     NO_RTS_CTS = "no-rts-cts"
     NO_DTR_DSR = "no-dtr-dsr"
     NO_NUM_UNREAD_BYTES = "no-num-unread-bytes"
-    NO_RESET_READ_BUFFER = "no-reset-read-buffer"
     NO_NUM_UNWRITTEN_BYTES = "no-num-unwritten-bytes"
     NO_RESET_WRITE_BUFFER = "no-reset-write-buffer"
     NO_WRITE_TIMEOUT = "no-write-timeout"
-    NO_PAUSE_READING = "no-pause-reading"
     NO_WRITE_LIMITS = "no-write-limits"
-    NO_PAUSE_WRITING_CALLBACKS = "no-pause-writing-callbacks"
+    NO_BACKPRESSURE = "no-backpressure"
+    NO_EXCLUSIVITY = "no-exclusivity"
 
 
-class SerialPair(NamedTuple):
-    """A connected pair of serial port paths with backend metadata."""
+SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
+    SerialBackend.SOCAT: frozenset(
+        {
+            SerialQuirk.NO_RTS_CTS,
+            SerialQuirk.NO_DTR_DSR,
+            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_EXCLUSIVITY,
+        }
+    ),
+    SerialBackend.SOCKET: frozenset(
+        {
+            SerialQuirk.NO_RTS_CTS,
+            SerialQuirk.NO_DTR_DSR,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+            SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_EXCLUSIVITY,
+        }
+    ),
+    SerialBackend.ESPHOME: frozenset(
+        {
+            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+            SerialQuirk.NO_EXCLUSIVITY,
+        }
+    ),
+    SerialBackend.ESPHOME_HOST: frozenset(
+        {
+            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+            # Host binary does not support flow control
+            SerialQuirk.NO_DTR_DSR,
+            SerialQuirk.NO_RTS_CTS,
+        }
+    ),
+    SerialBackend.SER2NET: frozenset(
+        {
+            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+        }
+    ),
+    SerialBackend.ADAPTER: frozenset({}),
+}
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class UnresolvedSerialPair:
+    """Description of a test serial pair before fixture creation."""
+
+    # The URIs to connect to either side, always set for emitted specs
+    left: str | None
+    right: str | None
+
+    original_left: str | None
+    original_right: str | None
+
+    # Backends to chain
+    backends: tuple[SerialBackend, ...]
+
+    # Accumulated quirks
+    quirks: frozenset[SerialQuirk]
+
+    serial_class: str | None = None
+    modem_line_propagation_delay: float = 0.05
+
+    def chain(self, backend: SerialBackend) -> Self:
+        """Chain another backend layer on top of this one, accumulating quirks."""
+        return dataclasses.replace(
+            self,
+            original_left=self.original_left,
+            original_right=self.original_right,
+            backends=(backend,) + self.backends,
+            quirks=frozenset(self.quirks) | SERIAL_PAIR_DEFAULT_QUIRKS[backend],
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class SerialPair(UnresolvedSerialPair):
+    """Description of a test serial pair after fixture creation."""
 
     left: str
     right: str
-    left_backend: SerialPairBackend
-    right_backend: SerialPairBackend
-    serial_class: str = serialx.Serial.__name__
-    quirks: frozenset[SerialQuirk] = frozenset()
-    spawned_ser2net: bool = False
-    modem_line_propagation_delay: float = 0.05
 
-    @property
-    def backends(self) -> frozenset[SerialPairBackend]:
-        """Return the distinct backend families used by this endpoint pair."""
-        return frozenset({self.left_backend, self.right_backend})
+    original_left: str
+    original_right: str
+
+    serial_class: str
 
 
 class BridgedSocatPair(NamedTuple):
@@ -88,21 +162,6 @@ class BridgedSocatPair(NamedTuple):
     right: str
     left_process: asyncio.subprocess.Process
     right_process: asyncio.subprocess.Process
-
-
-def get_esphome_host_daemon_program() -> str | None:
-    """Get the compiled ESPHome host daemon program path, if available."""
-    if override := os.getenv("SERIALX_ESPHOME_DAEMON_PROGRAM"):
-        program_path = Path(override).expanduser()
-    else:
-        program_path = _DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM
-
-    if not program_path.exists():
-        return None
-    if not os.access(program_path, os.X_OK):
-        return None
-
-    return str(program_path)
 
 
 def _pick_free_port() -> int:
@@ -136,38 +195,39 @@ def _wait_for_tcp_listener(
 
 
 @contextlib.contextmanager
-def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
-    """Create an esphome:// pair backed by a socat PTY pair and host daemon."""
-    with create_socat_pair() as (left_tty, right_tty):
-        api_port = _pick_free_port()
-        env = os.environ.copy()
-        env["SERIALX_UART_LEFT"] = left_tty
-        env["SERIALX_UART_RIGHT"] = right_tty
-        env["SERIALX_API_PORT"] = str(api_port)
+def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, str]]:
+    """Create an esphome:// pair."""
+    assert ESPHOME_HOST_BINARY is not None
 
-        process = subprocess.Popen(  # noqa: S603
-            [program_path],
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+    api_port = _pick_free_port()
+    env = os.environ.copy()
+    env["SERIALX_UART_LEFT"] = left_tty
+    env["SERIALX_UART_RIGHT"] = right_tty
+    env["SERIALX_API_PORT"] = str(api_port)
+
+    process = subprocess.Popen(  # noqa: S603
+        [ESPHOME_HOST_BINARY],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        _wait_for_tcp_listener(process, api_port, name="ESPHome host daemon")
+
+        yield (
+            f"esphome://127.0.0.1:{api_port}/0",
+            f"esphome://127.0.0.1:{api_port}/1",
         )
+    finally:
+        if process.poll() is None:
+            process.terminate()
 
-        try:
-            _wait_for_tcp_listener(process, api_port, name="ESPHome host daemon")
-
-            yield (
-                f"esphome://127.0.0.1:{api_port}/0",
-                f"esphome://127.0.0.1:{api_port}/1",
-            )
-        finally:
-            if process.poll() is None:
-                process.terminate()
-
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=5)
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
 
 
 @contextlib.contextmanager
@@ -255,106 +315,13 @@ def create_ser2net_pair(
 
 
 @contextlib.asynccontextmanager
-async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
-    """Create a pair of virtual PTYs using socat (asynchronous)."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        in_tty = os.path.join(tmpdir, "ttyTestIn")
-        out_tty = os.path.join(tmpdir, "ttyTestOut")
-
-        proc = await asyncio.create_subprocess_exec(
-            "socat",
-            f"PTY,link={in_tty},raw,echo=0",
-            f"PTY,link={out_tty},raw,echo=0",
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-
-        # Give socat time to set up the PTYs
-        await asyncio.sleep(0.5)
-
-        assert proc.returncode is None
-
-        try:
-            yield (in_tty, out_tty)
-        finally:
-            if proc.returncode is None:
-                proc.terminate()
-                await proc.wait()
-
-
-@contextlib.asynccontextmanager
-async def async_create_bridged_socat_pair() -> AsyncIterator[BridgedSocatPair]:
-    """Create a pair of PTYs bridged via two socat processes over a Unix socket.
-
-    Unlike `async_create_socat_pair`, killing one socat process propagates
-    through the bridge and tears down the other side, triggering a real EOF.
-    """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        left_tty = os.path.join(tmpdir, "ttyLeft")
-        right_tty = os.path.join(tmpdir, "ttyRight")
-        sock_path = os.path.join(tmpdir, "bridge.sock")
-
-        listener = await asyncio.create_subprocess_exec(
-            "socat",
-            f"PTY,link={left_tty},raw,echo=0",
-            f"UNIX-LISTEN:{sock_path}",
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-
-        # Wait for the socket to appear
-        for _ in range(100):
-            if os.path.exists(sock_path):
-                break
-            await asyncio.sleep(0.01)
-        else:
-            raise RuntimeError("socat listener socket was not created in time")
-
-        connector = await asyncio.create_subprocess_exec(
-            "socat",
-            f"PTY,link={right_tty},raw,echo=0",
-            f"UNIX-CONNECT:{sock_path}",
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-
-        # Wait for both PTYs to appear
-        for _ in range(100):
-            if os.path.exists(left_tty) and os.path.exists(right_tty):
-                break
-            await asyncio.sleep(0.01)
-        else:
-            raise RuntimeError("socat PTYs were not created in time")
-
-        assert listener.returncode is None
-        assert connector.returncode is None
-
-        try:
-            yield BridgedSocatPair(
-                left=left_tty,
-                right=right_tty,
-                left_process=listener,
-                right_process=connector,
-            )
-        finally:
-            if connector.returncode is None:
-                connector.terminate()
-                await connector.wait()
-            if listener.returncode is None:
-                listener.terminate()
-                await listener.wait()
-
-
-@contextlib.asynccontextmanager
 async def async_create_reader_writer(
-    port: str | None,
-    **kwargs: Any,
+    *args: Any, **kwargs: Any
 ) -> AsyncIterator[
     tuple[asyncio.StreamReader, serialx.SerialStreamWriter[BaseSerialTransport]]
 ]:
     """Create a single reader/writer pair."""
-
-    if port is None:
-        pytest.skip("No loopback adapter configured")
-
-    reader, writer = await serialx.open_serial_connection(port, **kwargs)
+    reader, writer = await serialx.open_serial_connection(*args, **kwargs)
 
     try:
         yield (reader, writer)

@@ -15,8 +15,8 @@ LOGGER = logging.getLogger(__name__)
 
 class _SocketPairRelay:
     def __init__(self) -> None:
-        self.left_to_right: queue.Queue[bytes] = queue.Queue()
-        self.right_to_left: queue.Queue[bytes] = queue.Queue()
+        self.left_to_right: queue.Queue[bytes] = queue.Queue(maxsize=4)
+        self.right_to_left: queue.Queue[bytes] = queue.Queue(maxsize=4)
         self.stop_event = threading.Event()
         self.active_connections: dict[str, socket.socket | None] = {
             "left": None,
@@ -76,7 +76,12 @@ class _SocketPairRelay:
                 if not data:
                     LOGGER.debug("%s client reached EOF", side)
                     return
-                outbound_queue.put(data)
+                while not self.stop_event.is_set():
+                    try:
+                        outbound_queue.put(data, timeout=0.1)
+                        break
+                    except queue.Full:
+                        continue
                 LOGGER.debug(
                     "queued %d bytes from %s to %s",
                     len(data),
@@ -108,6 +113,8 @@ class _SocketPairRelay:
                 return
 
             LOGGER.debug("accepted %s client connection", side)
+            conn.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 2048)
+            conn.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2048)
             self._set_active_connection(side, conn)
 
             reader_thread = threading.Thread(

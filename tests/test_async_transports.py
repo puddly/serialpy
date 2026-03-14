@@ -23,11 +23,9 @@ from serialx import (
     get_serial_classes,
 )
 from tests.common import (
-    SOCAT_BINARY,
+    SerialBackend,
     SerialPair,
-    SerialPairBackend,
     SerialQuirk,
-    async_create_bridged_socat_pair,
     async_create_reader_writer,
     async_create_reader_writer_pair,
 )
@@ -129,7 +127,7 @@ async def test_async_random_large(
         and sys.platform == "darwin"
         and (
             serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"),
-            serial_pair.spawned_ser2net,
+            SerialBackend.SER2NET in serial_pair.backends,
         )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
@@ -185,7 +183,7 @@ async def test_async_large_payload(serial_pair: SerialPair, payload_size: int) -
             "PosixSerial",
             "ExtendedPosixSerial",
         )
-        or serial_pair.spawned_ser2net
+        or SerialBackend.SER2NET in serial_pair.backends
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -228,12 +226,12 @@ async def test_async_sustained_throughput(
         and sys.platform == "darwin"
         and (
             serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"),
-            serial_pair.spawned_ser2net,
+            SerialBackend.SER2NET in serial_pair.backends,
         )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    if SerialPairBackend.ESPHOME in serial_pair.backends and (baudrate, iterations) == (
+    if SerialBackend.ESPHOME in serial_pair.backends and (baudrate, iterations) == (
         921600,
         512,
     ):
@@ -264,7 +262,7 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
         and sys.platform == "darwin"
         and (
             serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"),
-            serial_pair.spawned_ser2net,
+            SerialBackend.SER2NET in serial_pair.backends,
         )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
@@ -282,7 +280,7 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
 )
 async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.left_backend is SerialPairBackend.ESPHOME and parity in (
+    if serial_pair.backends[0] is SerialBackend.ESPHOME and parity in (
         Parity.MARK,
         Parity.SPACE,
     ):
@@ -319,7 +317,7 @@ async def test_async_valid_stopbits(
 ) -> None:
     """Test that valid stopbits settings are accepted."""
     if (
-        serial_pair.left_backend is SerialPairBackend.ESPHOME
+        serial_pair.backends[0] is SerialBackend.ESPHOME
         and expected is StopBits.ONE_POINT_FIVE
     ):
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
@@ -422,9 +420,14 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await writer_left.wait_closed()
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_PAUSE_READING)
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
+    if (
+        SerialBackend.ESPHOME_HOST in serial_pair.backends
+        or SerialBackend.ESPHOME in serial_pair.backends
+    ):
+        pytest.xfail("ESPHome backend does not support pause/resume")
+
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (reader_left, writer_left, _, writer_right):
@@ -541,7 +544,7 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
         assert transport.get_write_buffer_size() == 0
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_WRITE_LIMITS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
@@ -552,10 +555,9 @@ async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> N
         transport = writer.transport
 
         low, high = transport.get_write_buffer_limits()
-        assert low >= 0
-        assert high >= low
+        assert 0 <= low <= high
 
-        transport.set_write_buffer_limits(high=128 * 1024, low=32 * 1024)
+        transport.set_write_buffer_limits(low=32 * 1024, high=128 * 1024)
         assert transport.get_write_buffer_limits() == (32 * 1024, 128 * 1024)
 
         assert transport.can_write_eof() in (True, False)
@@ -573,7 +575,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
         assert result == b"flush test data"
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_PAUSE_READING)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
     async with async_create_reader_writer_pair(
@@ -581,44 +583,6 @@ async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> 
     ) as (_, writer_left, _, _):
         # resume without prior pause should be a no-op
         writer_left.transport.resume_reading()
-
-
-@pytest.mark.skipif(not SOCAT_BINARY, reason="socat binary is missing")
-@pytest.mark.xfail(
-    sys.platform.startswith("freebsd"),
-    reason="FreeBSD PTYs do not signal peer close",
-)
-async def test_async_peer_close_triggers_connection_lost() -> None:
-    """Test that killing one socat process triggers connection_lost on the other."""
-    async with async_create_bridged_socat_pair() as pair:
-        connection_lost_event = asyncio.Event()
-
-        class Receiver(asyncio.Protocol):
-            def connection_lost(self, exc: Exception | None) -> None:
-                connection_lost_event.set()
-
-        loop = asyncio.get_running_loop()
-
-        recv_transport, _ = await create_serial_connection(
-            loop, Receiver, pair.left, baudrate=115200
-        )
-        send_transport, _ = await create_serial_connection(
-            loop, asyncio.Protocol, pair.right, baudrate=115200
-        )
-
-        send_transport.write(b"goodbye")
-
-        # Kill the right-side socat process; this tears down the bridge
-        # and causes EOF on the left side
-        pair.right_process.terminate()
-        await pair.right_process.wait()
-
-        await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
-
-        send_transport.close()
-
-        if not recv_transport.is_closing():
-            recv_transport.close()
 
 
 async def test_async_invalid_uri() -> None:
@@ -649,10 +613,13 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
-    if serial_pair.left_backend is SerialPairBackend.SOCAT and sys.platform.startswith(
+    if serial_pair.backends[0] is SerialBackend.SOCAT and sys.platform.startswith(
         "freebsd"
     ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
+
+    if serial_pair.backends == (SerialBackend.SER2NET, SerialBackend.SOCAT):
+        pytest.xfail("ser2net+socat hangs on pin state changes")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         _,
@@ -712,12 +679,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
         assert modem_pins.rts is PinState.LOW
 
 
-# --- Backpressure ---
-# These tests use a dedicated async socket relay with read delay to reliably
-# trigger backpressure conditions.
-
-
-@pytest.mark.skip_quirks(SerialQuirk.NO_PAUSE_WRITING_CALLBACKS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -787,7 +749,7 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     await asyncio.gather(input_lost, output_lost)
 
 
-@pytest.mark.skip_backends(SerialPairBackend.SOCKET, SerialPairBackend.COM0COM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
 async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 

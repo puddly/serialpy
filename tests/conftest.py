@@ -1,9 +1,11 @@
 """Pytest configuration for serialx tests."""
 
-from collections.abc import Collection, Generator
+from __future__ import annotations
+
+from collections.abc import Generator
+import contextlib
 import dataclasses
 import importlib
-import re
 import sys
 import time
 from unittest.mock import patch
@@ -13,108 +15,19 @@ import pytest
 import serialx
 import serialx.platforms
 from tests.common import (
+    ESPHOME_HOST_BINARY,
     SER2NET_BINARY,
+    SERIAL_PAIR_DEFAULT_QUIRKS,
     SOCAT_BINARY,
+    SerialBackend,
     SerialPair,
-    SerialPairBackend,
     SerialQuirk,
+    UnresolvedSerialPair,
     create_esphome_pair,
     create_ser2net_pair,
     create_socat_pair,
-    get_esphome_host_daemon_program,
 )
 from tests.socket_relay import create_socket_pair
-
-try:
-    import aioesphomeapi
-except ImportError:
-    aioesphomeapi = None
-
-SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
-    SerialPairBackend.SOCAT: frozenset(
-        {
-            SerialQuirk.NO_RTS_CTS,
-            SerialQuirk.NO_DTR_DSR,
-            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialQuirk.NO_RESET_WRITE_BUFFER,
-            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
-        }
-    ),
-    SerialPairBackend.SOCKET: frozenset(
-        {
-            SerialQuirk.NO_DTR_DSR,
-            SerialQuirk.NO_RTS_CTS,
-            SerialQuirk.NO_NUM_UNREAD_BYTES,
-            SerialQuirk.NO_RESET_READ_BUFFER,
-            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialQuirk.NO_RESET_WRITE_BUFFER,
-            SerialQuirk.NO_WRITE_TIMEOUT,
-            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
-        }
-    ),
-    SerialPairBackend.ESPHOME: frozenset(
-        {
-            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialQuirk.NO_RESET_WRITE_BUFFER,
-            SerialQuirk.NO_WRITE_LIMITS,
-            SerialQuirk.NO_WRITE_TIMEOUT,
-            SerialQuirk.NO_PAUSE_READING,
-            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
-        }
-    ),
-    SerialPairBackend.ADAPTER: frozenset({}),
-    SerialPairBackend.COM0COM: frozenset(
-        {
-            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
-        }
-    ),
-    SerialPairBackend.TTY0TTY: frozenset(
-        {
-            SerialQuirk.NO_RTS_CTS,
-            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialQuirk.NO_RESET_WRITE_BUFFER,
-            SerialQuirk.NO_WRITE_TIMEOUT,
-        }
-    ),
-    SerialPairBackend.RFC2217: frozenset(
-        {
-            SerialQuirk.NO_NUM_UNREAD_BYTES,
-            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-            SerialQuirk.NO_WRITE_TIMEOUT,
-            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
-        }
-    ),
-}
-
-
-@dataclasses.dataclass(frozen=True)
-class SerialPairSpec:
-    """Description of a test serial pair variant before fixture creation."""
-
-    left_backend: SerialPairBackend
-    right_backend: SerialPairBackend
-    quirks: frozenset[SerialQuirk]
-    left: str | None = None
-    right: str | None = None
-    serial_class_override: str | None = None
-    esphome_program: str | None = None
-    pair_label: str | None = None
-    wrapped_left_backend: SerialPairBackend | None = None
-    wrapped_right_backend: SerialPairBackend | None = None
-
-    @property
-    def backends(self) -> frozenset[SerialPairBackend]:
-        """Return the distinct backend families exposed to the test pair."""
-        return frozenset({self.left_backend, self.right_backend})
-
-    @property
-    def wrapped_backends(self) -> frozenset[SerialPairBackend]:
-        """Return backend families used underneath a wrapped pair."""
-        return frozenset(
-            backend
-            for backend in (self.wrapped_left_backend, self.wrapped_right_backend)
-            if backend is not None
-        )
 
 
 def _get_posix_serial_classes() -> list[str]:
@@ -149,10 +62,6 @@ def pytest_configure(config: pytest.Config) -> None:
     )
     config.addinivalue_line(
         "markers",
-        "skip_backends(*backends): skip test when either endpoint backend matches a listed SerialPairBackend",
-    )
-    config.addinivalue_line(
-        "markers",
         "skip_quirks(*quirks): skip test when serial_pair exposes any listed quirk",
     )
 
@@ -172,407 +81,205 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def _get_endpoint_backend(path: str) -> SerialPairBackend:
+def _get_endpoint_backend(path: str) -> SerialBackend:
     """Classify a single endpoint into a backend family."""
     lower_path = path.lower()
     if lower_path.startswith("rfc2217://"):
-        return SerialPairBackend.RFC2217
+        return SerialBackend.SER2NET
     if lower_path.startswith("socket://"):
-        return SerialPairBackend.SOCKET
+        return SerialBackend.SOCKET
     if lower_path.startswith("esphome://"):
-        return SerialPairBackend.ESPHOME
-    if re.match(r"^CNC[A-Z]\d+$", path):
-        return SerialPairBackend.COM0COM
-    if re.match(r"^/dev/tnt\d+$", path):
-        return SerialPairBackend.TTY0TTY
-    return SerialPairBackend.ADAPTER
-
-
-def _coerce_serial_pair_backend(value: object) -> SerialPairBackend:
-    """Normalize a backend marker value to SerialPairBackend."""
-    if isinstance(value, SerialPairBackend):
-        return value
-    if isinstance(value, str):
-        return SerialPairBackend(value)
-    raise TypeError(f"Unsupported backend marker value: {value!r}")
-
-
-def _coerce_serial_pair_quirk(value: object) -> SerialQuirk:
-    """Normalize a quirk marker value to SerialQuirk."""
-    if isinstance(value, SerialQuirk):
-        return value
-    if isinstance(value, str):
-        return SerialQuirk(value)
-    raise TypeError(f"Unsupported quirk marker value: {value!r}")
-
-
-def _format_serial_pair_quirks(quirks: Collection[SerialQuirk]) -> str:
-    """Render a quirk set as comma-separated CLI tokens."""
-    return ", ".join(sorted(quirk.value for quirk in quirks))
-
-
-def _get_adapter_pairs(config: pytest.Config) -> list[SerialPairSpec]:
-    """Get parsed adapter pair specifications from config."""
-    pairs: list[SerialPairSpec] = []
-
-    for pair in config.getoption("--adapter-pair"):
-        parts = [part.strip() for part in pair.split(",")]
-        expected_format = "LEFT,RIGHT[,FLAG...]"
-
-        if len(parts) < 2:
-            raise ValueError(
-                f"Invalid adapter pair format: {pair}. Expected {expected_format}"
-            )
-
-        left, right, *raw_flags = parts
-
-        if not left or not right:
-            raise ValueError(
-                f"Invalid adapter pair format: {pair}. Expected {expected_format}"
-            )
-
-        left_backend = _get_endpoint_backend(left)
-        right_backend = _get_endpoint_backend(right)
-
-        pairs.append(
-            SerialPairSpec(
-                left_backend=left_backend,
-                right_backend=right_backend,
-                left=left,
-                right=right,
-                quirks=(
-                    SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
-                    | SERIAL_PAIR_DEFAULT_QUIRKS[right_backend]
-                    | frozenset({SerialQuirk(raw_flag) for raw_flag in raw_flags})
-                ),
-                pair_label=pair,
-            )
-        )
-
-    return pairs
-
-
-def _build_rfc2217_spec(spec: SerialPairSpec) -> SerialPairSpec:
-    """Build an RFC2217 variant that wraps an existing serial pair spec."""
-    return dataclasses.replace(
-        spec,
-        left_backend=SerialPairBackend.RFC2217,
-        right_backend=SerialPairBackend.RFC2217,
-        quirks=(
-            frozenset(spec.quirks)
-            | SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.RFC2217]
-        ),
-        wrapped_left_backend=spec.left_backend,
-        wrapped_right_backend=spec.right_backend,
-    )
-
-
-def _serial_pair_resource_group(spec: SerialPairSpec) -> list[pytest.MarkDecorator]:
-    """Return an xdist group key for specs that share one underlying resource."""
-    if spec.left is not None and spec.right is not None:
-        return [pytest.mark.xdist_group(name=f"pair:{spec.left}:{spec.right}")]
-    else:
-        return []
-
-
-def _can_wrap_adapter_rfc2217(spec: SerialPairSpec) -> bool:
-    """Return True when ser2net can wrap the given concrete endpoints."""
-    local_backends = {
-        SerialPairBackend.ADAPTER,
-        SerialPairBackend.COM0COM,
-        SerialPairBackend.TTY0TTY,
-    }
-
-    return (
-        spec.left is not None
-        and spec.right is not None
-        and not spec.wrapped_backends
-        and spec.left_backend in local_backends
-        and spec.right_backend in local_backends
-    )
+        return SerialBackend.ESPHOME
+    return SerialBackend.ADAPTER
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Parametrize tests based on available backends."""
 
-    # Physical adapters
+    adapters = []
+
+    # Physical adapters passed in with a CLI flag
     if "adapter_pair" in metafunc.fixturenames:
-        pairs = _get_adapter_pairs(metafunc.config)
+        for pair in metafunc.config.getoption("--adapter-pair"):
+            parts = [part.strip() for part in pair.split(",")]
+            expected_format = "LEFT,RIGHT[,FLAG...]"
 
-        metafunc.parametrize(
-            "adapter_pair",
-            [
-                pytest.param(
-                    (spec.left, spec.right),
-                    marks=_serial_pair_resource_group(spec),
-                    id=spec.pair_label,
+            if len(parts) < 2:
+                raise ValueError(
+                    f"Invalid adapter pair format: {pair}. Expected {expected_format}"
                 )
-                for spec in pairs
-            ],
-        )
 
-    # "Virtual" serial pairs
-    if "serial_pair" in metafunc.fixturenames:
-        params: list[pytest.ParameterSet] = []
+            left, right, *raw_flags = parts
 
-        # `socat` can be used as a backend for `socket`, `rfc2217`, and `esphome`
-        if SOCAT_BINARY:
-            params.append(
-                pytest.param(
-                    SerialPairSpec(
-                        left_backend=SerialPairBackend.SOCAT,
-                        right_backend=SerialPairBackend.SOCAT,
-                        quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCAT],
+            if not left or not right:
+                raise ValueError(
+                    f"Invalid adapter pair format: {pair}. Expected {expected_format}"
+                )
+
+            left_backend = _get_endpoint_backend(left)
+            right_backend = _get_endpoint_backend(right)
+
+            adapters.append(
+                UnresolvedSerialPair(
+                    backends=(),
+                    left=left,
+                    right=right,
+                    original_left=left,
+                    original_right=right,
+                    quirks=(
+                        SERIAL_PAIR_DEFAULT_QUIRKS[left_backend]
+                        | SERIAL_PAIR_DEFAULT_QUIRKS[right_backend]
+                        | frozenset({SerialQuirk(raw_flag) for raw_flag in raw_flags})
                     ),
-                    id="socat",
                 )
             )
 
-            if SER2NET_BINARY is not None:
-                params.append(
-                    pytest.param(
-                        _build_rfc2217_spec(
-                            SerialPairSpec(
-                                left_backend=SerialPairBackend.SOCAT,
-                                right_backend=SerialPairBackend.SOCAT,
-                                quirks=SERIAL_PAIR_DEFAULT_QUIRKS[
-                                    SerialPairBackend.SOCAT
-                                ],
-                            )
-                        ),
-                        id="rfc2217+socat",
-                    )
+    if "serial_pair" in metafunc.fixturenames:
+        # `socat` can always be used to create virtual serial port pairs
+        if SOCAT_BINARY:
+            adapters.append(
+                UnresolvedSerialPair(
+                    backends=(SerialBackend.SOCAT,),
+                    left=None,
+                    right=None,
+                    original_left="gen",
+                    original_right="gen",
+                    quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialBackend.SOCAT],
                 )
+            )
 
-            if (
-                sys.version_info >= (3, 11)
-                and aioesphomeapi is not None
-                and (esphome_program := get_esphome_host_daemon_program()) is not None
-            ):
-                params.append(
-                    pytest.param(
-                        SerialPairSpec(
-                            left_backend=SerialPairBackend.ESPHOME,
-                            right_backend=SerialPairBackend.ESPHOME,
-                            esphome_program=esphome_program,
-                            quirks=(
-                                SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.ESPHOME]
-                                | frozenset(
-                                    {
-                                        # Host binary does not support flow control
-                                        SerialQuirk.NO_DTR_DSR,
-                                        SerialQuirk.NO_RTS_CTS,
-                                    }
-                                )
-                            ),
-                        ),
-                        id="esphome",
-                    )
-                )
+        # Transport chains build on top of adapters
+        specs = []
 
-            for cls_name in _get_posix_serial_classes():
-                params.append(
-                    pytest.param(
-                        SerialPairSpec(
-                            left_backend=SerialPairBackend.SOCAT,
-                            right_backend=SerialPairBackend.SOCAT,
-                            serial_class_override=cls_name,
-                            quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCAT],
-                        ),
-                        id=f"socat+{cls_name}",
-                    )
-                )
-
-        # Socket tests are always supported via a loopback TCP server pair
-        params.append(
-            pytest.param(
-                SerialPairSpec(
-                    left_backend=SerialPairBackend.SOCKET,
-                    right_backend=SerialPairBackend.SOCKET,
-                    quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialPairBackend.SOCKET],
-                ),
-                id="socket",
+        # We can always create a TCP server
+        specs.append(
+            UnresolvedSerialPair(
+                backends=(SerialBackend.SOCKET,),
+                left=None,
+                right=None,
+                original_left="gen",
+                original_right="gen",
+                quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialBackend.SOCKET],
             )
         )
 
-        for spec in _get_adapter_pairs(metafunc.config):
-            assert spec.left is not None
-            assert spec.right is not None
-            assert spec.pair_label is not None
+        for adapter_spec in adapters:
+            if SER2NET_BINARY is not None:
+                ser2net_spec = adapter_spec.chain(SerialBackend.SER2NET)
 
-            resource_group = _serial_pair_resource_group(spec)
-
-            # The raw adapter pair
-            params.append(
-                pytest.param(
-                    spec,
-                    marks=resource_group,
-                    id=spec.pair_label,
-                )
-            )
-
-            # And `rfc2217` wrapping, if possible
-            if SER2NET_BINARY is not None and _can_wrap_adapter_rfc2217(spec):
-                params.append(
-                    pytest.param(
-                        _build_rfc2217_spec(spec),
-                        marks=resource_group,
-                        id=f"rfc2217+{spec.pair_label}",
-                    )
+                # ser2net only polls modem line states every second
+                specs.append(
+                    dataclasses.replace(ser2net_spec, modem_line_propagation_delay=1.1)
                 )
 
+            if sys.version_info >= (3, 11) and ESPHOME_HOST_BINARY is not None:
+                specs.append(adapter_spec.chain(SerialBackend.ESPHOME_HOST))
+
+        # For POSIX, we should test base classes on platforms that extend them
+        for cls_name in _get_posix_serial_classes():
+            for adapter in adapters:
+                specs.append(dataclasses.replace(adapter, serial_class=cls_name))
+
+        # Build the pytest parameter groups to limit concurrency to underlying resources
+        params = []
+
+        for spec in specs:
+            marks = []
+
+            if spec.left is not None:
+                marks.append(pytest.mark.xdist_group(name=spec.left))
+
+            if spec.right is not None:
+                marks.append(pytest.mark.xdist_group(name=spec.right))
+
+            param_id = "+".join([b.name for b in spec.backends])
+            if spec.original_left != "gen" and spec.original_right != "gen":
+                param_id += f"+{spec.original_left}-{spec.original_right}"
+
+            params.append(pytest.param(spec, marks=marks, id=param_id))
+
+        # Finally, emit tests
         metafunc.parametrize("serial_pair", params, indirect=True)
 
 
 @pytest.fixture
 def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
-    """Yield a connected serial port pair with backend metadata.
-
-    Parametrized over all available backends: socat, esphome, socket,
-    ser2net-backed RFC2217 variants, and any physical adapter pairs passed via
-    --adapter-pair.
-    """
-    spec: SerialPairSpec = request.param
-    pair_backends = spec.backends
-    quirks = spec.quirks
+    """Fixture for a connected serial port pair with the provided backend."""
+    spec: UnresolvedSerialPair = request.param
 
     for marker in request.node.iter_markers("skip_backends"):
-        blocked_backends = {_coerce_serial_pair_backend(arg) for arg in marker.args}
-        present_backends = pair_backends & blocked_backends
-        if present_backends:
+        if set(marker.args) & set(spec.backends):
             pytest.skip(
-                "Skipped for endpoint backends: "
-                + ", ".join(sorted(backend.value for backend in present_backends))
+                f"Skipping, blocked backends {marker.args} exist in spec {spec}"
             )
 
     for marker in request.node.iter_markers("skip_quirks"):
-        blocked = {_coerce_serial_pair_quirk(arg) for arg in marker.args}
-        present_quirks = blocked & quirks
-        if present_quirks:
-            pytest.skip(
-                "Skipped because serial_pair exposes quirks: "
-                + _format_serial_pair_quirks(present_quirks)
-            )
+        if set(marker.args) & set(spec.quirks):
+            pytest.skip(f"Skipping, blocked quirks {marker.args} exist in spec {spec}")
+
+    # Now we create the chained backends
+    stack = contextlib.ExitStack()
+    left = spec.left
+    right = spec.right
+
+    for backend in spec.backends[::-1]:
+        match backend:
+            # Synthetic backends don't have an underlying serial port
+            case SerialBackend.SOCAT:
+                assert left is None and right is None
+                left, right = stack.enter_context(create_socat_pair())
+
+            case SerialBackend.SOCKET:
+                assert left is None and right is None
+                left, right = stack.enter_context(create_socket_pair())
+
+            # Wrapped backends require one
+            case SerialBackend.ESPHOME_HOST:
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_esphome_pair(left, right))
+
+            case SerialBackend.SER2NET:
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_ser2net_pair(left, right))
+
+            case _:
+                raise ValueError(f"Unsupported backend: {backend!r}")
+
+    # At this point, both left and right should exist
+    assert left is not None
+    assert right is not None
+    assert spec.original_left is not None
+    assert spec.original_right is not None
 
     # Check if a serial class override is requested (e.g. "PosixSerial")
-    serial_class_override = spec.serial_class_override
-
-    if serial_class_override:
-        is_extended = serial_class_override == "ExtendedPosixSerial"
+    if spec.serial_class:
         with (
             patch("sys.platform", "unknown"),
             patch(
                 "serialx.platforms.serial_extended_posix.is_extended_posix",
-                return_value=is_extended,
+                return_value=(spec.serial_class == "ExtendedPosixSerial"),
             ),
         ):
             importlib.reload(serialx.platforms)
 
-        serial_class = serialx.platforms.Serial.__name__
+        assert serialx.platforms.Serial.__name__ == spec.serial_class
 
-        try:
-            if spec.backends == {SerialPairBackend.SOCAT}:
-                with create_socat_pair() as (left, right):
-                    yield SerialPair(
-                        left,
-                        right,
-                        SerialPairBackend.SOCAT,
-                        SerialPairBackend.SOCAT,
-                        serial_class,
-                        quirks,
-                    )
-            elif spec.backends == {SerialPairBackend.SOCKET}:
-                with create_socket_pair() as (left, right):
-                    yield SerialPair(
-                        left,
-                        right,
-                        SerialPairBackend.SOCKET,
-                        SerialPairBackend.SOCKET,
-                        serial_class,
-                        quirks,
-                    )
-        finally:
+    # Finally, emit the spec
+    try:
+        yield SerialPair(
+            left=left,
+            right=right,
+            original_left=spec.original_left,
+            original_right=spec.original_right,
+            backends=spec.backends,
+            quirks=spec.quirks,
+            serial_class=serialx.platforms.Serial.__name__,
+        )
+    finally:
+        stack.close()
+
+        if spec.serial_class:
             importlib.reload(serialx.platforms)
-    elif spec.backends == {SerialPairBackend.SOCAT}:
-        with create_socat_pair() as (left, right):
-            yield SerialPair(
-                left,
-                right,
-                SerialPairBackend.SOCAT,
-                SerialPairBackend.SOCAT,
-                quirks=quirks,
-            )
-    elif spec.backends == {SerialPairBackend.ESPHOME}:
-        assert spec.esphome_program is not None
-        with create_esphome_pair(spec.esphome_program) as (left, right):
-            yield SerialPair(
-                left,
-                right,
-                SerialPairBackend.ESPHOME,
-                SerialPairBackend.ESPHOME,
-                quirks=quirks,
-            )
-    elif spec.backends == {SerialPairBackend.SOCKET}:
-        with create_socket_pair() as (left, right):
-            yield SerialPair(
-                left,
-                right,
-                SerialPairBackend.SOCKET,
-                SerialPairBackend.SOCKET,
-                quirks=quirks,
-            )
-    elif spec.wrapped_backends:
-        if spec.left is not None and spec.right is not None:
-            assert SER2NET_BINARY is not None
-            with create_ser2net_pair(spec.left, spec.right) as (left, right):
-                yield SerialPair(
-                    left,
-                    right,
-                    spec.left_backend,
-                    spec.right_backend,
-                    quirks=quirks,
-                    spawned_ser2net=True,
-                    # ser2net polls modem lines every 1s
-                    modem_line_propagation_delay=1.1,
-                )
-        elif spec.wrapped_backends == {SerialPairBackend.SOCAT}:
-            assert SER2NET_BINARY is not None
-            with create_socat_pair() as (adapter_left, adapter_right):
-                with create_ser2net_pair(adapter_left, adapter_right) as (left, right):
-                    yield SerialPair(
-                        left,
-                        right,
-                        spec.left_backend,
-                        spec.right_backend,
-                        quirks=quirks,
-                        spawned_ser2net=True,
-                        # ser2net polls modem lines every 1s
-                        modem_line_propagation_delay=1.1,
-                    )
-        else:
-            raise AssertionError(f"Unsupported wrapped source spec: {spec!r}")
-    elif spec.left is not None and spec.right is not None:
-        if (
-            spec.backends == {SerialPairBackend.RFC2217}
-            or SerialPairBackend.RFC2217 in spec.backends
-        ):
-            yield SerialPair(
-                spec.left,
-                spec.right,
-                spec.left_backend,
-                spec.right_backend,
-                quirks=quirks,
-            )
-        else:
-            yield SerialPair(
-                spec.left,
-                spec.right,
-                spec.left_backend,
-                spec.right_backend,
-                quirks=quirks,
-            )
-    else:
-        raise AssertionError(f"Unsupported serial pair spec: {spec!r}")
 
 
 @pytest.fixture(autouse=True)
@@ -590,7 +297,7 @@ def _purge_com0com(request: pytest.FixtureRequest) -> None:
         return
 
     candidate: SerialPair = request.getfixturevalue("serial_pair")
-    if candidate.backends != {SerialPairBackend.COM0COM}:
+    if not (candidate.left.startswith("CNC") or candidate.right.startswith("CNC")):
         return
 
     from win32file import (  # noqa: PLC0415

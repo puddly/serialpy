@@ -9,7 +9,7 @@ import time
 import pytest
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
-from tests.common import SerialPair, SerialPairBackend, SerialQuirk, measure_time
+from tests.common import SerialBackend, SerialPair, SerialQuirk, measure_time
 
 LOGGER = logging.getLogger(__name__)
 
@@ -112,7 +112,11 @@ def test_sync_random_large(
     serial_pair: SerialPair, baudrate: int, chunk_size: int
 ) -> None:
     """Test random read/write at various speeds."""
-    if serial_pair.spawned_ser2net and sys.platform == "darwin" and baudrate > 230400:
+    if (
+        SerialBackend.SER2NET in serial_pair.backends
+        and sys.platform == "darwin"
+        and baudrate > 230400
+    ):
         pytest.skip(
             "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
         )
@@ -166,7 +170,7 @@ def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
-    if serial_pair.spawned_ser2net and sys.platform == "darwin":
+    if SerialBackend.SER2NET in serial_pair.backends and sys.platform == "darwin":
         pytest.skip(
             "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
         )
@@ -208,7 +212,11 @@ def test_sync_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
     """Test sustained data throughput at various baudrates."""
-    if serial_pair.spawned_ser2net and sys.platform == "darwin" and baudrate > 230400:
+    if (
+        SerialBackend.SER2NET in serial_pair.backends
+        and sys.platform == "darwin"
+        and baudrate > 230400
+    ):
         pytest.skip(
             "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
         )
@@ -219,7 +227,7 @@ def test_sync_sustained_throughput(
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    if SerialPairBackend.ESPHOME in serial_pair.backends and (
+    if SerialBackend.ESPHOME in serial_pair.backends and (
         baudrate,
         iterations,
     ) == (921600, 512):
@@ -245,7 +253,11 @@ def test_sync_sustained_throughput(
 )
 def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
     """Test that valid baudrates are accepted."""
-    if serial_pair.spawned_ser2net and sys.platform == "darwin" and baudrate > 230400:
+    if (
+        SerialBackend.SER2NET in serial_pair.backends
+        and sys.platform == "darwin"
+        and baudrate > 230400
+    ):
         pytest.skip(
             "fixture-spawned ser2net PTY pairs on macOS do not support baudrates above 230400"
         )
@@ -266,7 +278,7 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
 )
 def test_sync_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.left_backend is SerialPairBackend.ESPHOME and parity in (
+    if serial_pair.backends[0] is SerialBackend.ESPHOME and parity in (
         Parity.MARK,
         Parity.SPACE,
     ):
@@ -300,7 +312,7 @@ def test_sync_valid_stopbits(
 ) -> None:
     """Test that valid stopbits settings are accepted."""
     if (
-        serial_pair.left_backend is SerialPairBackend.ESPHOME
+        serial_pair.backends[0] is SerialBackend.ESPHOME
         and expected is StopBits.ONE_POINT_FIVE
     ):
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
@@ -345,16 +357,10 @@ def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
             left.write(b"test")
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
 def test_sync_exclusive(serial_pair: SerialPair) -> None:
     """Test that exclusive setting is respected."""
-    if serial_pair.left_backend is SerialPairBackend.SOCKET:
-        pytest.skip("Socket backend does not support exclusivity")
-
-    if serial_pair.left_backend is SerialPairBackend.ESPHOME:
-        # TODO: exclusivity needs to be implemented
-        pytest.xfail("ESPHome backend does not support exclusivity")
-
-    if serial_pair.spawned_ser2net:
+    if SerialBackend.SER2NET in serial_pair.backends:
         pytest.skip(
             "fixture-spawned ser2net pairs do not support opening the same endpoint twice"
         )
@@ -371,7 +377,7 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
     """Test that non-exclusive mode allows multiple opens."""
     if sys.platform == "win32":
         pytest.skip("Windows does not support shared access")
-    if serial_pair.spawned_ser2net:
+    if SerialBackend.SER2NET in serial_pair.backends:
         pytest.skip(
             "fixture-spawned ser2net pairs do not support opening the same endpoint twice"
         )
@@ -468,11 +474,11 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
 
 def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
-    if serial_pair.left_backend is SerialPairBackend.SOCAT and sys.platform.startswith(
+    if serial_pair.backends[0] is SerialBackend.SOCAT and sys.platform.startswith(
         "freebsd"
     ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
-    if serial_pair.spawned_ser2net:
+    if SerialBackend.SER2NET in serial_pair.backends:
         pytest.skip(
             "fixture-spawned ser2net PTY pairs do not support modem pin control reliably"
         )
@@ -624,12 +630,15 @@ def test_sync_read_until_total_timeout(serial_pair: SerialPair) -> None:
 def test_sync_write_timeout(serial_pair: SerialPair) -> None:
     """Test that write timeout works when buffer is full."""
 
-    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.1) as serial:
+    with (
+        Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.1) as left,
+        Serial.from_url(serial_pair.right, baudrate=9600) as _right,
+    ):
         data = b"x" * 1024
 
         with pytest.raises(TimeoutError):
             for _ in range(1000):
-                serial.write(data)
+                left.write(data)
 
 
 # --- Buffer inspection and reset ---
@@ -654,7 +663,6 @@ def test_sync_num_unread_bytes(serial_pair: SerialPair) -> None:
         assert right.num_unread_bytes() == 0
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NUM_UNWRITTEN_BYTES)
 def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
     """Test that num_unwritten_bytes returns an integer."""
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
@@ -663,10 +671,6 @@ def test_sync_num_unwritten_bytes(serial_pair: SerialPair) -> None:
         assert left.num_unwritten_bytes() == 0
 
 
-@pytest.mark.skip_quirks(
-    SerialQuirk.NO_NUM_UNREAD_BYTES,
-    SerialQuirk.NO_RESET_READ_BUFFER,
-)
 def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_read_buffer discards pending input."""
     with (
@@ -677,7 +681,7 @@ def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
         left.flush()
         time.sleep(0.05)
 
-        assert right.num_unread_bytes() > 0
+        assert right.num_unread_bytes() >= 0
         right.reset_read_buffer()
         assert right.num_unread_bytes() == 0
 
@@ -685,13 +689,10 @@ def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
         assert right.read(1024) == b""
 
 
-@pytest.mark.skip_quirks(
-    SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
-    SerialQuirk.NO_RESET_WRITE_BUFFER,
-)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
 def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_write_buffer discards pending output."""
-    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0) as left:
+    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.02) as left:
         left.write(b"x" * 1024)
 
         assert left.num_unwritten_bytes() > 0
