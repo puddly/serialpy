@@ -34,8 +34,8 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.SOCAT: frozenset(
         {
             SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_NULL_MODEM,
             SerialQuirk.NO_RTS_CTS,
+            SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
@@ -44,7 +44,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.SOCKET: frozenset(
         {
             SerialQuirk.NO_PIN_READBACK,
-            SerialQuirk.NO_NULL_MODEM,
+            SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RTS_CTS,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_RESET_READ_BUFFER,
@@ -167,9 +167,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         default=[],
         help=(
             "Pair of serial endpoints in format LEFT,RIGHT[,FLAG...] "
-            "(for example /dev/ttyUSB1,/dev/ttyUSB2,pin-readback,null-modem,"
-            "flow-control or /dev/tnt0,/dev/tnt1,no-pin-readback,no-null-modem,"
-            "no-rts-cts or rfc2217://127.0.0.1:5001,"
+            "(e.g. /dev/tnt0,/dev/tnt1,no-pin-readback,no-rts-cts "
+            "or rfc2217://127.0.0.1:5001,"
             "rfc2217://127.0.0.1:5002,no-write-timeout)"
         ),
     )
@@ -364,7 +363,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                                     {
                                         # Host binary does not support flow control
                                         SerialQuirk.NO_PIN_READBACK,
-                                        SerialQuirk.NO_NULL_MODEM,
+                                        SerialQuirk.NO_DTR_DSR,
                                         SerialQuirk.NO_RTS_CTS,
                                     }
                                 )

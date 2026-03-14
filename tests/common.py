@@ -52,8 +52,8 @@ class SerialQuirk(str, enum.Enum):
     """Quirks carried by a serial transport."""
 
     NO_PIN_READBACK = "no-pin-readback"
-    NO_NULL_MODEM = "no-null-modem"
     NO_RTS_CTS = "no-rts-cts"
+    NO_DTR_DSR = "no-dtr-dsr"
     NO_NUM_UNREAD_BYTES = "no-num-unread-bytes"
     NO_RESET_READ_BUFFER = "no-reset-read-buffer"
     NO_NUM_UNWRITTEN_BYTES = "no-num-unwritten-bytes"

@@ -712,7 +712,7 @@ def test_sync_buffer_methods(serial_pair: SerialPair) -> None:
         assert left.num_unwritten_bytes() == 0
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_rts_cts(serial_pair: SerialPair) -> None:
     """Test that RTS on one side controls CTS on the other (null modem)."""
 
@@ -737,7 +737,7 @@ def test_rts_cts(serial_pair: SerialPair) -> None:
         assert left.get_modem_pins().cts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_DSR)
 def test_dtr_dsr_cd(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls DSR and CD on the other (null modem)."""
 
@@ -766,7 +766,7 @@ def test_dtr_dsr_cd(serial_pair: SerialPair) -> None:
         assert left.get_modem_pins().car is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_deprecated_null_modem_pins(serial_pair: SerialPair) -> None:
     """Test null modem cross-port behavior via deprecated property aliases."""
 
@@ -804,7 +804,7 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test RTS/CTS deassertion on open."""
     if serial_pair.serial_class in (
@@ -847,7 +847,7 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test RTS/CTS hang up on close."""
     if serial_pair.serial_class in (
@@ -898,7 +898,7 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -948,7 +948,7 @@ def test_deassert_on_open_with_rtscts(
             assert left.get_modem_pins().cts is expected_state
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM, SerialQuirk.NO_RTS_CTS)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""
 

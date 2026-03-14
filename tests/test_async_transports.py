@@ -896,7 +896,7 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
     await connection_lost_event.wait()
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 async def test_async_rts_cts(serial_pair: SerialPair) -> None:
     """Test that RTS on one side controls CTS on the other (null modem)."""
 
@@ -921,7 +921,7 @@ async def test_async_rts_cts(serial_pair: SerialPair) -> None:
         assert (await left.transport.get_modem_pins()).cts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_DTR_DSR)
 async def test_async_dtr_dsr_cd(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls DSR and CD on the other (null modem)."""
 
@@ -951,7 +951,7 @@ async def test_async_dtr_dsr_cd(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test RTS/CTS deassertion on open."""
 
@@ -995,7 +995,7 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test RTS/CTS hang up on close."""
     if serial_pair.serial_class in (
@@ -1049,7 +1049,7 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_quirks(SerialQuirk.NO_NULL_MODEM)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
