@@ -116,6 +116,20 @@ class SocketSerial(BaseSerial):
     def reset_read_buffer(self) -> None:
         """Reset the read buffer."""
 
+        # Drain all of the pending data in nonblocking mode
+        with self._socket_timeout(0):
+            while True:
+                if self._socket is None:
+                    break
+
+                try:
+                    data = self._socket.recv(1024)
+                except BlockingIOError:
+                    break
+
+                if not data:
+                    break
+
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
