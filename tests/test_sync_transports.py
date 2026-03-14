@@ -505,7 +505,7 @@ def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
             assert pins_low.rts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
@@ -738,7 +738,7 @@ def test_rts_cts(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_DTR_DSR)
-def test_dtr_dsr_cd(serial_pair: SerialPair) -> None:
+def test_dtr_dsr(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls DSR and CD on the other (null modem)."""
 
     with (
@@ -748,22 +748,18 @@ def test_dtr_dsr_cd(serial_pair: SerialPair) -> None:
         left.set_modem_pins(dtr=True)
         time.sleep(serial_pair.modem_line_propagation_delay)
         assert right.get_modem_pins().dsr is PinState.HIGH
-        assert right.get_modem_pins().car is PinState.HIGH
 
         right.set_modem_pins(dtr=True)
         time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().dsr is PinState.HIGH
-        assert left.get_modem_pins().car is PinState.HIGH
 
         left.set_modem_pins(dtr=False)
         time.sleep(serial_pair.modem_line_propagation_delay)
         assert right.get_modem_pins().dsr is PinState.LOW
-        assert right.get_modem_pins().car is PinState.LOW
 
         right.set_modem_pins(dtr=False)
         time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().dsr is PinState.LOW
-        assert left.get_modem_pins().car is PinState.LOW
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)

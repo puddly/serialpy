@@ -51,7 +51,6 @@ class SerialPairBackend(str, enum.Enum):
 class SerialQuirk(str, enum.Enum):
     """Quirks carried by a serial transport."""
 
-    NO_PIN_READBACK = "no-pin-readback"
     NO_RTS_CTS = "no-rts-cts"
     NO_DTR_DSR = "no-dtr-dsr"
     NO_NUM_UNREAD_BYTES = "no-num-unread-bytes"

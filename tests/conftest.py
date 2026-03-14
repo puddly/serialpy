@@ -33,7 +33,6 @@ except ImportError:
 SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     SerialPairBackend.SOCAT: frozenset(
         {
-            SerialQuirk.NO_PIN_READBACK,
             SerialQuirk.NO_RTS_CTS,
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
@@ -43,7 +42,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialPairBackend, frozenset[SerialQuirk]] = {
     ),
     SerialPairBackend.SOCKET: frozenset(
         {
-            SerialQuirk.NO_PIN_READBACK,
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RTS_CTS,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
@@ -362,7 +360,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                                 | frozenset(
                                     {
                                         # Host binary does not support flow control
-                                        SerialQuirk.NO_PIN_READBACK,
                                         SerialQuirk.NO_DTR_DSR,
                                         SerialQuirk.NO_RTS_CTS,
                                     }

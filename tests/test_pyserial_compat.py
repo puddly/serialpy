@@ -63,7 +63,7 @@ def test_compat_deprecated_aliases(serial_pair: SerialPair) -> None:
         left.flushOutput()
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_compat_deprecated_pin_aliases(serial_pair: SerialPair) -> None:
     """Test deprecated pin property aliases on an opened serial port."""
     with (

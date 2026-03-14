@@ -360,7 +360,7 @@ jobs:
         shell: pwsh
         run: |
           python -m serialx.tools.list_ports
-          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0,no-pin-readback,no-pause-writing-callbacks
+          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:

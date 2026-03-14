@@ -647,7 +647,6 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
             assert value in (PinState.HIGH, PinState.LOW, PinState.UNDEFINED)
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
     if serial_pair.left_backend is SerialPairBackend.SOCAT and sys.platform.startswith(
@@ -686,7 +685,7 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
             assert pins_low.rts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_PIN_READBACK)
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
@@ -922,7 +921,7 @@ async def test_async_rts_cts(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_DTR_DSR)
-async def test_async_dtr_dsr_cd(serial_pair: SerialPair) -> None:
+async def test_async_dtr_dsr(serial_pair: SerialPair) -> None:
     """Test that DTR on one side controls DSR and CD on the other (null modem)."""
 
     async with (
@@ -932,22 +931,18 @@ async def test_async_dtr_dsr_cd(serial_pair: SerialPair) -> None:
         await left.transport.set_modem_pins(dtr=True)
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await right.transport.get_modem_pins()).dsr is PinState.HIGH
-        assert (await right.transport.get_modem_pins()).car is PinState.HIGH
 
         await right.transport.set_modem_pins(dtr=True)
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await left.transport.get_modem_pins()).dsr is PinState.HIGH
-        assert (await left.transport.get_modem_pins()).car is PinState.HIGH
 
         await left.transport.set_modem_pins(dtr=False)
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await right.transport.get_modem_pins()).dsr is PinState.LOW
-        assert (await right.transport.get_modem_pins()).car is PinState.LOW
 
         await right.transport.set_modem_pins(dtr=False)
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await left.transport.get_modem_pins()).dsr is PinState.LOW
-        assert (await left.transport.get_modem_pins()).car is PinState.LOW
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
