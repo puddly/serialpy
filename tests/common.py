@@ -191,7 +191,11 @@ def _wait_for_tcp_listener(
 
         time.sleep(0.01)
 
-    raise RuntimeError(f"{name} did not start listening on 127.0.0.1:{port}")
+    raise RuntimeError(
+        f"{name} did not start listening on 127.0.0.1:{port}."
+        f"\nstdout: {process.stdout.read() if process.stdout else None}"
+        f"\nstderr: {process.stderr.read() if process.stderr else None}"
+    )
 
 
 @contextlib.contextmanager

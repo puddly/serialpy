@@ -278,9 +278,9 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
 )
 def test_sync_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.backends[0] in (
-        SerialBackend.ESPHOME_HOST,
-        SerialBackend.ESPHOME,
+    if (
+        SerialBackend.ESPHOME_HOST in serial_pair.backends
+        or SerialBackend.ESPHOME in serial_pair.backends
     ) and parity in (
         Parity.MARK,
         Parity.SPACE,
@@ -315,9 +315,9 @@ def test_sync_valid_stopbits(
 ) -> None:
     """Test that valid stopbits settings are accepted."""
     if (
-        serial_pair.backends[0] in (SerialBackend.ESPHOME_HOST, SerialBackend.ESPHOME)
-        and expected is StopBits.ONE_POINT_FIVE
-    ):
+        SerialBackend.ESPHOME_HOST in serial_pair.backends
+        or SerialBackend.ESPHOME in serial_pair.backends
+    ) and expected is StopBits.ONE_POINT_FIVE:
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
     if (
         serial_pair.serial_class not in ("Win32Serial",)
@@ -477,7 +477,7 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
 
 def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
-    if serial_pair.backends[0] is SerialBackend.SOCAT and sys.platform.startswith(
+    if SerialBackend.SOCAT in serial_pair.backends and sys.platform.startswith(
         "freebsd"
     ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
