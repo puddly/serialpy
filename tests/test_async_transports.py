@@ -280,7 +280,10 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
 )
 async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.backends[0] is SerialBackend.ESPHOME and parity in (
+    if serial_pair.backends[0] in (
+        SerialBackend.ESPHOME_HOST,
+        SerialBackend.ESPHOME,
+    ) and parity in (
         Parity.MARK,
         Parity.SPACE,
     ):
@@ -317,7 +320,7 @@ async def test_async_valid_stopbits(
 ) -> None:
     """Test that valid stopbits settings are accepted."""
     if (
-        serial_pair.backends[0] is SerialBackend.ESPHOME
+        serial_pair.backends[0] in (SerialBackend.ESPHOME_HOST, SerialBackend.ESPHOME)
         and expected is StopBits.ONE_POINT_FIVE
     ):
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
