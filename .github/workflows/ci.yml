@@ -329,25 +329,38 @@ jobs:
       - name: Check out code from GitHub
         uses: actions/checkout@v6
       - name: Set up Python
+        id: python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Cache Rust build
-        id: cache-rust
-        uses: actions/cache@v4
+          check-latest: true
+      - name: Restore base Python virtual environment
+        id: cache-venv
+        uses: actions/cache/restore@v4
         with:
-          path: target
-          key: rust-macos-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src/**') }}
-          restore-keys: |
-            rust-macos-
+          path: venv
+          key: >-
+            1-${{ runner.os }}-base-venv-${{
+            steps.python.outputs.python-version }}-${{
+            hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
-        if: steps.cache-rust.outputs.cache-hit != 'true'
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@stable
-      - name: Install dependencies
+      - name: Create Python virtual environment
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
+          python -m venv venv
+          . venv/bin/activate
           pip install -e .[dev] pytest-cov
+      - name: Cache base Python virtual environment
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: venv
+          key: ${{ steps.cache-venv.outputs.cache-primary-key }}
       - name: Run tests
         run: |
+          . venv/bin/activate
           pytest --timeout=20 --cov=serialx tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -378,26 +391,39 @@ jobs:
         run: |
           .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr
       - name: Set up Python
+        id: python
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
-      - name: Cache Rust build
-        id: cache-rust
-        uses: actions/cache@v4
+          check-latest: true
+      - name: Restore base Python virtual environment
+        id: cache-venv
+        uses: actions/cache/restore@v4
         with:
-          path: target
-          key: rust-windows-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src/**') }}
-          restore-keys: |
-            rust-windows-
+          path: venv
+          key: >-
+            1-${{ runner.os }}-base-venv-${{
+            steps.python.outputs.python-version }}-${{
+            hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
-        if: steps.cache-rust.outputs.cache-hit != 'true'
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         uses: dtolnay/rust-toolchain@stable
-      - name: Install dependencies
+      - name: Create Python virtual environment
+        if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
+          python -m venv venv
+          venv\Scripts\activate
           pip install -e .[dev] pytest-cov
+      - name: Cache base Python virtual environment
+        if: steps.cache-venv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: venv
+          key: ${{ steps.cache-venv.outputs.cache-primary-key }}
       - name: Run tests
         shell: pwsh
         run: |
+          venv\Scripts\activate
           python -m serialx.tools.list_ports
           pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0
       - name: Upload coverage artifact
