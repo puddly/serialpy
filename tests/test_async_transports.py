@@ -214,9 +214,7 @@ async def test_async_rapid_small_writes(serial_pair: SerialPair) -> None:
         assert bytes(received) == expected
 
 
-@pytest.mark.parametrize(
-    "baudrate,iterations", [(9600, 4), (115200, 32), (921600, 32)]
-)
+@pytest.mark.parametrize("baudrate,iterations", [(9600, 4), (115200, 32), (921600, 32)])
 async def test_async_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
