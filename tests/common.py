@@ -425,11 +425,9 @@ def create_hub4com_pair(
             _wait_for_ready(
                 proc,
                 stream=proc.stdout,
-                marker="Listen(",
+                marker="Started TCP(",
                 name="hub4com",
             )
-
-        time.sleep(0.3)
 
         yield (
             f"rfc2217://127.0.0.1:{left_port}",
