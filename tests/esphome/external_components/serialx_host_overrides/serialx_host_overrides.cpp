@@ -52,6 +52,14 @@ void SerialxHostOverridesComponent::setup() {
   ESP_LOGI(TAG, "Overrode API port from %s", this->api_port_env_.c_str());
 }
 
+void SerialxHostOverridesComponent::loop() {
+  if (!this->ready_printed_) {
+    fprintf(stderr, "Ready\n");
+    fflush(stderr);
+    this->ready_printed_ = true;
+  }
+}
+
 }  // namespace esphome::serialx_host_overrides
 
 #endif  // USE_HOST

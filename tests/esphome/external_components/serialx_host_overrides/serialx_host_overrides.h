@@ -12,6 +12,7 @@ namespace esphome::serialx_host_overrides {
 class SerialxHostOverridesComponent : public Component {
  public:
   void setup() override;
+  void loop() override;
   float get_setup_priority() const override { return setup_priority::BUS + 1.0f; }
 
   void set_left_uart(uart::HostUartComponent *uart) { this->left_uart_ = uart; }
@@ -26,6 +27,7 @@ class SerialxHostOverridesComponent : public Component {
   std::string left_uart_env_;
   std::string right_uart_env_;
   std::string api_port_env_;
+  bool ready_printed_{false};
 };
 
 }  // namespace esphome::serialx_host_overrides

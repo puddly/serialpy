@@ -13,7 +13,7 @@ import socket
 import subprocess
 import tempfile
 import time
-from typing import Any, NamedTuple
+from typing import IO, Any, NamedTuple
 
 from typing_extensions import Self
 
@@ -182,34 +182,31 @@ def _pick_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _wait_for_tcp_listener(
+def _wait_for_ready(
     process: subprocess.Popen[Any],
-    port: int,
-    timeout: float = 5.0,
-    name: str = "process",
+    stream: IO[bytes] | None,
+    marker: str,
+    name: str,
 ) -> None:
-    deadline = time.monotonic() + timeout
+    """Wait for a process to print a ready marker to stdout or stderr."""
+    assert stream is not None
 
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
+    marker_bytes = marker.encode()
+    output = bytearray()
+
+    while True:
+        line = stream.readline()
+
+        if not line:
             raise RuntimeError(
-                f"{name} exited before listening (code={process.returncode})"
-                f"\nstdout: {process.stdout.read() if process.stdout else None}"
-                f"\nstderr: {process.stderr.read() if process.stderr else None}"
+                f"{name} exited before ready (code={process.returncode})"
+                f"\n{stream}: {output.decode(errors='replace')}"
             )
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.1)
-            if sock.connect_ex(("127.0.0.1", port)) == 0:
-                return
+        output.extend(line)
 
-        time.sleep(0.01)
-
-    raise RuntimeError(
-        f"{name} did not start listening on 127.0.0.1:{port}."
-        f"\nstdout: {process.stdout.read() if process.stdout else None}"
-        f"\nstderr: {process.stderr.read() if process.stderr else None}"
-    )
+        if marker_bytes in line:
+            return
 
 
 @contextlib.contextmanager
@@ -227,11 +224,16 @@ def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, st
         [ESPHOME_HOST_BINARY],
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
 
     try:
-        _wait_for_tcp_listener(process, api_port, name="ESPHome host daemon")
+        _wait_for_ready(
+            process,
+            stream=process.stderr,
+            marker="Ready",
+            name="ESPHome host daemon",
+        )
 
         yield (
             f"esphome://127.0.0.1:{api_port}/0",
@@ -258,22 +260,21 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
         proc = subprocess.Popen(
             [
                 "socat",
+                "-d",
+                "-d",
                 f"PTY,link={in_tty},raw,echo=0",
                 f"PTY,link={out_tty},raw,echo=0",
             ],
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
 
-        # Give socat time to set up the PTYs
-        for _attempt in range(100):
-            if os.path.exists(in_tty) and os.path.exists(out_tty):
-                break
-
-            time.sleep(0.01)
-        else:
-            raise RuntimeError("socat PTYs were not created in time")
-
-        assert proc.returncode is None
+        _wait_for_ready(
+            proc,
+            marker="starting data transfer loop",
+            stream=proc.stderr,
+            name="socat",
+        )
 
         try:
             yield (in_tty, out_tty)
@@ -310,6 +311,7 @@ def create_ser2net_pair(
         [
             "ser2net",
             "-n",  # Don't detach from the controlling terminal
+            "-r",  # Print "Ready" to stdout when listening
             "-u",  # Disable UUCP locking
             "-Y", json.dumps(config)
         ],
@@ -319,8 +321,12 @@ def create_ser2net_pair(
     # fmt: on
 
     try:
-        for port in (left_port, right_port):
-            _wait_for_tcp_listener(proc, port, name="ser2net")
+        _wait_for_ready(
+            proc,
+            stream=proc.stdout,
+            marker="Ready",
+            name="ser2net",
+        )
 
         yield (
             f"rfc2217://127.0.0.1:{left_port}",
@@ -373,8 +379,13 @@ def create_hub4com_pair(
             )
             procs.append(proc)
 
-        for proc, port in zip(procs, (left_port, right_port)):
-            _wait_for_tcp_listener(proc, port, name="hub4com")
+        for proc in procs:
+            _wait_for_ready(
+                proc,
+                stream=proc.stdout,
+                marker="Listen(",
+                name="hub4com",
+            )
 
         time.sleep(0.3)
 
