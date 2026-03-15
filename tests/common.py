@@ -194,6 +194,8 @@ def _wait_for_tcp_listener(
         if process.poll() is not None:
             raise RuntimeError(
                 f"{name} exited before listening (code={process.returncode})"
+                f"\nstdout: {process.stdout.read() if process.stdout else None}"
+                f"\nstderr: {process.stderr.read() if process.stderr else None}"
             )
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
