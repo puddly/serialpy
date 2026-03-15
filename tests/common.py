@@ -111,6 +111,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
         {
             SerialQuirk.NO_BACKPRESSURE,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
         }
     ),
@@ -118,6 +119,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
         {
             SerialQuirk.NO_BACKPRESSURE,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
         }
     ),

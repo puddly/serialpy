@@ -473,7 +473,8 @@ class RFC2217Serial(SocketSerial):
             rtscts=self._rtscts,
             xonxoff=self._xonxoff,
         ):
-            self._send_and_wait(cmd)
+            with self._socket_timeout(self._connect_timeout):
+                self._send_and_wait(cmd)
 
         LOGGER.debug("Port configuration complete")
 
