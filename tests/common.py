@@ -350,11 +350,7 @@ def create_hub4com_pair(
         "--create-filter=purge,com,purge",
         "--add-filters=0:com",
         "--add-filters=1:tcp",
-        "--bi-route=0:1",
-        "--no-default-fc-route=All:All",
         "--octs=off",
-        "--odsr=off",
-        "--idsr=off",
         "--write-limit=65536",
     ]
 
