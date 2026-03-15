@@ -22,6 +22,10 @@ from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
 SER2NET_BINARY = shutil.which("ser2net")
+HUB4COM_BINARY = shutil.which(
+    "hub4com.exe",
+    path=Path(__file__).resolve().parent / "data" / "windows" / "hub4com-2.1.0.0-386",
+) or shutil.which("hub4com")
 ESPHOME_HOST_BINARY = shutil.which(
     "program",
     path=(
@@ -45,6 +49,7 @@ class SerialBackend(str, enum.Enum):
     ESPHOME_HOST = "esphome_host"
     ADAPTER = "adapter"
     SER2NET = "rfc2217"
+    HUB4COM = "hub4com"
 
 
 class SerialQuirk(str, enum.Enum):
@@ -101,6 +106,13 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
         }
     ),
     SerialBackend.SER2NET: frozenset(
+        {
+            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+        }
+    ),
+    SerialBackend.HUB4COM: frozenset(
         {
             SerialQuirk.NO_BACKPRESSURE,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
@@ -316,6 +328,61 @@ def create_ser2net_pair(
         if proc.returncode is None:
             proc.terminate()
             proc.wait()
+
+
+@contextlib.contextmanager
+def create_hub4com_pair(
+    left_adapter: str, right_adapter: str
+) -> Iterator[tuple[str, str]]:
+    """Create a pair of independent RFC2217 sockets using hub4com on Windows."""
+    assert HUB4COM_BINARY is not None
+
+    left_port = _pick_free_port()
+    right_port = _pick_free_port()
+
+    hub4com_args = [
+        "--create-filter=escparse,com,parse",
+        "--create-filter=telnet,tcp,telnet:--comport=server --suppress-echo=yes",
+        "--create-filter=lsrmap,tcp,lsrmap",
+        "--create-filter=pinmap,tcp,pinmap:--cts=cts --dsr=dsr --dcd=dcd --ring=ring",
+        "--create-filter=linectl,tcp,lc:--br=local --lc=local",
+        "--create-filter=pinmap,com,pinmap:--rts=cts --dtr=dsr --break=break",
+        "--create-filter=linectl,com,lc:--br=remote --lc=remote",
+        "--create-filter=purge,com,purge",
+        "--add-filters=0:com",
+        "--add-filters=1:tcp",
+        "--octs=off",
+    ]
+
+    procs = []
+
+    try:
+        for adapter, port in ((left_adapter, left_port), (right_adapter, right_port)):
+            proc = subprocess.Popen(
+                [
+                    HUB4COM_BINARY,
+                    *hub4com_args,
+                    f"\\\\.\\{adapter}",
+                    "--use-driver=tcp",
+                    f"*{port}",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            procs.append(proc)
+
+        for proc, port in zip(procs, (left_port, right_port)):
+            _wait_for_tcp_listener(proc, port, name="hub4com")
+
+        yield (
+            f"rfc2217://127.0.0.1:{left_port}",
+            f"rfc2217://127.0.0.1:{right_port}",
+        )
+    finally:
+        for proc in procs:
+            if proc.returncode is None:
+                proc.terminate()
+                proc.wait()
 
 
 @contextlib.asynccontextmanager

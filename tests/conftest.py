@@ -16,6 +16,7 @@ import serialx
 import serialx.platforms
 from tests.common import (
     ESPHOME_HOST_BINARY,
+    HUB4COM_BINARY,
     SER2NET_BINARY,
     SERIAL_PAIR_DEFAULT_QUIRKS,
     SOCAT_BINARY,
@@ -24,6 +25,7 @@ from tests.common import (
     SerialQuirk,
     UnresolvedSerialPair,
     create_esphome_pair,
+    create_hub4com_pair,
     create_ser2net_pair,
     create_socat_pair,
 )
@@ -173,6 +175,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                     dataclasses.replace(ser2net_spec, modem_line_propagation_delay=1.1)
                 )
 
+            if HUB4COM_BINARY is not None:
+                specs.append(adapter_spec.chain(SerialBackend.HUB4COM))
+
             if sys.version_info >= (3, 11) and ESPHOME_HOST_BINARY is not None:
                 specs.append(adapter_spec.chain(SerialBackend.ESPHOME_HOST))
 
@@ -242,6 +247,10 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             case SerialBackend.SER2NET:
                 assert left is not None and right is not None
                 left, right = stack.enter_context(create_ser2net_pair(left, right))
+
+            case SerialBackend.HUB4COM:
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_hub4com_pair(left, right))
 
             case _:
                 raise ValueError(f"Unsupported backend: {backend!r}")
