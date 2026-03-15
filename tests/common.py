@@ -13,7 +13,7 @@ import socket
 import subprocess
 import tempfile
 import time
-from typing import IO, Any, NamedTuple
+from typing import IO, Any
 
 from typing_extensions import Self
 
@@ -167,15 +167,6 @@ class SerialPair(UnresolvedSerialPair):
     serial_class: str
 
 
-class BridgedSocatPair(NamedTuple):
-    """A bridged socat pair where killing one side propagates EOF to the other."""
-
-    left: str
-    right: str
-    left_process: asyncio.subprocess.Process
-    right_process: asyncio.subprocess.Process
-
-
 def _pick_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -252,36 +243,62 @@ def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, st
 
 @contextlib.contextmanager
 def create_socat_pair() -> Iterator[tuple[str, str]]:
-    """Create a pair of virtual PTYs using socat (synchronous)."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        in_tty = os.path.join(tmpdir, "ttyTestIn")
-        out_tty = os.path.join(tmpdir, "ttyTestOut")
+    """Create a bridged pair of virtual PTYs using two socat processes.
 
-        proc = subprocess.Popen(
+    Each PTY is managed by its own socat process, linked via a UNIX socket.
+    Killing one socat process closes its PTY and propagates EOF to the other.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        left_tty = os.path.join(tmpdir, "ttyLeft")
+        right_tty = os.path.join(tmpdir, "ttyRight")
+        bridge = os.path.join(tmpdir, "bridge.sock")
+
+        # Start the right side first (UNIX-LISTEN), then the left (UNIX-CONNECT)
+        right_proc = subprocess.Popen(
             [
                 "socat",
                 "-d",
                 "-d",
-                f"PTY,link={in_tty},raw,echo=0",
-                f"PTY,link={out_tty},raw,echo=0",
+                f"PTY,link={right_tty},raw,echo=0",
+                f"UNIX-LISTEN:{bridge}",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
         )
 
         _wait_for_ready(
-            proc,
+            right_proc,
+            marker="listening on",
+            stream=right_proc.stderr,
+            name="socat(right)",
+        )
+
+        left_proc = subprocess.Popen(
+            [
+                "socat",
+                "-d",
+                "-d",
+                f"PTY,link={left_tty},raw,echo=0",
+                f"UNIX-CONNECT:{bridge}",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        _wait_for_ready(
+            left_proc,
             marker="starting data transfer loop",
-            stream=proc.stderr,
-            name="socat",
+            stream=left_proc.stderr,
+            name="socat(left)",
         )
 
         try:
-            yield (in_tty, out_tty)
+            yield (left_tty, right_tty)
         finally:
-            if proc.returncode is None:
-                proc.terminate()
-                proc.wait()
+            for proc in (left_proc, right_proc):
+                if proc.returncode is None:
+                    proc.terminate()
+                    proc.wait()
 
 
 @contextlib.contextmanager
