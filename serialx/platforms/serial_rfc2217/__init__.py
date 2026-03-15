@@ -443,7 +443,8 @@ class RFC2217Serial(SocketSerial):
             if self._engine.check_negotiation_response():
                 return
 
-            self._recv_and_process()
+            with self._socket_timeout(self._connect_timeout):
+                self._recv_and_process()
 
     def _configure_port(self) -> None:
         """Send serial port configuration to the access server."""
