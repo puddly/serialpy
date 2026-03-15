@@ -695,7 +695,7 @@ def test_sync_reset_read_buffer(serial_pair: SerialPair) -> None:
 @pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
 def test_sync_reset_write_buffer(serial_pair: SerialPair) -> None:
     """Test that reset_write_buffer discards pending output."""
-    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0.02) as left:
+    with Serial.from_url(serial_pair.left, baudrate=9600, write_timeout=0) as left:
         left.write(b"x" * 1024)
 
         assert left.num_unwritten_bytes() > 0

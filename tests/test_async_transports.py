@@ -828,8 +828,10 @@ async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> Non
 
         assert data_received_count > 0
     finally:
-        out_transport.close()
-        in_transport.close()
+        in_transport.abort()
+        out_transport.abort()
+        await in_transport.wait_closed()
+        await out_transport.wait_closed()
 
 
 # --- Adapter-specific tests ---

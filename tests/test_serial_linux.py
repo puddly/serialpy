@@ -27,7 +27,7 @@ TIOCGSERIAL = 0x0000541E
 @patch("serialx.platforms.serial_linux.TIOCSSERIAL", TIOCSSERIAL)
 def test_tiocgserial_ioctl_not_supported(serial_pair: SerialPair) -> None:
     """Test that TIOCGSERIAL ioctl not supported is handled gracefully."""
-    if serial_pair.backends[-1] != SerialBackend.ADAPTER:
+    if serial_pair.backends and serial_pair.backends[-1] != SerialBackend.ADAPTER:
         pytest.skip("This test is only relevant for the adapter backend")
 
     ioctl_orig = fcntl.ioctl
@@ -52,7 +52,7 @@ def test_tiocgserial_ioctl_not_supported(serial_pair: SerialPair) -> None:
 @patch("serialx.platforms.serial_linux.TIOCSSERIAL", TIOCSSERIAL)
 def test_tiocgserial_ioctl_unexpected(serial_pair: SerialPair) -> None:
     """Test that TIOCGSERIAL ioctl not supported is handled gracefully."""
-    if serial_pair.backends[-1] != SerialBackend.ADAPTER:
+    if serial_pair.backends and serial_pair.backends[-1] != SerialBackend.ADAPTER:
         pytest.skip("This test is only relevant for the adapter backend")
 
     ioctl_orig = fcntl.ioctl
@@ -78,7 +78,7 @@ async def test_async_linux_race_condition_connect_close(
     serial_pair: SerialPair,
 ) -> None:
     """Test that calling `close()` during connection halts a `connection_made` call."""
-    if serial_pair.backends[-1] != SerialBackend.ADAPTER:
+    if serial_pair.backends and serial_pair.backends[-1] != SerialBackend.ADAPTER:
         pytest.skip("This test is only relevant for the adapter backend")
 
     started_configuring = threading.Event()
@@ -141,7 +141,7 @@ async def test_async_linux_wait_closed_when_close_task_cancelled(
     serial_pair: SerialPair,
 ) -> None:
     """wait_closed should resolve even if close task is cancelled before start."""
-    if serial_pair.backends[-1] != SerialBackend.ADAPTER:
+    if serial_pair.backends and serial_pair.backends[-1] != SerialBackend.ADAPTER:
         pytest.skip("This test is only relevant for the adapter backend")
 
     loop = asyncio.get_running_loop()
@@ -166,7 +166,7 @@ async def test_async_linux_wait_closed_when_connection_lost_raises(
     serial_pair: SerialPair,
 ) -> None:
     """wait_closed should resolve even if protocol.connection_lost raises."""
-    if serial_pair.backends[-1] != SerialBackend.ADAPTER:
+    if serial_pair.backends and serial_pair.backends[-1] != SerialBackend.ADAPTER:
         pytest.skip("This test is only relevant for the adapter backend")
 
     class RaisingProtocol(asyncio.Protocol):
@@ -187,7 +187,7 @@ async def test_async_linux_close_clears_fileno_when_fd_already_closed(
     serial_pair: SerialPair,
 ) -> None:
     """Close should clear fileno even if fd was externally closed."""
-    if serial_pair.backends[-1] != SerialBackend.ADAPTER:
+    if serial_pair.backends and serial_pair.backends[-1] != SerialBackend.ADAPTER:
         pytest.skip("This test is only relevant for the adapter backend")
 
     loop = asyncio.get_running_loop()
