@@ -353,10 +353,11 @@ def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
 @pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
 def test_sync_exclusive(serial_pair: SerialPair) -> None:
     """Test that exclusive setting is respected."""
-    if SerialBackend.SER2NET in serial_pair.backends:
-        pytest.skip(
-            "fixture-spawned ser2net pairs do not support opening the same endpoint twice"
-        )
+    if (
+        SerialBackend.SER2NET in serial_pair.backends
+        or SerialBackend.ESPHOME_HOST in serial_pair.backends
+    ):
+        pytest.skip("network-based transports do not enforce OS-level exclusive access")
 
     with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True) as serial:
         assert serial.exclusive is True
