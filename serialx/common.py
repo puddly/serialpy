@@ -399,9 +399,6 @@ class BaseSerial(io.RawIOBase):
             if timeout is not None:
                 timeout -= get_elapsed()
 
-            if not byte:
-                break
-
             buffer += byte
 
             if buffer[-expected_len:] == expected:
