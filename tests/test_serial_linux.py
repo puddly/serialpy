@@ -202,3 +202,13 @@ async def test_async_linux_close_clears_fileno_when_fd_already_closed(
     await transport.wait_closed()
 
     assert transport._fileno is None
+
+
+@pytest.mark.parametrize("low_latency", [True, False])
+def test_low_latency(serial_pair: SerialPair, low_latency: bool) -> None:
+    """Test that low_latency parameter is accepted."""
+    if serial_pair.backends and serial_pair.backends[-1] != SerialBackend.ADAPTER:
+        pytest.skip("This test is only relevant for the adapter backend")
+
+    with LinuxSerial(serial_pair.left, baudrate=115200, low_latency=low_latency):
+        pass

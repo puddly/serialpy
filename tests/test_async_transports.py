@@ -265,6 +265,21 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
         writer.write(b"test")
 
 
+async def test_async_nonstandard_baudrate(serial_pair: SerialPair) -> None:
+    """Test that a non-standard baudrate (no termios constant) is accepted."""
+    if serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"):
+        pytest.skip("Base POSIX backends only support standard baudrates")
+    if SerialBackend.SER2NET in serial_pair.backends and sys.platform == "darwin":
+        pytest.skip("ser2net PTY pairs on macOS do not support non-standard baudrates")
+
+    async with async_create_reader_writer_pair(
+        serial_pair.left, serial_pair.right, baudrate=200000
+    ) as (_, writer_left, reader_right, _):
+        assert writer_left.transport.baudrate == 200000
+        writer_left.write(b"test")
+        assert await reader_right.readexactly(4) == b"test"
+
+
 @pytest.mark.parametrize(
     "parity", [Parity.NONE, Parity.ODD, Parity.EVEN, Parity.MARK, Parity.SPACE]
 )
