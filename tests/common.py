@@ -341,7 +341,6 @@ def create_hub4com_pair(
     right_port = _pick_free_port()
 
     hub4com_args = [
-        "--create-filter=escparse,com,parse",
         "--create-filter=telnet,tcp,telnet:--comport=server --suppress-echo=yes",
         "--create-filter=lsrmap,tcp,lsrmap",
         "--create-filter=pinmap,tcp,pinmap:--cts=cts --dsr=dsr --dcd=dcd --ring=ring",

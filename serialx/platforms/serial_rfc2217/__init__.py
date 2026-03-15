@@ -434,7 +434,9 @@ class RFC2217Serial(SocketSerial):
     def _negotiate(self) -> None:
         """Perform the initial WILL/DO handshake for COM-PORT-OPTION."""
         assert self._socket is not None
-        LOGGER.debug("Starting RFC 2217 negotiation: sending WILL COM-PORT-OPTION")
+        LOGGER.debug("Starting RFC 2217 negotiation")
+        self._send_command(WillCmd(option=TelnetOption.BINARY))
+        self._send_command(DoCmd(option=TelnetOption.BINARY))
         self._send_command(WillCmd(option=TelnetOption.COM_PORT_OPTION))
 
         while True:
@@ -722,7 +724,9 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     async def _negotiate(self) -> None:
         """Perform the initial WILL/DO handshake for COM-PORT-OPTION."""
-        LOGGER.debug("Starting RFC 2217 negotiation: sending WILL COM-PORT-OPTION")
+        LOGGER.debug("Starting RFC 2217 negotiation")
+        self._send_command(WillCmd(option=TelnetOption.BINARY))
+        self._send_command(DoCmd(option=TelnetOption.BINARY))
         self._send_command(WillCmd(option=TelnetOption.COM_PORT_OPTION))
 
         cmd = await self._wait_for_telnet_commands([TelnetCmdId.DO, TelnetCmdId.DONT])
