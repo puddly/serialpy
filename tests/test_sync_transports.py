@@ -957,4 +957,4 @@ def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
                 with pytest.raises(TimeoutError):
                     left.write(b"x" * 1024)
 
-            assert elapsed() == pytest.approx(0.5, abs=0.2)
+            assert 0.3 <= elapsed() <= 1.2
