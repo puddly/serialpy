@@ -597,6 +597,19 @@ def test_sync_read_until(serial_pair: SerialPair) -> None:
         assert right.read_until(b"\n") == b"world\n"
 
 
+def test_sync_read_until_size_limit(serial_pair: SerialPair) -> None:
+    """Test that read_until stops at size limit even without finding delimiter."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=1.0) as right,
+    ):
+        left.write(b"no newline in this data")
+
+        result = right.read_until(b"\n", size=10)
+        assert result == b"no newline"
+        assert len(result) == 10
+
+
 def test_sync_readexactly_total_timeout(serial_pair: SerialPair) -> None:
     """Test that readexactly bounds total wall-clock time, not per-read time."""
     with (

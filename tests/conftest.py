@@ -198,9 +198,15 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             if spec.right is not None:
                 marks.append(pytest.mark.xdist_group(name=spec.right))
 
-            param_id = "+".join([b.name for b in spec.backends])
+            backends = [b.name for b in spec.backends]
+
             if spec.original_left != "gen" and spec.original_right != "gen":
-                param_id += f"+{spec.original_left}-{spec.original_right}"
+                backends.append(f"{spec.original_left}-{spec.original_right}")
+
+            param_id = "+".join(backends)
+
+            if spec.serial_class:
+                param_id += f"({spec.serial_class})"
 
             params.append(pytest.param(spec, marks=marks, id=param_id))
 
