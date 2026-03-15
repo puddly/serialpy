@@ -735,8 +735,9 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
 
     out_transport.set_write_buffer_limits(high=1024, low=256)
 
-    # Write enough to overflow the kernel buffer (~4KB for most serial drivers)
-    # so that the userspace buffer exceeds `high` and triggers pause_writing.
+    # Write enough to overflow the kernel buffer and any intermediate buffers
+    # (PTY ~4KB, UNIX socket ~200KB on Linux) so that the userspace buffer
+    # exceeds `high` and triggers pause_writing.
     payload = b"X" * 8192
     for _ in range(4):
         if out_transport.is_closing():
