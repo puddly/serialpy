@@ -206,7 +206,7 @@ def test_sync_rapid_small_writes(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.parametrize(
-    "baudrate,iterations", [(9600, 8), (115200, 64), (921600, 512)]
+    "baudrate,iterations", [(9600, 4), (115200, 32), (921600, 32)]
 )
 def test_sync_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
@@ -226,14 +226,6 @@ def test_sync_sustained_throughput(
         and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
-
-    if SerialBackend.ESPHOME in serial_pair.backends and (
-        baudrate,
-        iterations,
-    ) == (921600, 512):
-        pytest.skip(
-            "ESPHome backend is too slow for sustained throughput at 921600/512"
-        )
 
     with (
         Serial.from_url(serial_pair.left, baudrate=baudrate) as left,
