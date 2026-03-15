@@ -81,3 +81,4 @@ TI Z-Stack/
 
 zigpy-znp-*.*.*/
 .esphome/
+tests/data/windows/hub4com-2.1.0.0-386
