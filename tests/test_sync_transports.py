@@ -205,9 +205,7 @@ def test_sync_rapid_small_writes(serial_pair: SerialPair) -> None:
         assert bytes(received) == bytes([i % 256 for i in range(iterations)])
 
 
-@pytest.mark.parametrize(
-    "baudrate,iterations", [(9600, 4), (115200, 32), (921600, 32)]
-)
+@pytest.mark.parametrize("baudrate,iterations", [(9600, 4), (115200, 32), (921600, 32)])
 def test_sync_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
