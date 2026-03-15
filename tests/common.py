@@ -64,6 +64,7 @@ class SerialQuirk(str, enum.Enum):
     NO_WRITE_LIMITS = "no-write-limits"
     NO_BACKPRESSURE = "no-backpressure"
     NO_EXCLUSIVITY = "no-exclusivity"
+    NO_UNPLUG = "no-unplug"
 
 
 SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
@@ -85,6 +86,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_EXCLUSIVITY,
+            SerialQuirk.NO_UNPLUG,
         }
     ),
     SerialBackend.ESPHOME: frozenset(
@@ -103,6 +105,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             # Host binary does not support flow control
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RTS_CTS,
+            SerialQuirk.NO_UNPLUG,
         }
     ),
     SerialBackend.SER2NET: frozenset(
@@ -119,7 +122,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_WRITE_TIMEOUT,
         }
     ),
-    SerialBackend.ADAPTER: frozenset({}),
+    SerialBackend.ADAPTER: frozenset({SerialQuirk.NO_UNPLUG}),
 }
 
 
@@ -165,6 +168,27 @@ class SerialPair(UnresolvedSerialPair):
     original_right: str
 
     serial_class: str
+
+    left_process: subprocess.Popen[Any] | None = dataclasses.field(
+        default=None, repr=False
+    )
+    right_process: subprocess.Popen[Any] | None = dataclasses.field(
+        default=None, repr=False
+    )
+
+    def unplug_left(self) -> None:
+        """Kill the process backing the left serial endpoint."""
+        if self.left_process is None:
+            raise RuntimeError("Left endpoint has no associated process")
+        self.left_process.kill()
+        self.left_process.wait()
+
+    def unplug_right(self) -> None:
+        """Kill the process backing the right serial endpoint."""
+        if self.right_process is None:
+            raise RuntimeError("Right endpoint has no associated process")
+        self.right_process.kill()
+        self.right_process.wait()
 
 
 def _pick_free_port() -> int:
@@ -242,7 +266,9 @@ def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, st
 
 
 @contextlib.contextmanager
-def create_socat_pair() -> Iterator[tuple[str, str]]:
+def create_socat_pair() -> Iterator[
+    tuple[str, str, subprocess.Popen[bytes], subprocess.Popen[bytes]]
+]:
     """Create a bridged pair of virtual PTYs using two socat processes.
 
     Each PTY is managed by its own socat process, linked via a UNIX socket.
@@ -293,7 +319,7 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
         )
 
         try:
-            yield (left_tty, right_tty)
+            yield (left_tty, right_tty, left_proc, right_proc)
         finally:
             for proc in (left_proc, right_proc):
                 if proc.returncode is None:

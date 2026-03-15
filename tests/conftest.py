@@ -233,13 +233,17 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     stack = contextlib.ExitStack()
     left = spec.left
     right = spec.right
+    left_process = None
+    right_process = None
 
     for backend in spec.backends[::-1]:
         match backend:
             # Synthetic backends don't have an underlying serial port
             case SerialBackend.SOCAT:
                 assert left is None and right is None
-                left, right = stack.enter_context(create_socat_pair())
+                left, right, left_process, right_process = stack.enter_context(
+                    create_socat_pair()
+                )
 
             case SerialBackend.SOCKET:
                 assert left is None and right is None
@@ -290,6 +294,8 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             backends=spec.backends,
             quirks=spec.quirks,
             serial_class=serialx.platforms.Serial.__name__,
+            left_process=left_process,
+            right_process=right_process,
         )
     finally:
         stack.close()

@@ -839,6 +839,19 @@ async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> Non
         await out_transport.wait_closed()
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
+async def test_async_eof_on_unplug(serial_pair: SerialPair) -> None:
+    """Test that unplugging one side delivers EOF to the other."""
+    async with async_create_reader_writer(serial_pair.right, baudrate=115200) as (
+        reader,
+        _,
+    ):
+        serial_pair.unplug_left()
+
+        data = await reader.read(1024)
+        assert data == b""
+
+
 # --- Adapter-specific tests ---
 # These tests require physical adapter pairs (com0com, real hardware)
 # and verify cross-port behavior that virtual backends can't emulate.
