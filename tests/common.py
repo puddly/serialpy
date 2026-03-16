@@ -48,7 +48,8 @@ class SerialBackend(str, enum.Enum):
     ESPHOME = "esphome"
     ESPHOME_HOST = "esphome_host"
     ADAPTER = "adapter"
-    SER2NET = "rfc2217"
+    RFC2217 = "rfc2217"
+    SER2NET = "ser2net"
     HUB4COM = "hub4com"
 
 
@@ -109,6 +110,11 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RTS_CTS,
             SerialQuirk.NO_UNPLUG,
+        }
+    ),
+    SerialBackend.RFC2217: frozenset(
+        {
+            SerialQuirk.NO_RTS_DTR_READBACK,
         }
     ),
     SerialBackend.SER2NET: frozenset(
