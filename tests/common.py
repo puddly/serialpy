@@ -157,11 +157,11 @@ class UnresolvedSerialPair:
 
         for backend in backends:
             result = dataclasses.replace(
-                self,
-                original_left=self.original_left,
-                original_right=self.original_right,
-                backends=(backend,) + self.backends,
-                quirks=frozenset(self.quirks) | SERIAL_PAIR_DEFAULT_QUIRKS[backend],
+                result,
+                original_left=result.original_left,
+                original_right=result.original_right,
+                backends=(backend,) + result.backends,
+                quirks=frozenset(result.quirks) | SERIAL_PAIR_DEFAULT_QUIRKS[backend],
             )
 
         return result
