@@ -6,29 +6,29 @@ import contextlib
 import os
 from pathlib import Path
 import shutil
-import socket
 import subprocess
 import tempfile
 import time
-from typing import Any, NamedTuple
+from typing import IO, Any, NamedTuple
 
+import psutil
 import pytest
 
 import serialx
 from serialx.common import BaseSerialTransport
 
 SOCAT_BINARY = shutil.which("socat")
-_SERIALX_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM = (
-    _SERIALX_ROOT
-    / "tests"
-    / "esphome"
-    / ".esphome"
-    / "build"
-    / "serialx-host-daemon"
-    / ".pioenvs"
-    / "serialx-host-daemon"
-    / "program"
+ESPHOME_HOST_BINARY = shutil.which(
+    "program",
+    path=(
+        Path(__file__).resolve().parent
+        / "esphome"
+        / ".esphome"
+        / "build"
+        / "serialx-host-daemon"
+        / ".pioenvs"
+        / "serialx-host-daemon"
+    ),
 )
 
 
@@ -50,69 +50,70 @@ class BridgedSocatPair(NamedTuple):
     right_process: asyncio.subprocess.Process
 
 
-def get_esphome_host_daemon_program() -> str | None:
-    """Get the compiled ESPHome host daemon program path, if available."""
-    if override := os.getenv("SERIALX_ESPHOME_DAEMON_PROGRAM"):
-        program_path = Path(override).expanduser()
-    else:
-        program_path = _DEFAULT_ESPHOME_HOST_DAEMON_PROGRAM
-
-    if not program_path.exists():
-        return None
-    if not os.access(program_path, os.X_OK):
-        return None
-
-    return str(program_path)
-
-
-def _pick_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
-def _wait_for_esphome_listener(
-    process: subprocess.Popen[Any], port: int, timeout: float = 5.0
-) -> None:
-    deadline = time.monotonic() + timeout
-
-    while time.monotonic() < deadline:
-        if process.poll() is not None:
-            raise RuntimeError(
-                f"ESPHome host daemon exited before listening (code={process.returncode})"
-            )
-
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(0.1)
-            if sock.connect_ex(("127.0.0.1", port)) == 0:
-                return
-
-        time.sleep(0.01)
-
-    raise RuntimeError(
-        f"ESPHome host daemon did not start listening on 127.0.0.1:{port}"
+def _get_listening_ports(pid: int) -> list[int]:
+    """Get the TCP ports a process is listening on, via psutil."""
+    return sorted(
+        c.laddr.port
+        for c in psutil.Process(pid).net_connections(kind="tcp")
+        if c.status == psutil.CONN_LISTEN
     )
 
 
+def _wait_for_ready(
+    process: subprocess.Popen[Any],
+    stream: IO[bytes] | None,
+    marker: str,
+    name: str,
+) -> None:
+    """Wait for a process to print a ready marker to stdout or stderr."""
+    assert stream is not None
+
+    marker_bytes = marker.encode()
+    output = bytearray()
+
+    while True:
+        line = stream.readline()
+
+        if not line:
+            raise RuntimeError(
+                f"{name} exited before ready (code={process.returncode})"
+                f"\n{stream}: {output.decode(errors='replace')}"
+            )
+
+        output.extend(line)
+
+        if marker_bytes in line:
+            return
+
+
 @contextlib.contextmanager
-def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
-    """Create an esphome:// pair backed by a socat PTY pair and host daemon."""
+def create_esphome_pair() -> Iterator[tuple[str, str]]:
+    """Create an esphome:// pair."""
+    assert ESPHOME_HOST_BINARY is not None
+
     with create_socat_pair() as (left_tty, right_tty):
-        api_port = _pick_free_port()
         env = os.environ.copy()
         env["SERIALX_UART_LEFT"] = left_tty
         env["SERIALX_UART_RIGHT"] = right_tty
-        env["SERIALX_API_PORT"] = str(api_port)
+        env["SERIALX_API_PORT"] = "0"
 
         process = subprocess.Popen(  # noqa: S603
-            [program_path],
+            [ESPHOME_HOST_BINARY],
             env=env,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
 
         try:
-            _wait_for_esphome_listener(process, api_port)
+            _wait_for_ready(
+                process,
+                stream=process.stderr,
+                marker="Ready",
+                name="ESPHome host daemon",
+            )
+
+            api_port = _get_listening_ports(process.pid)[0]
+
             yield (
                 f"esphome://127.0.0.1:{api_port}/0",
                 f"esphome://127.0.0.1:{api_port}/1",
@@ -120,6 +121,7 @@ def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
         finally:
             if process.poll() is None:
                 process.terminate()
+
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
@@ -129,35 +131,62 @@ def create_esphome_pair(program_path: str) -> Iterator[tuple[str, str]]:
 
 @contextlib.contextmanager
 def create_socat_pair() -> Iterator[tuple[str, str]]:
-    """Create a pair of virtual PTYs using socat (synchronous)."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        in_tty = os.path.join(tmpdir, "ttyTestIn")
-        out_tty = os.path.join(tmpdir, "ttyTestOut")
+    """Create a bridged pair of virtual PTYs using two socat processes.
 
-        proc = subprocess.Popen(
+    Each PTY is managed by its own socat process, linked via a UNIX socket.
+    Killing one socat process closes its PTY and propagates EOF to the other.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        left_tty = os.path.join(tmpdir, "ttyLeft")
+        right_tty = os.path.join(tmpdir, "ttyRight")
+        bridge = os.path.join(tmpdir, "bridge.sock")
+
+        # Start the right side first (UNIX-LISTEN), then the left (UNIX-CONNECT)
+        right_proc = subprocess.Popen(
             [
                 "socat",
-                f"PTY,link={in_tty},raw,echo=0",
-                f"PTY,link={out_tty},raw,echo=0",
+                "-d",
+                "-d",
+                f"PTY,link={right_tty},raw,echo=0",
+                f"UNIX-LISTEN:{bridge}",
             ],
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
 
-        # Give socat time to set up the PTYs
-        for _attempt in range(100):
-            if os.path.exists(in_tty) and os.path.exists(out_tty):
-                break
+        _wait_for_ready(
+            right_proc,
+            marker="listening on",
+            stream=right_proc.stderr,
+            name="socat(right)",
+        )
 
-            time.sleep(0.01)
-        else:
-            raise RuntimeError("socat PTYs were not created in time")
+        left_proc = subprocess.Popen(
+            [
+                "socat",
+                "-d",
+                "-d",
+                f"PTY,link={left_tty},raw,echo=0",
+                f"UNIX-CONNECT:{bridge}",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
 
-        assert proc.returncode is None
+        _wait_for_ready(
+            left_proc,
+            marker="starting data transfer loop",
+            stream=left_proc.stderr,
+            name="socat(left)",
+        )
 
-        yield (in_tty, out_tty)
-
-        proc.terminate()
-        proc.wait()
+        try:
+            yield (left_tty, right_tty)
+        finally:
+            for proc in (left_proc, right_proc):
+                if proc.returncode is None:
+                    proc.terminate()
+                    proc.wait()
 
 
 @contextlib.asynccontextmanager
