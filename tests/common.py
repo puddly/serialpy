@@ -417,6 +417,7 @@ def create_hub4com_pair(
                     *hub4com_args,
                     f"\\\\.\\{adapter}",
                     "--use-driver=tcp",
+                    "--interface=127.0.0.1",
                     f"*{port}",
                 ],
                 stdout=subprocess.PIPE,
