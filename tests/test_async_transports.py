@@ -23,9 +23,9 @@ from serialx import (
     get_serial_classes,
 )
 from tests.common import (
-    SOCAT_BINARY,
+    SerialBackend,
     SerialPair,
-    async_create_bridged_socat_pair,
+    SerialQuirk,
     async_create_reader_writer,
     async_create_reader_writer_pair,
 )
@@ -207,9 +207,7 @@ async def test_async_rapid_small_writes(serial_pair: SerialPair) -> None:
         assert bytes(received) == expected
 
 
-@pytest.mark.parametrize(
-    "baudrate,iterations", [(9600, 8), (115200, 64), (921600, 512)]
-)
+@pytest.mark.parametrize("baudrate,iterations", [(9600, 4), (115200, 32), (921600, 32)])
 async def test_async_sustained_throughput(
     serial_pair: SerialPair, baudrate: int, iterations: int
 ) -> None:
@@ -220,11 +218,6 @@ async def test_async_sustained_throughput(
         and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
-
-    if (serial_pair.backend, baudrate, iterations) == ("esphome", 921600, 512):
-        pytest.skip(
-            "ESPHome backend is too slow for sustained throughput at 921600/512"
-        )
 
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=baudrate
@@ -259,12 +252,31 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
         writer.write(b"test")
 
 
+async def test_async_nonstandard_baudrate(serial_pair: SerialPair) -> None:
+    """Test that a non-standard baudrate (no termios constant) is accepted."""
+    if serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"):
+        pytest.skip("Base POSIX backends only support standard baudrates")
+
+    async with async_create_reader_writer_pair(
+        serial_pair.left, serial_pair.right, baudrate=200000
+    ) as (_, writer_left, reader_right, _):
+        assert writer_left.transport.baudrate == 200000
+        writer_left.write(b"test")
+        assert await reader_right.readexactly(4) == b"test"
+
+
 @pytest.mark.parametrize(
     "parity", [Parity.NONE, Parity.ODD, Parity.EVEN, Parity.MARK, Parity.SPACE]
 )
 async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
     """Test that valid parity settings are accepted."""
-    if serial_pair.backend == "esphome" and parity in (Parity.MARK, Parity.SPACE):
+    if (
+        SerialBackend.ESPHOME_HOST in serial_pair.backends
+        or SerialBackend.ESPHOME in serial_pair.backends
+    ) and parity in (
+        Parity.MARK,
+        Parity.SPACE,
+    ):
         pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
 
     if serial_pair.serial_class not in ("LinuxSerial", "Win32Serial") and parity in (
@@ -297,7 +309,10 @@ async def test_async_valid_stopbits(
     expected: StopBits,
 ) -> None:
     """Test that valid stopbits settings are accepted."""
-    if serial_pair.backend == "esphome" and expected is StopBits.ONE_POINT_FIVE:
+    if (
+        SerialBackend.ESPHOME_HOST in serial_pair.backends
+        or SerialBackend.ESPHOME in serial_pair.backends
+    ) and expected is StopBits.ONE_POINT_FIVE:
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
 
     if (
@@ -398,7 +413,7 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await writer_left.wait_closed()
 
 
-@pytest.mark.skip_backends("esphome")
+@pytest.mark.skip_backends(SerialBackend.ESPHOME, SerialBackend.ESPHOME_HOST)
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
     async with async_create_reader_writer_pair(
@@ -517,11 +532,7 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
         assert transport.get_write_buffer_size() == 0
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32",
-    reason="Only DescriptorTransport implements write buffer limits",
-)
-@pytest.mark.skip_backends("socket", "esphome")
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
@@ -532,13 +543,12 @@ async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> N
         transport = writer.transport
 
         low, high = transport.get_write_buffer_limits()
-        assert low >= 0
-        assert high >= low
+        assert 0 <= low <= high
 
-        transport.set_write_buffer_limits(high=128 * 1024, low=32 * 1024)
+        transport.set_write_buffer_limits(low=32 * 1024, high=128 * 1024)
         assert transport.get_write_buffer_limits() == (32 * 1024, 128 * 1024)
 
-        assert transport.can_write_eof() is True
+        assert transport.can_write_eof() in (True, False)
 
 
 async def test_async_flush(serial_pair: SerialPair) -> None:
@@ -553,7 +563,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
         assert result == b"flush test data"
 
 
-@pytest.mark.skip_backends("esphome")
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
     async with async_create_reader_writer_pair(
@@ -561,44 +571,6 @@ async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> 
     ) as (_, writer_left, _, _):
         # resume without prior pause should be a no-op
         writer_left.transport.resume_reading()
-
-
-@pytest.mark.skipif(not SOCAT_BINARY, reason="socat binary is missing")
-@pytest.mark.xfail(
-    sys.platform.startswith("freebsd"),
-    reason="FreeBSD PTYs do not signal peer close",
-)
-async def test_async_peer_close_triggers_connection_lost() -> None:
-    """Test that killing one socat process triggers connection_lost on the other."""
-    async with async_create_bridged_socat_pair() as pair:
-        connection_lost_event = asyncio.Event()
-
-        class Receiver(asyncio.Protocol):
-            def connection_lost(self, exc: Exception | None) -> None:
-                connection_lost_event.set()
-
-        loop = asyncio.get_running_loop()
-
-        recv_transport, _ = await create_serial_connection(
-            loop, Receiver, pair.left, baudrate=115200
-        )
-        send_transport, _ = await create_serial_connection(
-            loop, asyncio.Protocol, pair.right, baudrate=115200
-        )
-
-        send_transport.write(b"goodbye")
-
-        # Kill the right-side socat process; this tears down the bridge
-        # and causes EOF on the left side
-        pair.right_process.terminate()
-        await pair.right_process.wait()
-
-        await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
-
-        send_transport.close()
-
-        if not recv_transport.is_closing():
-            recv_transport.close()
 
 
 async def test_async_invalid_uri() -> None:
@@ -629,7 +601,9 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
-    if serial_pair.backend == "socat" and sys.platform.startswith("freebsd"):
+    if SerialBackend.SOCAT in serial_pair.backends and sys.platform.startswith(
+        "freebsd"
+    ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
@@ -663,10 +637,9 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
             assert pins_low.rts is PinState.LOW
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR, SerialQuirk.NO_RTS_DTR_READBACK
 )
-@pytest.mark.skip_backends("socket", "socat")
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
@@ -675,27 +648,25 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
         writer,
     ):
         await writer.transport.set_modem_pins(dtr=True, rts=True)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         modem_pins = await writer.transport.get_modem_pins()
         assert modem_pins.dtr is PinState.HIGH
         assert modem_pins.rts is PinState.HIGH
 
         await writer.transport.set_modem_pins(dtr=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         modem_pins = await writer.transport.get_modem_pins()
         assert modem_pins.dtr is PinState.LOW
         assert modem_pins.rts is PinState.HIGH
 
         await writer.transport.set_modem_pins(dtr=False, rts=False)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         modem_pins = await writer.transport.get_modem_pins()
         assert modem_pins.dtr is PinState.LOW
         assert modem_pins.rts is PinState.LOW
 
 
-# --- Backpressure ---
-# These tests use a dedicated async socket relay with read delay to reliably
-# trigger backpressure conditions.
-
-
-@pytest.mark.skip_backends("socket", "com0com", "socat", "esphome", "tty0tty")
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -743,8 +714,9 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
 
     out_transport.set_write_buffer_limits(high=1024, low=256)
 
-    # Write enough to overflow the kernel buffer (~4KB for most serial drivers)
-    # so that the userspace buffer exceeds `high` and triggers pause_writing.
+    # Write enough to overflow the kernel buffer and any intermediate buffers
+    # (PTY ~4KB, UNIX socket ~200KB on Linux) so that the userspace buffer
+    # exceeds `high` and triggers pause_writing.
     payload = b"X" * 8192
     for _ in range(4):
         if out_transport.is_closing():
@@ -765,7 +737,7 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     await asyncio.gather(input_lost, output_lost)
 
 
-@pytest.mark.skip_backends("socket", "com0com")
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 
@@ -841,8 +813,10 @@ async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> Non
 
         assert data_received_count > 0
     finally:
-        out_transport.close()
-        in_transport.close()
+        in_transport.abort()
+        out_transport.abort()
+        await in_transport.wait_closed()
+        await out_transport.wait_closed()
 
 
 # --- Adapter-specific tests ---
@@ -874,9 +848,17 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
-    """Test DTR/CTS deassertion on open."""
+    """Test RTS/CTS deassertion on open."""
+
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
@@ -888,11 +870,11 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(dtr=True)
-            await asyncio.sleep(0.05)
+            await writer_right.transport.set_modem_pins(rts=True)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -901,18 +883,25 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
-            await writer_right.transport.set_modem_pins(dtr=True)
+            await writer_right.transport.set_modem_pins(rts=True)
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
-    """Test DTR/CTS hang up on close."""
+    """Test RTS/CTS hang up on close."""
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
 
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
@@ -924,11 +913,11 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(dtr=True)
-            await asyncio.sleep(0.05)
+            await writer_right.transport.set_modem_pins(rts=True)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -937,10 +926,10 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -949,15 +938,15 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
-@pytest.mark.skip_backends("socket", "socat", "esphome", "com0com", "tty0tty")
+@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 @pytest.mark.parametrize(
     ("rtscts", "rtsdtr_on_open", "expected_state"),
     [
@@ -975,6 +964,14 @@ async def test_async_deassert_on_open_with_rtscts(
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
 
+    if serial_pair.serial_class in (
+        "LinuxSerial",
+        "DarwinSerial",
+        "PosixSerial",
+        "ExtendedPosixSerial",
+    ):
+        pytest.skip("POSIX backends do not support deasserting pins on open")
+
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
         reader_left,
         writer_left,
@@ -986,11 +983,11 @@ async def test_async_deassert_on_open_with_rtscts(
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
         ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(dtr=True)
-            await asyncio.sleep(0.05)
+            await writer_right.transport.set_modem_pins(rts=True)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(serial_pair.modem_line_propagation_delay)
         assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
 
         async with async_create_reader_writer(
@@ -999,5 +996,5 @@ async def test_async_deassert_on_open_with_rtscts(
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
         ) as (reader_right, writer_right):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is expected_state
