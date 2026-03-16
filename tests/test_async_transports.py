@@ -637,7 +637,9 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
             assert pins_low.rts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR, SerialQuirk.NO_RTSDTR_READBACK
+)
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
