@@ -115,7 +115,10 @@ def test_sync_random_large(
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            or SerialBackend.SER2NET in serial_pair.backends
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -162,9 +165,9 @@ def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
-    if sys.platform == "darwin" and serial_pair.serial_class in (
-        "PosixSerial",
-        "ExtendedPosixSerial",
+    if sys.platform == "darwin" and (
+        serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        or SerialBackend.SER2NET in serial_pair.backends
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -201,7 +204,10 @@ def test_sync_sustained_throughput(
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            or SerialBackend.SER2NET in serial_pair.backends
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -226,7 +232,10 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            or SerialBackend.SER2NET in serial_pair.backends
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -341,6 +350,9 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
     if sys.platform == "win32":
         pytest.skip("Windows does not support shared access")
 
+    if SerialBackend.SER2NET in serial_pair.backends:
+        pytest.skip("ser2net only allows one connection per port")
+
     with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=False) as serial1:
         assert serial1.exclusive is False
 
@@ -433,6 +445,12 @@ def test_sync_get_modem_pins(serial_pair: SerialPair) -> None:
 
 def test_sync_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
+    if SerialBackend.SER2NET in serial_pair.backends and (
+        SerialQuirk.NO_DTR_DSR in serial_pair.quirks
+        or SerialQuirk.NO_RTS_CTS in serial_pair.quirks
+    ):
+        pytest.skip("ser2net hangs setting modem pins on backends without support")
+
     if SerialBackend.SOCAT in serial_pair.backends and sys.platform.startswith(
         "freebsd"
     ):
