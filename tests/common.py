@@ -49,7 +49,7 @@ class SerialQuirk(str, enum.Enum):
 
     NO_RTS_CTS = "no-rts-cts"
     NO_DTR_DSR = "no-dtr-dsr"
-    NO_RTSDTR_READBACK = "no-dtr-dtr-readback"
+    NO_RTS_DTR_READBACK = "no-rts-dtr-readback"
     NO_NUM_UNREAD_BYTES = "no-num-unread-bytes"
     NO_NUM_UNWRITTEN_BYTES = "no-num-unwritten-bytes"
     NO_RESET_WRITE_BUFFER = "no-reset-write-buffer"
