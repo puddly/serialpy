@@ -312,13 +312,10 @@ jobs:
         uses: actions/checkout@v6
       - name: Install com0com
         shell: pwsh
-        working-directory: .github
+        working-directory: tests/data/windows
         run: |
-          Invoke-WebRequest https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/com0com.cer -OutFile com0com.cer
           Import-Certificate -FilePath com0com.cer -CertStoreLocation Cert:\LocalMachine\Root
           Import-Certificate -FilePath com0com.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
-
-          Invoke-WebRequest https://github.com/Apollon77/SupportingFiles/raw/a14981be47f3be872a4aec2d989ab529ba362f23/appveyor/serial/setup_com0com_W7_x64_signed.exe -OutFile setup_com0com_W7_x64_signed.exe
           .\setup_com0com_W7_x64_signed.exe /S
       - name: Configure com0com
         shell: pwsh
