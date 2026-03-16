@@ -17,6 +17,8 @@ import serialx
 import serialx.platforms
 from tests.common import (
     ESPHOME_HOST_BINARY,
+    HUB4COM_BINARY,
+    SER2NET_BINARY,
     SERIAL_PAIR_DEFAULT_QUIRKS,
     SOCAT_BINARY,
     SerialBackend,
@@ -24,6 +26,8 @@ from tests.common import (
     SerialQuirk,
     UnresolvedSerialPair,
     create_esphome_pair,
+    create_hub4com_pair,
+    create_ser2net_pair,
     create_socat_pair,
 )
 from tests.socket_relay import create_socket_pair
@@ -87,6 +91,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def _get_endpoint_backend(path: str) -> SerialBackend:
     """Classify a single endpoint into a backend family."""
     lower_path = path.lower()
+    if lower_path.startswith("rfc2217://"):
+        return SerialBackend.SER2NET
     if lower_path.startswith("socket://"):
         return SerialBackend.SOCKET
     if lower_path.startswith("esphome://"):
@@ -166,6 +172,20 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         for adapter_spec in adapters:
             specs.append(adapter_spec)
 
+            if SER2NET_BINARY is not None:
+                ser2net_spec = adapter_spec.chain(SerialBackend.SER2NET)
+
+                specs.append(
+                    dataclasses.replace(
+                        ser2net_spec,
+                        # ser2net only polls modem line states every second...
+                        modem_line_propagation_delay=1.1,
+                    )
+                )
+
+            if HUB4COM_BINARY is not None:
+                specs.append(adapter_spec.chain(SerialBackend.HUB4COM))
+
             if sys.version_info >= (3, 11) and ESPHOME_HOST_BINARY is not None:
                 specs.append(adapter_spec.chain(SerialBackend.ESPHOME_HOST))
 
@@ -237,6 +257,14 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             case SerialBackend.ESPHOME_HOST:
                 assert left is not None and right is not None
                 left, right = stack.enter_context(create_esphome_pair(left, right))
+
+            case SerialBackend.SER2NET:
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_ser2net_pair(left, right))
+
+            case SerialBackend.HUB4COM:
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_hub4com_pair(left, right))
 
             case _:
                 raise ValueError(f"Unsupported backend: {backend!r}")
