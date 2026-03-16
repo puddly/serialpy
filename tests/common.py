@@ -74,6 +74,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_EXCLUSIVITY,
+            SerialQuirk.NO_BACKPRESSURE,
         }
     ),
     SerialBackend.SOCKET: frozenset(
