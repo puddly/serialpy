@@ -236,7 +236,7 @@ jobs:
             --cov=serialx \
             -o console_output_style=count \
             -p no:sugar \
-            --adapter-pair /dev/tnt0:/dev/tnt1 \
+            --adapter-pair /dev/tnt0,/dev/tnt1,no-rts-cts,no-dtr-dsr,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-backpressure \
             tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -329,7 +329,7 @@ jobs:
         shell: pwsh
         working-directory: C:\Program Files (x86)\com0com
         run: |
-          .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rdtr PortName=-,EmuBR=yes,cts=rdtr
+          .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr
       - name: Set up Python
         id: python
         uses: actions/setup-python@v6
@@ -385,7 +385,7 @@ jobs:
         run: |
           venv\Scripts\activate
           python -m serialx.tools.list_ports
-          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0:CNCB0
+          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
