@@ -55,7 +55,7 @@ class SerialQuirk(str, enum.Enum):
     NO_RESET_READ_BUFFER = "no-reset-read-buffer"
     NO_WRITE_TIMEOUT = "no-write-timeout"
     NO_WRITE_LIMITS = "no-write-limits"
-    NO_BACKPRESSURE = "no-backpressure"
+    NO_BUFFER_CONTROL = "no-buffer-control"
     NO_EXCLUSIVITY = "no-exclusivity"
     NO_UNPLUG = "no-unplug"
 
@@ -67,7 +67,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_EXCLUSIVITY,
-            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_BUFFER_CONTROL,
         }
     ),
     SerialBackend.SOCKET: frozenset(
@@ -76,7 +76,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RESET_READ_BUFFER,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
-            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_EXCLUSIVITY,
@@ -85,7 +85,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
     ),
     SerialBackend.ESPHOME: frozenset(
         {
-            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_EXCLUSIVITY,
@@ -93,7 +93,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
     ),
     SerialBackend.ESPHOME_HOST: frozenset(
         {
-            SerialQuirk.NO_BACKPRESSURE,
+            SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
             # Host binary does not support flow control
@@ -102,7 +102,11 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_UNPLUG,
         }
     ),
-    SerialBackend.ADAPTER: frozenset({SerialQuirk.NO_UNPLUG}),
+    SerialBackend.ADAPTER: frozenset(
+        {
+            SerialQuirk.NO_UNPLUG,
+        }
+    ),
 }
 
 

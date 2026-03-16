@@ -236,7 +236,7 @@ jobs:
             --cov=serialx \
             -o console_output_style=count \
             -p no:sugar \
-            --adapter-pair /dev/tnt0,/dev/tnt1,no-rts-cts,no-dtr-dsr,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-backpressure \
+            --adapter-pair /dev/tnt0,/dev/tnt1,no-rts-cts,no-dtr-dsr,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-buffer-control \
             tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -385,7 +385,7 @@ jobs:
         run: |
           venv\Scripts\activate
           python -m serialx.tools.list_ports
-          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0
+          pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0,no-buffer-control
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:

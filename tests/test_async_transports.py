@@ -532,7 +532,7 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
         assert transport.get_write_buffer_size() == 0
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
@@ -563,7 +563,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
         assert result == b"flush test data"
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
     async with async_create_reader_writer_pair(
@@ -664,7 +664,7 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
         assert modem_pins.rts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -735,7 +735,7 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     await asyncio.gather(input_lost, output_lost)
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BACKPRESSURE)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 
