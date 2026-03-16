@@ -6,13 +6,13 @@ import asyncio
 from collections.abc import Callable, Coroutine
 from enum import IntFlag
 import logging
-from pathlib import Path
 import threading
 from typing import Any, TypeVar
 import urllib.parse
 
 import aioesphomeapi
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
+from aioesphomeapi.core import PingRequest, PingResponse
 from typing_extensions import Buffer
 
 from serialx import UnsupportedSetting
@@ -59,28 +59,13 @@ class ESPHomeSerial(BaseSerial):
 
     def __init__(
         self,
-        path: str | Path,
-        baudrate: int,
-        parity: Parity = Parity.NONE,
-        stopbits: StopBits = StopBits.ONE,
-        xonxoff: bool = False,
-        rtscts: bool = False,
-        byte_size: int = 8,
-        *,
+        *args,
+        connect_timeout: float = 10.0,
         loop: asyncio.AbstractEventLoop | None = None,
         **kwargs,
     ) -> None:
         """Initialize ESPHome serial port."""
-        super().__init__(
-            path=path,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-            byte_size=byte_size,
-            **kwargs,
-        )
+        super().__init__(*args, **kwargs)
 
         if self._parity not in PARITY_MAP:
             raise UnsupportedSetting(f"Unsupported parity: {self._parity}")
@@ -92,6 +77,8 @@ class ESPHomeSerial(BaseSerial):
         # a temporary event loop while the async one passes through its own.
         self._loop = loop
         self._loop_thread: threading.Thread | None = None
+
+        self._connect_timeout = connect_timeout
 
         parsed = urllib.parse.urlparse(str(self._path))
         params = urllib.parse.parse_qs(parsed.query)
@@ -149,14 +136,31 @@ class ESPHomeSerial(BaseSerial):
 
     async def _async_subscribe(self) -> None:
         assert self._api is not None
-        self._subscribe_instance()
+        await self._subscribe_instance()
         self._unsub = self._api.subscribe_serial_proxy_data(self._on_data)
 
-    def _subscribe_instance(self) -> None:
+    async def _ping(self, *, timeout: float) -> None:
+        """Ping the ESPHome API."""
+        assert self._api is not None
+        conn = self._api._get_connection()
+
+        await conn.send_messages_await_response_complex(
+            messages=(PingRequest(),),
+            do_append=None,
+            do_stop=lambda msg: isinstance(msg, PingResponse),
+            msg_types=(PingResponse,),
+            timeout=timeout,
+        )
+
+    async def _subscribe_instance(self) -> None:
         """Subscribe serial proxy streaming for this instance if supported."""
         if self._api is None or self._instance_subscribed:
             return
         self._api.serial_proxy_subscribe(self.instance)
+
+        # Ping to ensure the daemon has processed the subscribe
+        await self._ping(timeout=self._connect_timeout)
+
         self._instance_subscribed = True
 
     def _unsubscribe_instance(self) -> None:
@@ -301,7 +305,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._serial.configure_port()
 
         assert self._serial._api is not None
-        self._serial._subscribe_instance()
+        await self._serial._subscribe_instance()
         self._unsub = self._serial._api.subscribe_serial_proxy_data(self._on_data)
 
         self._protocol.connection_made(self)
