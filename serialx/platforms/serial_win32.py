@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from ctypes import (  # type: ignore[attr-defined]
+    WinError,
+    c_void_p,
+    sizeof,
+    windll,
+    wintypes,
+)
 import logging
 import os
 from typing import Any
@@ -43,7 +50,6 @@ from win32file import (
     PURGE_RXCLEAR,
     PURGE_TXABORT,
     PURGE_TXCLEAR,
-    CancelIo,
     ClearCommError,
     CloseHandle,
     CreateFile,
@@ -73,6 +79,24 @@ from ..common import (
     StopBits,
 )
 
+
+def _cancelioex_errcheck(value: bool, func: Any, args: Any) -> Any:
+    if not value:
+        raise WinError()
+
+    return args
+
+
+# CancelIoEx cancels pending IO operations more granularly and across threads, unlike
+# CancelIo which only cancels IO from the calling thread.
+CancelIoEx = windll.kernel32.CancelIoEx  #  type: ignore[attr-defined]
+CancelIoEx.restype = wintypes.BOOL
+CancelIoEx.errcheck = _cancelioex_errcheck
+CancelIoEx.argtypes = (
+    wintypes.HANDLE,  # hObject
+    c_void_p,  # lpOverlapped (NULL to cancel all)
+)
+
 # Constants missing from win32con
 MS_CTS_ON = 0x0010
 MS_DSR_ON = 0x0020
@@ -100,6 +124,27 @@ WIN32_STOPBITS_MAP = {
     StopBits.ONE_POINT_FIVE: ONE5STOPBITS,
     StopBits.TWO: TWOSTOPBITS,
 }
+
+
+def _get_pyoverlapped_internal_offset() -> int:
+    """Calculate the offset of the internal OVERLAPPED structure."""
+    offset = 3 * sizeof(c_void_p)
+
+    temp = OVERLAPPED()
+    temp.Internal = 0x12345678
+
+    if c_void_p.from_address(id(temp) + offset).value != temp.Internal:
+        raise RuntimeError("Unexpected OVERLAPPED structure layout, cannot get pointer")
+
+    return offset
+
+
+_PYOVERLAPPED_OFFSET = _get_pyoverlapped_internal_offset()
+
+
+def _get_pyoverlapped_ptr(overlapped: OVERLAPPED) -> int:
+    """Convert a pywintypes.OVERLAPPED object to a pointer for use with Win32 APIs."""
+    return id(overlapped) + _PYOVERLAPPED_OFFSET
 
 
 def _normalize_windows_port_path(path: os.PathLike | str) -> str:
@@ -282,8 +327,8 @@ class Win32Serial(BaseSerial):
                     LOGGER.debug("Failed to set modem pins on close", exc_info=True)
 
             try:
-                CancelIo(self._handle)
-            except pywintypes.error:
+                CancelIoEx(int(self._handle), None)
+            except OSError:
                 LOGGER.debug("Failed to cancel IO on close", exc_info=True)
 
             _safe_close_handle(self._handle)
@@ -352,6 +397,7 @@ class Win32Serial(BaseSerial):
     def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
         """Read data into the provided bytearray."""
         assert self._overlapped_read is not None
+        assert self._handle is not None
         ResetEvent(self._overlapped_read.hEvent)
 
         try:
@@ -365,7 +411,9 @@ class Win32Serial(BaseSerial):
             res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
 
             if res == WAIT_TIMEOUT:
-                CancelIo(self._handle)
+                CancelIoEx(
+                    int(self._handle), _get_pyoverlapped_ptr(self._overlapped_read)
+                )
                 # Wait for cancellation to complete to avoid data corruption or races
                 WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
                 return 0
@@ -381,6 +429,7 @@ class Win32Serial(BaseSerial):
     def _write(self, data: Buffer, *, timeout: float | None) -> int:
         """Write data to the serial port synchronously."""
         assert self._overlapped_write is not None
+        assert self._handle is not None
         ResetEvent(self._overlapped_write.hEvent)
 
         try:
@@ -398,7 +447,9 @@ class Win32Serial(BaseSerial):
             res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
 
             if res == WAIT_TIMEOUT:
-                CancelIo(self._handle)
+                CancelIoEx(
+                    int(self._handle), _get_pyoverlapped_ptr(self._overlapped_write)
+                )
                 # Wait for cancellation to complete
                 WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
                 raise TimeoutError("Write timeout") from None
