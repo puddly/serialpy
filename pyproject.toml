@@ -29,6 +29,7 @@ dev = [
     "pytest-asyncio",
     "pytest-timeout",
     "pytest-xdist",
+    "psutil",
     "aioesphomeapi>=44.5.1 ; python_version >= '3.11'",
 ]
 

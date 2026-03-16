@@ -9,12 +9,12 @@ import json
 import os
 from pathlib import Path
 import shutil
-import socket
 import subprocess
 import tempfile
 import time
 from typing import IO, Any
 
+import psutil
 from typing_extensions import Self
 
 import serialx
@@ -193,10 +193,13 @@ class SerialPair(UnresolvedSerialPair):
         self.right_process.wait()
 
 
-def _pick_free_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
+def _get_listening_ports(pid: int) -> list[int]:
+    """Get the TCP ports a process is listening on, via psutil."""
+    return sorted(
+        c.laddr.port
+        for c in psutil.Process(pid).net_connections(kind="tcp")
+        if c.status == psutil.CONN_LISTEN
+    )
 
 
 def _wait_for_ready(
@@ -231,11 +234,10 @@ def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, st
     """Create an esphome:// pair."""
     assert ESPHOME_HOST_BINARY is not None
 
-    api_port = _pick_free_port()
     env = os.environ.copy()
     env["SERIALX_UART_LEFT"] = left_tty
     env["SERIALX_UART_RIGHT"] = right_tty
-    env["SERIALX_API_PORT"] = str(api_port)
+    env["SERIALX_API_PORT"] = "0"
 
     process = subprocess.Popen(  # noqa: S603
         [ESPHOME_HOST_BINARY],
@@ -251,6 +253,8 @@ def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, st
             marker="Ready",
             name="ESPHome host daemon",
         )
+
+        api_port = _get_listening_ports(process.pid)[0]
 
         yield (
             f"esphome://127.0.0.1:{api_port}/0",
@@ -335,17 +339,14 @@ def create_ser2net_pair(
 ) -> Iterator[tuple[str, str]]:
     """Create a pair of independent RFC2217 sockets using ser2net."""
 
-    left_port = _pick_free_port()
-    right_port = _pick_free_port()
-
     config = {
         "connections": {
             "left_adapter": {
-                "accepter": f"telnet(rfc2217),tcp,{left_port}",
+                "accepter": "telnet(rfc2217),tcp,0",
                 "connector": f"serialdev(),{left_adapter},speed=115200n81",
             },
             "right_adapter": {
-                "accepter": f"telnet(rfc2217),tcp,127.0.0.1,{right_port}",
+                "accepter": "telnet(rfc2217),tcp,0",
                 "connector": f"serialdev(),{right_adapter},speed=115200n81",
             },
         }
@@ -373,9 +374,11 @@ def create_ser2net_pair(
             name="ser2net",
         )
 
+        left, right = _get_listening_ports(proc.pid)
+
         yield (
-            f"rfc2217://127.0.0.1:{left_port}",
-            f"rfc2217://127.0.0.1:{right_port}",
+            f"rfc2217://127.0.0.1:{left}",
+            f"rfc2217://127.0.0.1:{right}",
         )
     finally:
         if proc.returncode is None:
@@ -389,9 +392,6 @@ def create_hub4com_pair(
 ) -> Iterator[tuple[str, str]]:
     """Create a pair of independent RFC2217 sockets using hub4com on Windows."""
     assert HUB4COM_BINARY is not None
-
-    left_port = _pick_free_port()
-    right_port = _pick_free_port()
 
     hub4com_args = [
         "--create-filter=telnet,tcp,telnet:--comport=server --suppress-echo=yes",
@@ -410,7 +410,7 @@ def create_hub4com_pair(
     procs = []
 
     try:
-        for adapter, port in ((left_adapter, left_port), (right_adapter, right_port)):
+        for adapter in (left_adapter, right_adapter):
             proc = subprocess.Popen(
                 [
                     HUB4COM_BINARY,
@@ -418,7 +418,7 @@ def create_hub4com_pair(
                     f"\\\\.\\{adapter}",
                     "--use-driver=tcp",
                     "--interface=127.0.0.1",
-                    f"*{port}",
+                    "*0",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -433,9 +433,11 @@ def create_hub4com_pair(
                 name="hub4com",
             )
 
+        left, right = [_get_listening_ports(proc.pid)[0] for proc in procs]
+
         yield (
-            f"rfc2217://127.0.0.1:{left_port}",
-            f"rfc2217://127.0.0.1:{right_port}",
+            f"rfc2217://127.0.0.1:{left}",
+            f"rfc2217://127.0.0.1:{right}",
         )
     finally:
         for proc in procs:

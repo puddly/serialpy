@@ -43,7 +43,7 @@ void SerialxHostOverridesComponent::setup() {
   errno = 0;
   char *end = nullptr;
   long parsed = std::strtol(api_port_value, &end, 10);
-  if (errno != 0 || end == api_port_value || *end != '\0' || parsed < 1 || parsed > 65535) {
+  if (errno != 0 || end == api_port_value || *end != '\0' || parsed < 0 || parsed > 65535) {
     ESP_LOGE(TAG, "Invalid API port in %s: %s", this->api_port_env_.c_str(), api_port_value);
     return;
   }
