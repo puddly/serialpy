@@ -664,40 +664,46 @@ class BaseSerialTransport(asyncio.Transport):
         assert self._serial is not None
         return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
 
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
+        await self._loop.run_in_executor(
+            None,
+            lambda: (
+                self._serial._set_modem_pins(modem_pins)
+                if self._serial is not None
+                else None
+            ),
+        )
+
     async def set_modem_pins(
         self,
         modem_pins: ModemPins | None = None,
         *,
-        le: bool | None = None,
-        dtr: bool | None = None,
-        rts: bool | None = None,
-        st: bool | None = None,
-        sr: bool | None = None,
-        cts: bool | None = None,
-        car: bool | None = None,
-        rng: bool | None = None,
-        dsr: bool | None = None,
+        le: PinState | bool | None = PinState.UNDEFINED,
+        dtr: PinState | bool | None = PinState.UNDEFINED,
+        rts: PinState | bool | None = PinState.UNDEFINED,
+        st: PinState | bool | None = PinState.UNDEFINED,
+        sr: PinState | bool | None = PinState.UNDEFINED,
+        cts: PinState | bool | None = PinState.UNDEFINED,
+        car: PinState | bool | None = PinState.UNDEFINED,
+        rng: PinState | bool | None = PinState.UNDEFINED,
+        dsr: PinState | bool | None = PinState.UNDEFINED,
     ) -> None:
         """Set modem control bits."""
-        await self._loop.run_in_executor(
-            None,
-            lambda: (
-                None
-                if self._serial is None
-                else self._serial.set_modem_pins(
-                    modem_pins,
-                    le=le,
-                    dtr=dtr,
-                    rts=rts,
-                    st=st,
-                    sr=sr,
-                    cts=cts,
-                    car=car,
-                    rng=rng,
-                    dsr=dsr,
-                )
-            ),
-        )
+        if modem_pins is None:
+            modem_pins = ModemPins(
+                le=PinState.convert(le),
+                dtr=PinState.convert(dtr),
+                rts=PinState.convert(rts),
+                st=PinState.convert(st),
+                sr=PinState.convert(sr),
+                cts=PinState.convert(cts),
+                car=PinState.convert(car),
+                rng=PinState.convert(rng),
+                dsr=PinState.convert(dsr),
+            )
+
+        return await self._set_modem_pins(modem_pins)
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
