@@ -198,6 +198,14 @@ jobs:
           key: >-
             1-esphome-daemon-${{
             hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+      - name: Get kernel version
+        id: kernel
+        run: echo "version=$(uname -r)" >> "$GITHUB_OUTPUT"
+      - name: Restore cached tty0tty module
+        uses: actions/cache/restore@v4
+        with:
+          path: tty0tty.ko
+          key: tty0tty-dac0a105bee6997ebb3a06441c7befe3164c9fd1-${{ steps.kernel.outputs.version }}
       - name: Install system dependencies
         run: |
           sudo apt-get update
