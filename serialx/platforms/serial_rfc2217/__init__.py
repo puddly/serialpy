@@ -1,0 +1,975 @@
+"""RFC 2217 (Telnet Com Port Control) implementation."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Generator
+from contextlib import contextmanager, suppress
+from enum import IntEnum
+import logging
+import sys
+
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as asyncio_timeout
+else:
+    from async_timeout import timeout as asyncio_timeout
+
+from typing_extensions import Buffer
+
+from ...common import (
+    BaseSerialTransport,
+    ModemPins,
+    Parity,
+    PinState,
+    SerialException,
+    StopBits,
+    UnsupportedSetting,
+    measure_time,
+)
+from ..serial_socket import SocketSerial
+from .types import (
+    CMD_ID_TO_CLASS,
+    ControlCmdId,
+    DoCmd,
+    DontCmd,
+    LineStateFlag,
+    ModemStateFlag,
+    NotifyLinestateCmd,
+    NotifyModemstateCmd,
+    PurgeDataCmd,
+    PurgeDataValue,
+    Rfc2217CmdId,
+    Rfc2217Command,
+    Rfc2217Parity,
+    Rfc2217StopSize,
+    SetBaudrateCmd,
+    SetControlCmd,
+    SetDatasizeCmd,
+    SetLinestateMaskCmd,
+    SetModemstateMaskCmd,
+    SetParityCmd,
+    SetStopsizeCmd,
+    TelnetCmdId,
+    TelnetCommand,
+    TelnetOption,
+    WillCmd,
+    WontCmd,
+    encode_command,
+    iac_escape,
+)
+
+LOGGER = logging.getLogger(__name__)
+
+RFC2217_PARITY_MAP = {
+    Parity.NONE: Rfc2217Parity.NONE,
+    Parity.ODD: Rfc2217Parity.ODD,
+    Parity.EVEN: Rfc2217Parity.EVEN,
+    Parity.MARK: Rfc2217Parity.MARK,
+    Parity.SPACE: Rfc2217Parity.SPACE,
+}
+
+RFC2217_STOPBITS_MAP = {
+    StopBits.ONE: Rfc2217StopSize.ONE,
+    StopBits.TWO: Rfc2217StopSize.TWO,
+    StopBits.ONE_POINT_FIVE: Rfc2217StopSize.ONE_POINT_FIVE,
+}
+
+
+OPTION_CMD_TO_TYPE: dict[int, type[WillCmd | WontCmd | DoCmd | DontCmd]] = {
+    TelnetCmdId.WILL: WillCmd,
+    TelnetCmdId.WONT: WontCmd,  # codespell:ignore wont
+    TelnetCmdId.DO: DoCmd,
+    TelnetCmdId.DONT: DontCmd,
+}
+
+
+class TelnetParserState(IntEnum):
+    """States for the telnet protocol parser state machine."""
+
+    NORMAL = 0
+    IAC_SEEN = 1
+    OPTION_CMD = (
+        2  # waiting for option byte after WILL/WONT/DO/DONT  # codespell:ignore wont
+    )
+    SUBNEG_OPTION = 3  # waiting for option byte after SB
+    SUBNEG_DATA = 4  # accumulating subneg payload
+    SUBNEG_IAC = 5  # IAC seen inside subnegotiation
+
+
+class TelnetParser:
+    """State machine that separates a telnet byte stream into data and commands."""
+
+    def __init__(self) -> None:
+        """Initialize the telnet parser."""
+        self._state = TelnetParserState.NORMAL
+        self._pending_cmd: int = 0
+        self._subneg_option: int = 0
+        self._subneg_buffer = bytearray()
+
+    def feed(self, data: bytes) -> list[bytes | TelnetCommand | Rfc2217Command]:
+        """Process raw bytes and return data chunks and commands."""
+        LOGGER.debug("Parser feed: %d bytes: %s", len(data), data.hex(" "))
+        result: list[bytes | TelnetCommand | Rfc2217Command] = []
+        data_buf = bytearray()
+
+        for byte in data:
+            match self._state:
+                case TelnetParserState.NORMAL:
+                    if byte == TelnetCmdId.IAC:
+                        self._state = TelnetParserState.IAC_SEEN
+                    else:
+                        data_buf.append(byte)
+
+                case TelnetParserState.IAC_SEEN:
+                    if byte == TelnetCmdId.IAC:
+                        # Escaped IAC -> literal 0xFF data byte
+                        data_buf.append(0xFF)
+                        self._state = TelnetParserState.NORMAL
+                    elif byte == TelnetCmdId.SB:
+                        # Flush data before command
+                        if data_buf:
+                            result.append(bytes(data_buf))
+                            data_buf.clear()
+                        self._state = TelnetParserState.SUBNEG_OPTION
+                    elif byte in OPTION_CMD_TO_TYPE:
+                        if data_buf:
+                            result.append(bytes(data_buf))
+                            data_buf.clear()
+                        self._pending_cmd = byte
+                        self._state = TelnetParserState.OPTION_CMD
+                    else:
+                        # Ignore NOP, BRK, DM, etc.
+                        self._state = TelnetParserState.NORMAL
+
+                case TelnetParserState.OPTION_CMD:
+                    cmd_cls = OPTION_CMD_TO_TYPE[self._pending_cmd]
+                    option_cmd = cmd_cls(option=TelnetOption(byte))
+                    LOGGER.debug("Parsed telnet command: %r", option_cmd)
+                    result.append(option_cmd)
+                    self._state = TelnetParserState.NORMAL
+
+                case TelnetParserState.SUBNEG_OPTION:
+                    self._subneg_option = byte
+                    self._subneg_buffer.clear()
+                    self._state = TelnetParserState.SUBNEG_DATA
+
+                case TelnetParserState.SUBNEG_DATA:
+                    if byte == TelnetCmdId.IAC:
+                        self._state = TelnetParserState.SUBNEG_IAC
+                    else:
+                        self._subneg_buffer.append(byte)
+
+                case TelnetParserState.SUBNEG_IAC:
+                    if byte == TelnetCmdId.IAC:
+                        # Escaped IAC inside subneg
+                        self._subneg_buffer.append(0xFF)
+                        self._state = TelnetParserState.SUBNEG_DATA
+                    elif byte == TelnetCmdId.SE:
+                        cmd = self._finish_subneg()
+                        if cmd is not None:
+                            result.append(cmd)
+                        self._state = TelnetParserState.NORMAL
+                    else:
+                        # Malformed, discard subneg and treat as normal IAC cmd
+                        LOGGER.debug(
+                            "Malformed subneg: IAC %d inside subneg for option %d",
+                            byte,
+                            self._subneg_option,
+                        )
+                        self._state = TelnetParserState.NORMAL
+
+        if data_buf:
+            result.append(bytes(data_buf))
+
+        return result
+
+    def _finish_subneg(self) -> Rfc2217Command | None:
+        """Parse a completed subnegotiation."""
+        option = self._subneg_option
+        payload = bytes(self._subneg_buffer)
+
+        LOGGER.debug("Subneg complete: option=%d payload=%r", option, payload.hex(" "))
+
+        if option != TelnetOption.COM_PORT_OPTION:
+            LOGGER.debug("Ignoring subneg for unknown option %d", option)
+            return None
+
+        if not payload:
+            LOGGER.debug("Empty COM-PORT-OPTION subneg")
+            return None
+
+        cmd_code = payload[0]
+        cmd_payload = payload[1:]
+
+        # Server responses use codes offset by +100
+        if cmd_code >= 100:
+            cmd_code -= 100
+
+        cmd_cls = CMD_ID_TO_CLASS.get(cmd_code)
+        if cmd_cls is None:
+            LOGGER.debug("Unknown RFC 2217 command code: %d", cmd_code)
+            return None
+
+        cmd = cmd_cls.from_bytes(cmd_payload)
+        LOGGER.debug("Parsed RFC2217 %s", cmd)
+        return cmd
+
+
+class Rfc2217:
+    """IO-free RFC2217 protocol engine shared by sync and async wrappers."""
+
+    _ACCEPTED_OPTIONS = frozenset(
+        {
+            TelnetOption.BINARY,
+            TelnetOption.SUPPRESS_GO_AHEAD,
+        }
+    )
+
+    def __init__(self) -> None:
+        """Initialize parser state and protocol bookkeeping."""
+        self._parser = TelnetParser()
+        self._pending_telnet: dict[TelnetCmdId, TelnetCommand] = {}
+        self._pending_rfc2217: dict[Rfc2217CmdId, Rfc2217Command] = {}
+        self._modemstate = ModemStateFlag(0)
+        self._linestate = LineStateFlag(0)
+        self._negotiated = False
+        self._dtr_state: PinState = PinState.UNDEFINED
+        self._rts_state: PinState = PinState.UNDEFINED
+
+    @property
+    def negotiated(self) -> bool:
+        """Return whether COM-PORT-OPTION negotiation has completed."""
+        return self._negotiated
+
+    def mark_negotiated(self) -> None:
+        """Mark COM-PORT-OPTION negotiation as complete."""
+        self._negotiated = True
+
+    def reset(self) -> None:
+        """Reset parser state and all protocol bookkeeping."""
+        self._parser = TelnetParser()
+        self._pending_telnet.clear()
+        self._pending_rfc2217.clear()
+        self._modemstate = ModemStateFlag(0)
+        self._linestate = LineStateFlag(0)
+        self._negotiated = False
+
+    def feed(self, data: bytes) -> tuple[bytes, list[TelnetCommand]]:
+        """Parse raw bytes, update protocol state, and return data/responses."""
+        return self._dispatch_parser_items(self._parser.feed(data))
+
+    def pop_pending_telnet(self, cmd_id: TelnetCmdId) -> TelnetCommand | None:
+        """Pop a pending telnet command of the given type, if present."""
+        return self._pending_telnet.pop(cmd_id, None)
+
+    def pop_pending_rfc2217(self, cmd_id: Rfc2217CmdId) -> Rfc2217Command | None:
+        """Pop a pending RFC2217 command of the given type, if present."""
+        return self._pending_rfc2217.pop(cmd_id, None)
+
+    def check_negotiation_response(self) -> bool:
+        """Consume COM-PORT-OPTION negotiation responses when present."""
+        cmd = self._pending_telnet.pop(TelnetCmdId.DO, None)
+        if cmd is not None:
+            assert isinstance(cmd, DoCmd)
+            assert cmd.option == TelnetOption.COM_PORT_OPTION
+            self.mark_negotiated()
+            LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
+            return True
+
+        if self._pending_telnet.pop(TelnetCmdId.DONT, None) is not None:
+            raise SerialException("Server refused COM-PORT-OPTION (sent DONT 44)")
+
+        return False
+
+    def build_port_config_commands(
+        self,
+        *,
+        baudrate: int,
+        byte_size: int,
+        parity: Parity,
+        stopbits: StopBits,
+        rtscts: bool,
+        xonxoff: bool,
+    ) -> tuple[Rfc2217Command, ...]:
+        """Build the RFC2217 commands needed to configure the remote port."""
+        if rtscts and xonxoff:
+            raise UnsupportedSetting(
+                "Cannot enable both RTS/CTS and XON/XOFF flow control"
+            )
+
+        if rtscts:
+            flow_control = ControlCmdId.USE_HARDWARE
+        elif xonxoff:
+            flow_control = ControlCmdId.USE_XON_XOFF
+        else:
+            flow_control = ControlCmdId.USE_NO_FLOW_CONTROL
+
+        return (
+            SetBaudrateCmd(baudrate=baudrate),
+            SetDatasizeCmd(size=byte_size),
+            SetParityCmd(parity=RFC2217_PARITY_MAP[parity]),
+            SetStopsizeCmd(size=RFC2217_STOPBITS_MAP[stopbits]),
+            SetControlCmd(control=flow_control),
+            SetModemstateMaskCmd(mask=ModemStateFlag(255)),
+            SetLinestateMaskCmd(mask=LineStateFlag(0)),
+        )
+
+    def build_modem_pin_commands(
+        self, modem_pins: ModemPins
+    ) -> Generator[SetControlCmd]:
+        """Build SET_CONTROL commands needed to apply modem pin changes."""
+        if modem_pins.dtr is PinState.HIGH:
+            self._dtr_state = PinState.HIGH
+            yield SetControlCmd(control=ControlCmdId.SET_DTR_ON)
+        elif modem_pins.dtr is PinState.LOW:
+            self._dtr_state = PinState.LOW
+            yield SetControlCmd(control=ControlCmdId.SET_DTR_OFF)
+
+        if modem_pins.rts is PinState.HIGH:
+            self._rts_state = PinState.HIGH
+            yield SetControlCmd(control=ControlCmdId.SET_RTS_ON)
+        elif modem_pins.rts is PinState.LOW:
+            self._rts_state = PinState.LOW
+            yield SetControlCmd(control=ControlCmdId.SET_RTS_OFF)
+
+    def get_modem_pins(self) -> ModemPins:
+        """Return modem pin state from the last NOTIFY-MODEMSTATE."""
+        state = self._modemstate
+
+        return ModemPins(
+            dtr=self._dtr_state,
+            rts=self._rts_state,
+            cts=(PinState.HIGH if state & ModemStateFlag.CTS else PinState.LOW),
+            dsr=(PinState.HIGH if state & ModemStateFlag.DSR else PinState.LOW),
+            rng=(PinState.HIGH if state & ModemStateFlag.RI else PinState.LOW),
+            car=(PinState.HIGH if state & ModemStateFlag.RLSD else PinState.LOW),
+        )
+
+    def _build_do_response(self, cmd: DoCmd) -> WillCmd | WontCmd | None:
+        """Build a response to a telnet DO option negotiation command."""
+        if cmd.option == TelnetOption.COM_PORT_OPTION:
+            self._pending_telnet[cmd.CMD_ID] = cmd
+            return None
+
+        if cmd.option in self._ACCEPTED_OPTIONS:
+            return WillCmd(option=cmd.option)
+        else:
+            return WontCmd(option=cmd.option)
+
+    def _build_will_response(self, cmd: WillCmd) -> DoCmd | DontCmd | None:
+        """Build a response to a telnet WILL option negotiation command."""
+        if cmd.option == TelnetOption.COM_PORT_OPTION:
+            self._pending_telnet[cmd.CMD_ID] = cmd
+            return None
+
+        if cmd.option in self._ACCEPTED_OPTIONS:
+            return DoCmd(option=cmd.option)
+        else:
+            return DontCmd(option=cmd.option)
+
+    def _dispatch_parser_items(
+        self, items: list[bytes | TelnetCommand | Rfc2217Command]
+    ) -> tuple[bytes, list[TelnetCommand]]:
+        """Update protocol state from parsed items and produce responses."""
+        responses: list[TelnetCommand] = []
+        serial_data = bytearray()
+
+        for item in items:
+            if isinstance(item, bytes):
+                LOGGER.debug("RX data: %d bytes  [%s]", len(item), item.hex(" "))
+                serial_data.extend(item)
+            elif isinstance(item, NotifyModemstateCmd):
+                LOGGER.debug("RX modemstate notification: %r", item)
+                self._modemstate = item.modemstate
+            elif isinstance(item, NotifyLinestateCmd):
+                LOGGER.debug("RX linestate notification: %r", item)
+                self._linestate = item.linestate
+            elif isinstance(item, WillCmd):
+                will_rsp = self._build_will_response(item)
+                LOGGER.debug("RX %r -> %r", item, will_rsp)
+                if will_rsp is not None:
+                    responses.append(will_rsp)
+            elif isinstance(item, DoCmd):
+                do_rsp = self._build_do_response(item)
+                LOGGER.debug("RX %r -> %r", item, do_rsp)
+                if do_rsp is not None:
+                    responses.append(do_rsp)
+            elif isinstance(item, Rfc2217Command):
+                LOGGER.debug("RX rfc2217 cmd: %r", item)
+                self._pending_rfc2217[item.CMD_ID] = item
+            else:
+                LOGGER.debug("RX telnet cmd: %r", item)
+                self._pending_telnet[item.CMD_ID] = item
+
+        return bytes(serial_data), responses
+
+
+class RFC2217Serial(SocketSerial):
+    """RFC 2217 serial port implementation (Synchronous)."""
+
+    def __init__(
+        self,
+        *args,
+        receive_buffer_size: int = 4096,
+        connect_timeout: float = 5.0,
+        **kwargs,
+    ) -> None:
+        """Initialize the RFC 2217 serial port."""
+        super().__init__(*args, **kwargs)
+        self._receive_buffer_size = receive_buffer_size
+        self._connect_timeout = connect_timeout
+
+        self._engine = Rfc2217()
+        self._data_buffer = bytearray()
+
+    @contextmanager
+    def _socket_timeout(
+        self, timeout: float | None
+    ) -> Generator[float | None, None, None]:
+        """Context manager to set socket timeout temporarily."""
+        assert self._socket is not None
+
+        original_timeout = self._socket.gettimeout()
+        self._socket.settimeout(timeout)
+
+        try:
+            yield original_timeout
+        finally:
+            self._socket.settimeout(original_timeout)
+
+    def _open(self) -> None:
+        """Open the TCP connection and negotiate COM-PORT-OPTION."""
+        super()._open()
+        assert self._socket is not None
+        LOGGER.debug("TCP connected to %s:%s", self._host, self._port)
+        self._negotiate()
+
+    def _negotiate(self) -> None:
+        """Perform the initial WILL/DO handshake for COM-PORT-OPTION."""
+        assert self._socket is not None
+        LOGGER.debug("Starting RFC 2217 negotiation")
+        self._send_command(WillCmd(option=TelnetOption.BINARY))
+        self._send_command(DoCmd(option=TelnetOption.BINARY))
+        self._send_command(WillCmd(option=TelnetOption.COM_PORT_OPTION))
+
+        while True:
+            if self._engine.check_negotiation_response():
+                return
+
+            with self._socket_timeout(self._connect_timeout):
+                self._recv_and_process()
+
+    def _configure_port(self) -> None:
+        """Send serial port configuration to the access server."""
+        # Let parent set socket timeout
+        super()._configure_port()
+
+        if not self._engine.negotiated:
+            return
+
+        LOGGER.debug(
+            "Configuring port: baudrate=%d byte_size=%d parity=%s stopbits=%s "
+            "rtscts=%s xonxoff=%s",
+            self._baudrate,
+            self._byte_size,
+            self._parity,
+            self._stopbits,
+            self._rtscts,
+            self._xonxoff,
+        )
+
+        for cmd in self._engine.build_port_config_commands(
+            baudrate=self._baudrate,
+            byte_size=self._byte_size,
+            parity=self._parity,
+            stopbits=self._stopbits,
+            rtscts=self._rtscts,
+            xonxoff=self._xonxoff,
+        ):
+            with self._socket_timeout(self._connect_timeout):
+                self._send_and_wait(cmd)
+
+        LOGGER.debug("Port configuration complete")
+
+    def _close(self) -> None:
+        """Close the connection and reset state."""
+        self._engine.reset()
+        self._data_buffer.clear()
+        LOGGER.debug("Closing RFC 2217 connection")
+        super()._close()
+
+    # -- low-level send/receive helpers -------------------------------------
+
+    def _send_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
+        """Encode and send a command over the socket."""
+        assert self._socket is not None
+        data = encode_command(cmd)
+        LOGGER.debug("TX cmd: %r  [%s]", cmd, data.hex(" "))
+        self._socket.sendall(data)
+
+    def _recv_and_process(self) -> None:
+        """Read raw bytes from socket, feed through parser, dispatch results."""
+        assert self._socket is not None
+        buf = bytearray(self._receive_buffer_size)
+        n = self._socket.recv_into(buf)
+
+        if n == 0:
+            raise SerialException("RFC 2217 connection closed by server")
+
+        raw = bytes(buf[:n])
+        LOGGER.debug("RX raw: %d bytes  [%s]", n, raw.hex(" "))
+        serial_data, responses = self._engine.feed(raw)
+        self._data_buffer.extend(serial_data)
+
+        for response in responses:
+            self._send_command(response)
+
+    def _drain_data_buffer(self, target: memoryview) -> int:
+        """Copy buffered serial data into ``target`` when available."""
+        if not self._data_buffer:
+            return 0
+
+        n = min(len(target), len(self._data_buffer))
+        target[:n] = self._data_buffer[:n]
+        del self._data_buffer[:n]
+        LOGGER.debug("Read %d bytes from data buffer", n)
+        return n
+
+    def _send_and_wait(self, cmd: Rfc2217Command) -> Rfc2217Command:
+        """Send a command and block until the matching server ack arrives."""
+        cmd_id = cmd.CMD_ID
+        self._send_command(cmd)
+        LOGGER.debug("Waiting for %s ack...", type(cmd).__name__)
+
+        while True:
+            pending = self._engine.pop_pending_rfc2217(cmd_id)
+
+            if pending is not None:
+                LOGGER.debug("RX ack: %r", pending)
+                return pending
+
+            self._recv_and_process()
+
+    def num_unread_bytes(self) -> int:
+        """Return the number of buffered serial data bytes waiting to be read."""
+        return len(self._data_buffer)
+
+    def reset_write_buffer(self) -> None:
+        """Reset the write buffer."""
+        self._send_and_wait(PurgeDataCmd(what=PurgeDataValue.RECEIVE))
+
+    def reset_read_buffer(self) -> None:
+        """Reset the read buffer."""
+        self._send_and_wait(PurgeDataCmd(what=PurgeDataValue.TRANSMIT))
+        self._data_buffer.clear()
+
+    def _write(self, b: Buffer, *, timeout: float | None) -> int:
+        """Write data bytes to socket, escaping any 0xFF."""
+        assert self._socket is not None
+        data = bytes(b)
+        escaped = iac_escape(data)
+        LOGGER.debug(
+            "TX data: %d bytes (%d on wire)  [%s]",
+            len(data),
+            len(escaped),
+            escaped.hex(" "),
+        )
+
+        with self._socket_timeout(timeout):
+            self._socket.sendall(escaped)
+
+        return len(data)
+
+    def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
+        """Read data bytes into buffer, transparently handling telnet framing."""
+        m = memoryview(b).cast("B")
+
+        # Serve from already-buffered data first
+        n = self._drain_data_buffer(m)
+        if n:
+            return n
+
+        # Read from socket and feed through parser
+        assert self._socket is not None
+        buf = bytearray(max(len(m), self._receive_buffer_size))
+
+        # Individual RFC2217 socket reads may not always translate into real serial data
+        # we need to loop until it actually produces some, or we hit the timeout limit
+        while True:
+            if timeout is not None and timeout <= 0:
+                return 0
+
+            with measure_time() as get_elapsed:
+                try:
+                    with self._socket_timeout(timeout):
+                        n = self._socket.recv_into(buf)
+                except TimeoutError:
+                    return 0
+
+            if timeout is not None:
+                timeout -= get_elapsed()
+
+            if n == 0:
+                return 0
+
+            raw = bytes(buf[:n])
+            LOGGER.debug("RX raw (readinto): %d bytes  [%s]", n, raw.hex(" "))
+            serial_data, responses = self._engine.feed(raw)
+            self._data_buffer.extend(serial_data)
+
+            for response in responses:
+                self._send_command(response)
+
+            # Serve whatever data the parser produced
+            n = self._drain_data_buffer(m)
+            if n:
+                return n
+
+    def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set DTR/RTS via SET_CONTROL commands."""
+        LOGGER.debug("Setting modem pins: %r", modem_pins)
+
+        for cmd in self._engine.build_modem_pin_commands(modem_pins):
+            self._send_and_wait(cmd)
+
+    def _get_modem_pins(self) -> ModemPins:
+        """Return modem pin state from the last NOTIFY-MODEMSTATE."""
+
+        # Process any pending data to ensure we have the latest modem state
+        with self._socket_timeout(0):  # noqa: SIM117
+            with suppress(BlockingIOError):
+                self._recv_and_process()
+
+        return self._engine.get_modem_pins()
+
+    def flush(self) -> None:
+        """Flush write buffers (no-op, TCP handles buffering)."""
+
+
+class _RFC2217ProxyProtocol(asyncio.Protocol):
+    """Bridge protocol between asyncio TCP transport and RFC2217SerialTransport."""
+
+    def __init__(self, serial_transport: RFC2217SerialTransport) -> None:
+        """Initialize the proxy protocol."""
+        self._serial_transport = serial_transport
+
+    def data_received(self, data: bytes) -> None:
+        """Forward received data to the serial transport for parsing."""
+        self._serial_transport._data_received(data)
+
+    def pause_writing(self) -> None:
+        """Propagate backpressure from TCP transport to serial protocol."""
+        self._serial_transport._protocol.pause_writing()
+
+    def resume_writing(self) -> None:
+        """Propagate resume signal from TCP transport to serial protocol."""
+        self._serial_transport._protocol.resume_writing()
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        """Handle TCP connection loss."""
+        self._serial_transport._tcp_connection_lost(exc)
+
+
+class RFC2217SerialTransport(BaseSerialTransport):
+    """Async RFC 2217 serial transport over TCP."""
+
+    transport_name = "rfc2217"
+    _serial: RFC2217Serial
+
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
+    ) -> None:
+        """Initialize the RFC 2217 serial transport."""
+        super().__init__(loop, protocol)
+        self._telnet_waiters: dict[TelnetCmdId, asyncio.Future[TelnetCommand]] = {}
+        self._rfc2217_waiters: dict[Rfc2217CmdId, asyncio.Future[Rfc2217Command]] = {}
+        self._tcp_transport: asyncio.Transport | None = None
+        self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
+        self._connection_lost_called = False
+        self._configured = False
+
+    # -- connection lifecycle -----------------------------------------------
+
+    async def _connect(  # type: ignore[override]
+        self,
+        *,
+        path: str,
+        baudrate: int,
+        parity: Parity = Parity.NONE,
+        stopbits: StopBits | int | float = StopBits.ONE,
+        xonxoff: bool = False,
+        rtscts: bool = False,
+        byte_size: int = 8,
+        **kwargs,
+    ) -> None:
+        """Connect to the RFC 2217 server and negotiate COM-PORT-OPTION."""
+        self._serial = RFC2217Serial(
+            path=path,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            byte_size=byte_size,
+        )
+        self._extra["serial"] = self._serial
+
+        self._tcp_connection_lost_waiter = self._loop.create_future()
+
+        async with asyncio_timeout(self._serial._connect_timeout):
+            tcp_transport, _ = await self._loop.create_connection(
+                lambda: _RFC2217ProxyProtocol(self),
+                host=self._serial._host,
+                port=self._serial._port,
+            )
+            self._tcp_transport = tcp_transport
+
+            if self._connection_lost_called:
+                tcp_transport.close()
+                if self._tcp_connection_lost_waiter is not None:
+                    await self._tcp_connection_lost_waiter
+                self._tcp_transport = None
+                return
+
+            await self._negotiate()
+            await self._configure_port()
+
+        self._configured = True
+        self._protocol.connection_made(self)
+
+    async def _negotiate(self) -> None:
+        """Perform the initial WILL/DO handshake for COM-PORT-OPTION."""
+        LOGGER.debug("Starting RFC 2217 negotiation")
+        self._send_command(WillCmd(option=TelnetOption.BINARY))
+        self._send_command(DoCmd(option=TelnetOption.BINARY))
+        self._send_command(WillCmd(option=TelnetOption.COM_PORT_OPTION))
+
+        cmd = await self._wait_for_telnet_commands([TelnetCmdId.DO, TelnetCmdId.DONT])
+        if isinstance(cmd, DontCmd):
+            raise SerialException("Server refused COM-PORT-OPTION (sent DONT 44)")
+
+        assert isinstance(cmd, DoCmd)
+        assert cmd.option == TelnetOption.COM_PORT_OPTION
+
+        self._serial._engine.mark_negotiated()
+        LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
+
+    async def _configure_port(self) -> None:
+        """Send serial port configuration to the access server."""
+        serial = self._serial
+
+        LOGGER.debug(
+            "Configuring port: baudrate=%d byte_size=%d parity=%s stopbits=%s "
+            "rtscts=%s xonxoff=%s",
+            serial._baudrate,
+            serial._byte_size,
+            serial._parity,
+            serial._stopbits,
+            serial._rtscts,
+            serial._xonxoff,
+        )
+
+        for cmd in serial._engine.build_port_config_commands(
+            baudrate=serial._baudrate,
+            byte_size=serial._byte_size,
+            parity=serial._parity,
+            stopbits=serial._stopbits,
+            rtscts=serial._rtscts,
+            xonxoff=serial._xonxoff,
+        ):
+            await self._send_and_wait(cmd)
+
+        LOGGER.debug("Port configuration complete")
+
+    # -- low-level send/receive helpers -------------------------------------
+
+    def _send_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
+        """Encode and send a command over the TCP transport."""
+        assert self._tcp_transport is not None
+        data = encode_command(cmd)
+        LOGGER.debug("TX cmd: %r  [%s]", cmd, data.hex(" "))
+        self._tcp_transport.write(data)
+
+    def _data_received(self, data: bytes) -> None:
+        """Handle raw data from the TCP transport."""
+        LOGGER.debug("RX raw: %d bytes  [%s]", len(data), data.hex(" "))
+        serial_data, responses = self._serial._engine.feed(data)
+        self._resolve_pending_waiters()
+
+        for response in responses:
+            self._send_command(response)
+
+        if serial_data and self._configured:
+            self._protocol.data_received(serial_data)
+
+    async def _send_and_wait(self, cmd: Rfc2217Command) -> Rfc2217Command:
+        """Send a command and wait for the matching server ack."""
+        waiter: asyncio.Future[Rfc2217Command] = self._loop.create_future()
+        pending = self._serial._engine.pop_pending_rfc2217(cmd.CMD_ID)
+        if pending is not None:
+            self._send_command(cmd)
+            LOGGER.debug("RX ack (already pending): %r", pending)
+            return pending
+
+        self._rfc2217_waiters[cmd.CMD_ID] = waiter
+        try:
+            self._send_command(cmd)
+            LOGGER.debug("Waiting for %s ack...", type(cmd).__name__)
+            result = await waiter
+        finally:
+            if self._rfc2217_waiters.get(cmd.CMD_ID) is waiter:
+                self._rfc2217_waiters.pop(cmd.CMD_ID, None)
+
+        LOGGER.debug("RX ack: %r", result)
+        return result
+
+    def write(self, data: bytes | bytearray | memoryview) -> None:
+        """Write data to the serial port, escaping IAC bytes."""
+        assert self._tcp_transport is not None
+        escaped = iac_escape(bytes(data))
+        LOGGER.debug("TX data: %d bytes (%d on wire)", len(data), len(escaped))
+        self._tcp_transport.write(escaped)
+
+    async def get_modem_pins(self) -> ModemPins:
+        """Return modem pin state from the last NOTIFY-MODEMSTATE."""
+        return self._serial._engine.get_modem_pins()
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set DTR/RTS via SET_CONTROL commands."""
+        LOGGER.debug("Setting modem pins: %r", modem_pins)
+
+        for cmd in self._serial._engine.build_modem_pin_commands(modem_pins):
+            await self._send_and_wait(cmd)
+
+    async def _wait_for_telnet_commands(
+        self, rsp_ids: list[TelnetCmdId]
+    ) -> TelnetCommand:
+        """Wait for one of the specified telnet commands."""
+        for cmd_id in rsp_ids:
+            pending = self._serial._engine.pop_pending_telnet(cmd_id)
+            if pending is not None:
+                return pending
+
+        waiter: asyncio.Future[TelnetCommand] = self._loop.create_future()
+        for cmd_id in rsp_ids:
+            self._telnet_waiters[cmd_id] = waiter
+
+        try:
+            return await waiter
+        finally:
+            for cmd_id in rsp_ids:
+                if self._telnet_waiters.get(cmd_id) is waiter:
+                    self._telnet_waiters.pop(cmd_id, None)
+
+    def _resolve_pending_waiters(self) -> None:
+        """Resolve any async waiters whose commands have now been parsed."""
+        for cmd_id, waiter in list(self._telnet_waiters.items()):
+            if waiter.done():
+                self._telnet_waiters.pop(cmd_id, None)
+                continue
+
+            pending = self._serial._engine.pop_pending_telnet(cmd_id)
+            if pending is not None:
+                self._telnet_waiters.pop(cmd_id, None)
+                waiter.set_result(pending)
+
+        for rfc_cmd_id, rfc_waiter in list(self._rfc2217_waiters.items()):
+            if rfc_waiter.done():
+                self._rfc2217_waiters.pop(rfc_cmd_id, None)
+                continue
+
+            rfc_pending = self._serial._engine.pop_pending_rfc2217(rfc_cmd_id)
+            if rfc_pending is not None:
+                self._rfc2217_waiters.pop(rfc_cmd_id, None)
+                rfc_waiter.set_result(rfc_pending)
+
+    # -- transport lifecycle ------------------------------------------------
+
+    def _tcp_connection_lost(self, exc: Exception | None) -> None:
+        """Handle TCP connection loss."""
+        if (
+            self._tcp_connection_lost_waiter is not None
+            and not self._tcp_connection_lost_waiter.done()
+        ):
+            self._tcp_connection_lost_waiter.set_result(None)
+
+        if self._connection_lost_called:
+            return
+        self._connection_lost_called = True
+        self._closing = True
+        self._tcp_transport = None
+
+        # Fail any pending waiters
+        waiter_exc = exc or SerialException("RFC 2217 connection closed by server")
+        for waiters in (self._telnet_waiters, self._rfc2217_waiters):
+            for waiter in waiters.values():
+                if not waiter.done():
+                    waiter.set_exception(waiter_exc)
+            waiters.clear()
+
+        self._serial._engine.reset()
+
+        self._call_protocol_connection_lost(exc)
+
+    def pause_reading(self) -> None:
+        """Pause reading from the TCP transport."""
+        assert self._tcp_transport is not None
+        self._tcp_transport.pause_reading()
+
+    def resume_reading(self) -> None:
+        """Resume reading from the TCP transport."""
+        assert self._tcp_transport is not None
+        self._tcp_transport.resume_reading()
+
+    def close(self) -> None:
+        """Close the transport."""
+        if self._connection_lost_called:
+            return
+        self._closing = True
+
+        if self._tcp_transport is not None:
+            self._tcp_transport.close()
+        else:
+            self._tcp_connection_lost(None)
+
+    def abort(self) -> None:
+        """Abort the transport immediately."""
+        if self._connection_lost_called:
+            return
+        self._closing = True
+
+        if self._tcp_transport is not None:
+            self._tcp_transport.abort()
+        else:
+            self._tcp_connection_lost(None)
+
+    async def flush(self) -> None:
+        """Flush write buffers (no-op, TCP transport handles buffering)."""
+
+    def get_write_buffer_size(self) -> int:
+        """Get the number of bytes currently in the write buffer."""
+        if self._tcp_transport is None:
+            return 0
+
+        return self._tcp_transport.get_write_buffer_size()
+
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Get the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            return (0, 0)
+
+        return self._tcp_transport.get_write_buffer_limits()
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            raise RuntimeError("Transport not connected")
+
+        self._tcp_transport.set_write_buffer_limits(high=high, low=low)
+
+    def can_write_eof(self) -> bool:
+        """Return whether the underlying TCP transport supports EOF."""
+        if self._tcp_transport is None:
+            return False
+
+        return self._tcp_transport.can_write_eof()
