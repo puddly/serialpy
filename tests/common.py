@@ -115,24 +115,14 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
     SerialBackend.RFC2217: frozenset(
         {
             SerialQuirk.NO_RTS_DTR_READBACK,
-        }
-    ),
-    SerialBackend.SER2NET: frozenset(
-        {
             SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
         }
     ),
-    SerialBackend.HUB4COM: frozenset(
-        {
-            SerialQuirk.NO_BUFFER_CONTROL,
-            SerialQuirk.NO_NUM_UNREAD_BYTES,
-            SerialQuirk.NO_RESET_WRITE_BUFFER,
-            SerialQuirk.NO_WRITE_TIMEOUT,
-        }
-    ),
+    SerialBackend.SER2NET: frozenset({}),
+    SerialBackend.HUB4COM: frozenset({}),
     SerialBackend.ADAPTER: frozenset(
         {
             SerialQuirk.NO_UNPLUG,
@@ -161,15 +151,20 @@ class UnresolvedSerialPair:
     serial_class: str | None = None
     modem_line_propagation_delay: float = 0.05
 
-    def chain(self, backend: SerialBackend) -> Self:
+    def chain(self, *backends: SerialBackend) -> Self:
         """Chain another backend layer on top of this one, accumulating quirks."""
-        return dataclasses.replace(
-            self,
-            original_left=self.original_left,
-            original_right=self.original_right,
-            backends=(backend,) + self.backends,
-            quirks=frozenset(self.quirks) | SERIAL_PAIR_DEFAULT_QUIRKS[backend],
-        )
+        result = self
+
+        for backend in backends:
+            result = dataclasses.replace(
+                self,
+                original_left=self.original_left,
+                original_right=self.original_right,
+                backends=(backend,) + self.backends,
+                quirks=frozenset(self.quirks) | SERIAL_PAIR_DEFAULT_QUIRKS[backend],
+            )
+
+        return result
 
 
 @dataclasses.dataclass(frozen=True)

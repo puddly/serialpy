@@ -507,10 +507,9 @@ def test_sync_set_modem_pins(serial_pair: SerialPair) -> None:
         assert modem_pins.rts is PinState.LOW
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR, SerialQuirk.NO_RTS_DTR_READBACK
 )
-@pytest.mark.skip_backends(SerialBackend.SOCKET, SerialBackend.SOCAT)
 def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
     """Test DTR property (deprecated alias)."""
 
@@ -522,10 +521,9 @@ def test_sync_deprecated_dtr_property(serial_pair: SerialPair) -> None:
         assert serial.dtr is False
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32", reason="GetCommModemStatus cannot read back DTR/RTS"
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR, SerialQuirk.NO_RTS_DTR_READBACK
 )
-@pytest.mark.skip_backends(SerialBackend.SOCKET, SerialBackend.SOCAT)
 def test_sync_deprecated_rts_property(serial_pair: SerialPair) -> None:
     """Test RTS property (deprecated alias)."""
 

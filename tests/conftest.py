@@ -92,7 +92,7 @@ def _get_endpoint_backend(path: str) -> SerialBackend:
     """Classify a single endpoint into a backend family."""
     lower_path = path.lower()
     if lower_path.startswith("rfc2217://"):
-        return SerialBackend.SER2NET
+        return SerialBackend.RFC2217
     if lower_path.startswith("socket://"):
         return SerialBackend.SOCKET
     if lower_path.startswith("esphome://"):
@@ -173,7 +173,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
             specs.append(adapter_spec)
 
             if SER2NET_BINARY is not None:
-                ser2net_spec = adapter_spec.chain(SerialBackend.SER2NET)
+                ser2net_spec = adapter_spec.chain(
+                    SerialBackend.SER2NET, SerialBackend.RFC2217
+                )
 
                 specs.append(
                     dataclasses.replace(
@@ -184,7 +186,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 )
 
             if HUB4COM_BINARY is not None:
-                specs.append(adapter_spec.chain(SerialBackend.HUB4COM))
+                specs.append(
+                    adapter_spec.chain(SerialBackend.HUB4COM, SerialBackend.RFC2217)
+                )
 
             if sys.version_info >= (3, 11) and ESPHOME_HOST_BINARY is not None:
                 specs.append(adapter_spec.chain(SerialBackend.ESPHOME_HOST))
@@ -265,6 +269,11 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             case SerialBackend.HUB4COM:
                 assert left is not None and right is not None
                 left, right = stack.enter_context(create_hub4com_pair(left, right))
+
+            case SerialBackend.RFC2217:
+                # This backend doesn't require creating anything but introduces its own
+                # quirks
+                pass
 
             case _:
                 raise ValueError(f"Unsupported backend: {backend!r}")
