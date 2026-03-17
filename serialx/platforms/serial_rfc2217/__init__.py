@@ -14,6 +14,8 @@ if sys.version_info >= (3, 11):
 else:
     from async_timeout import timeout as asyncio_timeout
 
+from typing import overload
+
 from typing_extensions import Buffer
 
 from ...common import (
@@ -228,7 +230,7 @@ class Rfc2217:
     def __init__(self) -> None:
         """Initialize parser state and protocol bookkeeping."""
         self._parser = TelnetParser()
-        self._pending_telnet: dict[TelnetCmdId, TelnetCommand] = {}
+        self._pending_telnet: list[TelnetCommand] = []
         self._pending_rfc2217: dict[Rfc2217CmdId, Rfc2217Command] = {}
         self._modemstate = ModemStateFlag(0)
         self._linestate = LineStateFlag(0)
@@ -256,28 +258,20 @@ class Rfc2217:
         """Parse raw bytes, update protocol state, and return data/responses."""
         return self._dispatch_parser_items(self._parser.feed(data))
 
-    def pop_pending_telnet(self, cmd_id: TelnetCmdId) -> TelnetCommand | None:
-        """Pop a pending telnet command of the given type, if present."""
-        return self._pending_telnet.pop(cmd_id, None)
+    def pop_matching_telnet(
+        self, expected: list[TelnetCommand]
+    ) -> TelnetCommand | None:
+        """Pop a pending telnet command matching one of the expected responses."""
+        for i, pending in enumerate(self._pending_telnet):
+            if pending in expected:
+                del self._pending_telnet[i]
+                return pending
+
+        return None
 
     def pop_pending_rfc2217(self, cmd_id: Rfc2217CmdId) -> Rfc2217Command | None:
         """Pop a pending RFC2217 command of the given type, if present."""
         return self._pending_rfc2217.pop(cmd_id, None)
-
-    def check_negotiation_response(self) -> bool:
-        """Consume COM-PORT-OPTION negotiation responses when present."""
-        cmd = self._pending_telnet.pop(TelnetCmdId.DO, None)
-        if cmd is not None:
-            assert isinstance(cmd, DoCmd)
-            assert cmd.option == TelnetOption.COM_PORT_OPTION
-            self.mark_negotiated()
-            LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
-            return True
-
-        if self._pending_telnet.pop(TelnetCmdId.DONT, None) is not None:
-            raise SerialException("Server refused COM-PORT-OPTION (sent DONT 44)")
-
-        return False
 
     def build_port_config_commands(
         self,
@@ -339,23 +333,23 @@ class Rfc2217:
 
     def _build_do_response(self, cmd: DoCmd) -> WillCmd | WontCmd | None:
         """Build a response to a telnet DO option negotiation command."""
-        if cmd.option == TelnetOption.COM_PORT_OPTION:
-            self._pending_telnet[cmd.CMD_ID] = cmd
-            return None
+        self._pending_telnet.append(cmd)
 
         if cmd.option in self._ACCEPTED_OPTIONS:
             return WillCmd(option=cmd.option)
+        elif cmd.option == TelnetOption.COM_PORT_OPTION:
+            return None
         else:
             return WontCmd(option=cmd.option)
 
     def _build_will_response(self, cmd: WillCmd) -> DoCmd | DontCmd | None:
         """Build a response to a telnet WILL option negotiation command."""
-        if cmd.option == TelnetOption.COM_PORT_OPTION:
-            self._pending_telnet[cmd.CMD_ID] = cmd
-            return None
+        self._pending_telnet.append(cmd)
 
         if cmd.option in self._ACCEPTED_OPTIONS:
             return DoCmd(option=cmd.option)
+        elif cmd.option == TelnetOption.COM_PORT_OPTION:
+            return None
         else:
             return DontCmd(option=cmd.option)
 
@@ -391,7 +385,7 @@ class Rfc2217:
                 self._pending_rfc2217[item.CMD_ID] = item
             else:
                 LOGGER.debug("RX telnet cmd: %r", item)
-                self._pending_telnet[item.CMD_ID] = item
+                self._pending_telnet.append(item)
 
         return bytes(serial_data), responses
 
@@ -440,16 +434,40 @@ class RFC2217Serial(SocketSerial):
         """Perform the initial WILL/DO handshake for COM-PORT-OPTION."""
         assert self._socket is not None
         LOGGER.debug("Starting RFC 2217 negotiation")
-        self._send_command(WillCmd(option=TelnetOption.BINARY))
-        self._send_command(DoCmd(option=TelnetOption.BINARY))
-        self._send_command(WillCmd(option=TelnetOption.COM_PORT_OPTION))
 
-        while True:
-            if self._engine.check_negotiation_response():
-                return
+        with self._socket_timeout(self._connect_timeout):
+            rsp = self._send_command(
+                WillCmd(option=TelnetOption.BINARY),
+                responses=[
+                    DoCmd(option=TelnetOption.BINARY),
+                    DontCmd(option=TelnetOption.BINARY),
+                ],
+            )
+            if isinstance(rsp, DontCmd):
+                raise SerialException("Server refused BINARY transmission")
 
-            with self._socket_timeout(self._connect_timeout):
-                self._recv_and_process()
+            rsp = self._send_command(
+                DoCmd(option=TelnetOption.BINARY),
+                responses=[
+                    WillCmd(option=TelnetOption.BINARY),
+                    WontCmd(option=TelnetOption.BINARY),
+                ],
+            )
+            if isinstance(rsp, WontCmd):
+                raise SerialException("Server refused BINARY transmission")
+
+            rsp = self._send_command(
+                WillCmd(option=TelnetOption.COM_PORT_OPTION),
+                responses=[
+                    DoCmd(option=TelnetOption.COM_PORT_OPTION),
+                    DontCmd(option=TelnetOption.COM_PORT_OPTION),
+                ],
+            )
+            if isinstance(rsp, DontCmd):
+                raise SerialException("Server refused COM-PORT-OPTION")
+
+        self._engine.mark_negotiated()
+        LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
 
     def _configure_port(self) -> None:
         """Send serial port configuration to the access server."""
@@ -492,12 +510,31 @@ class RFC2217Serial(SocketSerial):
 
     # -- low-level send/receive helpers -------------------------------------
 
-    def _send_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
-        """Encode and send a command over the socket."""
+    def _send_command(
+        self,
+        cmd: TelnetCommand | Rfc2217Command,
+        responses: list[TelnetCommand] | None = None,
+    ) -> TelnetCommand | None:
+        """Encode and send a command over the socket.
+
+        If ``responses`` is provided, block until one of the expected responses
+        arrives and return it.
+        """
         assert self._socket is not None
         data = encode_command(cmd)
         LOGGER.debug("TX cmd: %r  [%s]", cmd, data.hex(" "))
         self._socket.sendall(data)
+
+        if responses is None:
+            return None
+
+        while True:
+            match = self._engine.pop_matching_telnet(responses)
+            if match is not None:
+                LOGGER.debug("RX response: %r", match)
+                return match
+
+            self._recv_and_process()
 
     def _recv_and_process(self) -> None:
         """Read raw bytes from socket, feed through parser, dispatch results."""
@@ -673,7 +710,9 @@ class RFC2217SerialTransport(BaseSerialTransport):
     ) -> None:
         """Initialize the RFC 2217 serial transport."""
         super().__init__(loop, protocol)
-        self._telnet_waiters: dict[TelnetCmdId, asyncio.Future[TelnetCommand]] = {}
+        self._telnet_waiters: list[
+            tuple[list[TelnetCommand], asyncio.Future[TelnetCommand]]
+        ] = []
         self._rfc2217_waiters: dict[Rfc2217CmdId, asyncio.Future[Rfc2217Command]] = {}
         self._tcp_transport: asyncio.Transport | None = None
         self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
@@ -732,16 +771,36 @@ class RFC2217SerialTransport(BaseSerialTransport):
     async def _negotiate(self) -> None:
         """Perform the initial WILL/DO handshake for COM-PORT-OPTION."""
         LOGGER.debug("Starting RFC 2217 negotiation")
-        self._send_command(WillCmd(option=TelnetOption.BINARY))
-        self._send_command(DoCmd(option=TelnetOption.BINARY))
-        self._send_command(WillCmd(option=TelnetOption.COM_PORT_OPTION))
 
-        cmd = await self._wait_for_telnet_commands([TelnetCmdId.DO, TelnetCmdId.DONT])
-        if isinstance(cmd, DontCmd):
-            raise SerialException("Server refused COM-PORT-OPTION (sent DONT 44)")
+        rsp = await self._send_command(
+            WillCmd(option=TelnetOption.BINARY),
+            responses=[
+                DoCmd(option=TelnetOption.BINARY),
+                DontCmd(option=TelnetOption.BINARY),
+            ],
+        )
+        if isinstance(rsp, DontCmd):
+            raise SerialException("Server refused BINARY transmission")
 
-        assert isinstance(cmd, DoCmd)
-        assert cmd.option == TelnetOption.COM_PORT_OPTION
+        rsp = await self._send_command(
+            DoCmd(option=TelnetOption.BINARY),
+            responses=[
+                WillCmd(option=TelnetOption.BINARY),
+                WontCmd(option=TelnetOption.BINARY),
+            ],
+        )
+        if isinstance(rsp, WontCmd):
+            raise SerialException("Server refused BINARY transmission")
+
+        rsp = await self._send_command(
+            WillCmd(option=TelnetOption.COM_PORT_OPTION),
+            responses=[
+                DoCmd(option=TelnetOption.COM_PORT_OPTION),
+                DontCmd(option=TelnetOption.COM_PORT_OPTION),
+            ],
+        )
+        if isinstance(rsp, DontCmd):
+            raise SerialException("Server refused COM-PORT-OPTION")
 
         self._serial._engine.mark_negotiated()
         LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
@@ -775,12 +834,47 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     # -- low-level send/receive helpers -------------------------------------
 
-    def _send_command(self, cmd: TelnetCommand | Rfc2217Command) -> None:
-        """Encode and send a command over the TCP transport."""
+    @overload
+    def _send_command(
+        self,
+        cmd: TelnetCommand | Rfc2217Command,
+    ) -> None: ...
+
+    @overload
+    def _send_command(
+        self,
+        cmd: TelnetCommand | Rfc2217Command,
+        responses: list[TelnetCommand],
+    ) -> asyncio.Future[TelnetCommand]: ...
+
+    def _send_command(
+        self,
+        cmd: TelnetCommand | Rfc2217Command,
+        responses: list[TelnetCommand] | None = None,
+    ) -> asyncio.Future[TelnetCommand] | None:
+        """Encode and send a command over the TCP transport.
+
+        If ``responses`` is provided, return a future that resolves when one of
+        the expected responses arrives.
+        """
         assert self._tcp_transport is not None
         data = encode_command(cmd)
         LOGGER.debug("TX cmd: %r  [%s]", cmd, data.hex(" "))
         self._tcp_transport.write(data)
+
+        if responses is None:
+            return None
+
+        # Check if already pending
+        match = self._serial._engine.pop_matching_telnet(responses)
+        if match is not None:
+            fut: asyncio.Future[TelnetCommand] = self._loop.create_future()
+            fut.set_result(match)
+            return fut
+
+        waiter: asyncio.Future[TelnetCommand] = self._loop.create_future()
+        self._telnet_waiters.append((responses, waiter))
+        return waiter
 
     def _data_received(self, data: bytes) -> None:
         """Handle raw data from the TCP transport."""
@@ -833,37 +927,21 @@ class RFC2217SerialTransport(BaseSerialTransport):
         for cmd in self._serial._engine.build_modem_pin_commands(modem_pins):
             await self._send_and_wait(cmd)
 
-    async def _wait_for_telnet_commands(
-        self, rsp_ids: list[TelnetCmdId]
-    ) -> TelnetCommand:
-        """Wait for one of the specified telnet commands."""
-        for cmd_id in rsp_ids:
-            pending = self._serial._engine.pop_pending_telnet(cmd_id)
-            if pending is not None:
-                return pending
-
-        waiter: asyncio.Future[TelnetCommand] = self._loop.create_future()
-        for cmd_id in rsp_ids:
-            self._telnet_waiters[cmd_id] = waiter
-
-        try:
-            return await waiter
-        finally:
-            for cmd_id in rsp_ids:
-                if self._telnet_waiters.get(cmd_id) is waiter:
-                    self._telnet_waiters.pop(cmd_id, None)
-
     def _resolve_pending_waiters(self) -> None:
         """Resolve any async waiters whose commands have now been parsed."""
-        for cmd_id, waiter in list(self._telnet_waiters.items()):
+        remaining: list[tuple[list[TelnetCommand], asyncio.Future[TelnetCommand]]] = []
+
+        for expected, waiter in self._telnet_waiters:
             if waiter.done():
-                self._telnet_waiters.pop(cmd_id, None)
                 continue
 
-            pending = self._serial._engine.pop_pending_telnet(cmd_id)
-            if pending is not None:
-                self._telnet_waiters.pop(cmd_id, None)
-                waiter.set_result(pending)
+            match = self._serial._engine.pop_matching_telnet(expected)
+            if match is not None:
+                waiter.set_result(match)
+            else:
+                remaining.append((expected, waiter))
+
+        self._telnet_waiters = remaining
 
         for rfc_cmd_id, rfc_waiter in list(self._rfc2217_waiters.items()):
             if rfc_waiter.done():
@@ -893,11 +971,16 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
         # Fail any pending waiters
         waiter_exc = exc or SerialException("RFC 2217 connection closed by server")
-        for waiters in (self._telnet_waiters, self._rfc2217_waiters):
-            for waiter in waiters.values():
-                if not waiter.done():
-                    waiter.set_exception(waiter_exc)
-            waiters.clear()
+
+        for _expected, telnet_waiter in self._telnet_waiters:
+            if not telnet_waiter.done():
+                telnet_waiter.set_exception(waiter_exc)
+        self._telnet_waiters.clear()
+
+        for rfc2217_waiter in self._rfc2217_waiters.values():
+            if not rfc2217_waiter.done():
+                rfc2217_waiter.set_exception(waiter_exc)
+        self._rfc2217_waiters.clear()
 
         self._serial._engine.reset()
 
