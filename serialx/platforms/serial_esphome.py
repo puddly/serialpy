@@ -183,6 +183,10 @@ class ESPHomeSerial(BaseSerial):
         )
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits."""
+        self._call_on_loop(self._async_set_modem_pins(modem_pins))
+
+    async def _async_set_modem_pins(self, modem_pins: ModemPins) -> None:
         assert self._api is not None
         line_states = self._last_line_state
 
@@ -201,6 +205,8 @@ class ESPHomeSerial(BaseSerial):
             instance=self.instance,
             line_states=self._last_line_state,
         )
+
+        await self._ping(timeout=2.0)
 
     def _get_modem_pins(self) -> ModemPins:
         return self._call_on_loop(self._async_get_modem_pins())
