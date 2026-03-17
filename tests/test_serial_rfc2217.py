@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from serialx import Serial, create_serial_connection
+from serialx import Serial, SerialException, create_serial_connection
 from serialx.common import measure_time
 from serialx.platforms.serial_rfc2217.types import (
     FlowcontrolResumeCmd,
@@ -18,6 +18,7 @@ from serialx.platforms.serial_rfc2217.types import (
     WillCmd,
 )
 
+from .common import HUB4COM_BINARY, SerialBackend, SerialPair, create_hub4com_pair
 from .socket_relay import create_silent_server
 
 
@@ -94,3 +95,40 @@ async def test_async_negotiate_timeout_silent_server() -> None:
                 )
 
         assert 0.1 <= elapsed() < 1.0
+
+
+@pytest.mark.skipif(not HUB4COM_BINARY, reason="hub4com not available")
+def test_sync_negotiate_comport_rejected_by_hub4com(serial_pair: SerialPair) -> None:
+    """Sync RFC2217 negotiation fails when the server responds with `Wont`."""  # codespell:ignore wont
+    if serial_pair.backends != (SerialBackend.ADAPTER,):
+        pytest.skip("Requires a bare adapter pair")
+
+    with create_hub4com_pair(serial_pair.left, serial_pair.right, comport="no") as (
+        rfc_left,
+        _rfc_right,
+    ):
+        with pytest.raises(SerialException, match="COM-PORT-OPTION"):
+            with Serial.from_url(rfc_left, baudrate=115200, connect_timeout=1.0):
+                pass
+
+
+@pytest.mark.skipif(not HUB4COM_BINARY, reason="hub4com not available")
+async def test_async_negotiate_comport_rejected_by_hub4com(
+    serial_pair: SerialPair,
+) -> None:
+    """Async RFC2217 negotiation fails when the server responds with `Wont`."""  # codespell:ignore wont
+    if serial_pair.backends != (SerialBackend.ADAPTER,):
+        pytest.skip("Requires a bare adapter pair")
+
+    with create_hub4com_pair(serial_pair.left, serial_pair.right, comport="no") as (
+        rfc_left,
+        _rfc_right,
+    ):
+        with pytest.raises(SerialException, match="COM-PORT-OPTION"):
+            await create_serial_connection(
+                asyncio.get_running_loop(),
+                asyncio.Protocol,
+                url=rfc_left,
+                baudrate=115200,
+                connect_timeout=1.0,
+            )

@@ -467,13 +467,13 @@ def create_ser2net_pair(
 
 @contextlib.contextmanager
 def create_hub4com_pair(
-    left_adapter: str, right_adapter: str
+    left_adapter: str, right_adapter: str, *, comport: str = "server"
 ) -> Iterator[tuple[str, str]]:
     """Create a pair of independent RFC2217 sockets using hub4com on Windows."""
     assert HUB4COM_BINARY is not None
 
     hub4com_args = [
-        "--create-filter=telnet,tcp,telnet:--comport=server --suppress-echo=yes",
+        f"--create-filter=telnet,tcp,telnet:--comport={comport} --suppress-echo=yes",
         "--create-filter=lsrmap,tcp,lsrmap",
         "--create-filter=pinmap,tcp,pinmap:--cts=cts --dsr=dsr --dcd=dcd --ring=ring",
         "--create-filter=linectl,tcp,lc:--br=local --lc=local",
