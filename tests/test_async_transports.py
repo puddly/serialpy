@@ -425,7 +425,7 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await writer_left.wait_closed()
 
 
-@pytest.mark.skip_backends(SerialBackend.ESPHOME, SerialBackend.ESPHOME_HOST)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
     async with async_create_reader_writer_pair(

@@ -380,6 +380,7 @@ def test_sync_context_manager_multiple_times(serial_pair: SerialPair) -> None:
         assert right.readexactly(5) == b"test2"
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_RESET_READ_BUFFER)
 def test_sync_open_close_cycles(serial_pair: SerialPair) -> None:
     """Test multiple open/close cycles."""
     left = Serial.from_url(serial_pair.left, baudrate=115200)

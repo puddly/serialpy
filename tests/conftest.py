@@ -67,10 +67,6 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "skip_quirks(*quirks): skip test when serial_pair exposes any listed quirk",
     )
-    config.addinivalue_line(
-        "markers",
-        "skip_backends(*backends): skip test when a specific backend is used",
-    )
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -230,12 +226,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     """Fixture for a connected serial port pair with the provided backend."""
     spec: UnresolvedSerialPair = request.param
-
-    for marker in request.node.iter_markers("skip_backends"):
-        if set(marker.args) & set(spec.backends):
-            pytest.skip(
-                f"Skipping, blocked backends {marker.args} exist in spec {spec}"
-            )
 
     for marker in request.node.iter_markers("skip_quirks"):
         if set(marker.args) & set(spec.quirks):
