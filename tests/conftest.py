@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 import contextlib
 import dataclasses
 import importlib
@@ -333,16 +333,19 @@ def _snapshot_fds() -> dict[int, str]:
 
 
 @pytest.fixture(autouse=True)
-def check_fd_leaks(request: pytest.FixtureRequest) -> Generator[None]:
+async def check_fd_leaks(request: pytest.FixtureRequest) -> AsyncGenerator[None]:
     """Detect leaked file descriptors between tests."""
     if sys.platform != "linux":
         yield
         return
 
     before = _snapshot_fds()
-    yield
-    after = _snapshot_fds()
 
-    leaked = {fd: path for fd, path in after.items() if fd not in before}
-    if leaked:
-        pytest.fail(f"Leaked file descriptors: {leaked}")
+    try:
+        yield
+    finally:
+        after = _snapshot_fds()
+
+        leaked = {fd: path for fd, path in after.items() if fd not in before}
+        if leaked:
+            pytest.fail(f"Leaked file descriptors: {leaked}")
