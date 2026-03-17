@@ -5,11 +5,14 @@ from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
 import dataclasses
 import enum
+import errno
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 from typing import IO, Any
@@ -215,6 +218,71 @@ def _wait_for_ready(
 
         if marker_bytes in line:
             return
+
+
+@contextlib.contextmanager
+def create_adapter_pair(left: str, right: str) -> Iterator[tuple[str, str]]:
+    """Fixture to clean up/set up physical adapters, which may have quirks."""
+    if left.startswith("CNC") or right.startswith("CNC"):
+        # com0com has baudrate emulation and requires buffers to be purged
+        assert sys.platform == "win32"
+
+        from win32file import (  # noqa: PLC0415
+            PURGE_RXABORT,
+            PURGE_RXCLEAR,
+            PURGE_TXABORT,
+            PURGE_TXCLEAR,
+            PurgeComm,
+        )
+
+        for adapter in (left, right):
+            if not adapter.startswith("CNC"):
+                continue
+
+            with serialx.Serial.from_url(adapter, baudrate=10_000_000) as serial:
+                flags = PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR
+
+                PurgeComm(serial._handle, flags)  # type: ignore[attr-defined]
+                time.sleep(0.05)
+
+        yield (left, right)
+    elif left.startswith("/dev/tnt") or right.startswith("/dev/tnt"):
+        try:
+            yield (left, right)
+        finally:
+            for path in (left, right):
+                try:
+                    fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+                except OSError as exc:  # noqa: PERF203
+                    if exc.errno != errno.EBUSY:
+                        continue
+
+                    logger = logging.getLogger(__name__)
+                    logger.warning("tty0tty %s is EBUSY after teardown", path)
+
+                    # Who has this device open?
+                    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+                        try:
+                            for f in proc.open_files():
+                                if f.path == path:
+                                    logger.warning(
+                                        "  PID %d (%s) fd=%d: %s",
+                                        proc.pid,
+                                        proc.info["name"],
+                                        f.fd,
+                                        proc.info["cmdline"],
+                                    )
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):  # noqa: PERF203
+                            pass
+
+                    # Check our own process
+                    for f in psutil.Process().open_files():
+                        if "/dev/tnt" in f.path:
+                            logger.warning("  SELF fd=%d: %s", f.fd, f.path)
+                else:
+                    os.close(fd)
+    else:
+        yield (left, right)
 
 
 @contextlib.contextmanager
