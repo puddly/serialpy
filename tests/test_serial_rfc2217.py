@@ -1,5 +1,11 @@
 """RFC2217 serial port tests."""
 
+import asyncio
+
+import pytest
+
+from serialx import Serial, create_serial_connection
+from serialx.common import measure_time
 from serialx.platforms.serial_rfc2217.types import (
     FlowcontrolResumeCmd,
     FlowcontrolSuspendCmd,
@@ -11,6 +17,8 @@ from serialx.platforms.serial_rfc2217.types import (
     TelnetOption,
     WillCmd,
 )
+
+from .socket_relay import create_silent_server
 
 
 def test_unknown_telnet_option() -> None:
@@ -57,3 +65,32 @@ def test_flowcontrol_resume_roundtrip() -> None:
     cmd = FlowcontrolResumeCmd()
     assert cmd.to_bytes() == b""
     assert FlowcontrolResumeCmd.from_bytes(b"") == cmd
+
+
+def test_sync_negotiate_timeout_silent_server() -> None:
+    """Sync RFC2217 negotiation times out when the server never responds."""
+    with create_silent_server() as addr:
+        with measure_time() as elapsed:
+            with pytest.raises(TimeoutError):
+                with Serial.from_url(
+                    f"rfc2217://{addr}", baudrate=115200, connect_timeout=0.1
+                ):
+                    pass
+
+        assert 0.1 <= elapsed() < 1.0
+
+
+async def test_async_negotiate_timeout_silent_server() -> None:
+    """Async RFC2217 negotiation times out when the server never responds."""
+    with create_silent_server() as addr:
+        with measure_time() as elapsed:
+            with pytest.raises(TimeoutError):
+                await create_serial_connection(
+                    asyncio.get_running_loop(),
+                    asyncio.Protocol,
+                    url=f"rfc2217://{addr}",
+                    baudrate=115200,
+                    connect_timeout=0.1,
+                )
+
+        assert 0.1 <= elapsed() < 1.0

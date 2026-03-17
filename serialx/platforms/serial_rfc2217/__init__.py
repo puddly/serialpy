@@ -727,26 +727,10 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     async def _connect(  # type: ignore[override]
         self,
-        *,
-        path: str,
-        baudrate: int,
-        parity: Parity = Parity.NONE,
-        stopbits: StopBits | int | float = StopBits.ONE,
-        xonxoff: bool = False,
-        rtscts: bool = False,
-        byte_size: int = 8,
         **kwargs,
     ) -> None:
         """Connect to the RFC 2217 server and negotiate COM-PORT-OPTION."""
-        self._serial = RFC2217Serial(
-            path=path,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-            byte_size=byte_size,
-        )
+        self._serial = RFC2217Serial(**kwargs)
         self._extra["serial"] = self._serial
 
         self._tcp_connection_lost_waiter = self._loop.create_future()
