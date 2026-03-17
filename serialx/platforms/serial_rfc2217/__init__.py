@@ -435,36 +435,38 @@ class RFC2217Serial(SocketSerial):
         assert self._socket is not None
         LOGGER.debug("Starting RFC 2217 negotiation")
 
-        with self._socket_timeout(self._connect_timeout):
-            rsp = self._send_command(
-                WillCmd(option=TelnetOption.BINARY),
-                responses=[
-                    DoCmd(option=TelnetOption.BINARY),
-                    DontCmd(option=TelnetOption.BINARY),
-                ],
-            )
-            if isinstance(rsp, DontCmd):
-                raise SerialException("Server refused BINARY transmission")
-
-            rsp = self._send_command(
+        rsp = self._send_command(
+            WillCmd(option=TelnetOption.BINARY),
+            responses=[
                 DoCmd(option=TelnetOption.BINARY),
-                responses=[
-                    WillCmd(option=TelnetOption.BINARY),
-                    WontCmd(option=TelnetOption.BINARY),
-                ],
-            )
-            if isinstance(rsp, WontCmd):
-                raise SerialException("Server refused BINARY transmission")
+                DontCmd(option=TelnetOption.BINARY),
+            ],
+            timeout=self._connect_timeout,
+        )
+        if isinstance(rsp, DontCmd):
+            raise SerialException("Server refused BINARY transmission")
 
-            rsp = self._send_command(
-                WillCmd(option=TelnetOption.COM_PORT_OPTION),
-                responses=[
-                    DoCmd(option=TelnetOption.COM_PORT_OPTION),
-                    DontCmd(option=TelnetOption.COM_PORT_OPTION),
-                ],
-            )
-            if isinstance(rsp, DontCmd):
-                raise SerialException("Server refused COM-PORT-OPTION")
+        rsp = self._send_command(
+            DoCmd(option=TelnetOption.BINARY),
+            responses=[
+                WillCmd(option=TelnetOption.BINARY),
+                WontCmd(option=TelnetOption.BINARY),
+            ],
+            timeout=self._connect_timeout,
+        )
+        if isinstance(rsp, WontCmd):
+            raise SerialException("Server refused BINARY transmission")
+
+        rsp = self._send_command(
+            WillCmd(option=TelnetOption.COM_PORT_OPTION),
+            responses=[
+                DoCmd(option=TelnetOption.COM_PORT_OPTION),
+                DontCmd(option=TelnetOption.COM_PORT_OPTION),
+            ],
+            timeout=self._connect_timeout,
+        )
+        if isinstance(rsp, DontCmd):
+            raise SerialException("Server refused COM-PORT-OPTION")
 
         self._engine.mark_negotiated()
         LOGGER.debug("Negotiation complete: server accepted COM-PORT-OPTION")
@@ -514,11 +516,12 @@ class RFC2217Serial(SocketSerial):
         self,
         cmd: TelnetCommand | Rfc2217Command,
         responses: list[TelnetCommand] | None = None,
+        timeout: float | None = None,
     ) -> TelnetCommand | None:
         """Encode and send a command over the socket.
 
         If ``responses`` is provided, block until one of the expected responses
-        arrives and return it.
+        arrives and return it.  ``timeout`` bounds the wait in seconds.
         """
         assert self._socket is not None
         data = encode_command(cmd)
@@ -528,13 +531,14 @@ class RFC2217Serial(SocketSerial):
         if responses is None:
             return None
 
-        while True:
-            match = self._engine.pop_matching_telnet(responses)
-            if match is not None:
-                LOGGER.debug("RX response: %r", match)
-                return match
+        with self._socket_timeout(timeout):
+            while True:
+                match = self._engine.pop_matching_telnet(responses)
+                if match is not None:
+                    LOGGER.debug("RX response: %r", match)
+                    return match
 
-            self._recv_and_process()
+                self._recv_and_process()
 
     def _recv_and_process(self) -> None:
         """Read raw bytes from socket, feed through parser, dispatch results."""
