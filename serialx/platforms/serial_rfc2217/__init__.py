@@ -233,7 +233,6 @@ class Rfc2217:
         self._pending_telnet: list[TelnetCommand] = []
         self._pending_rfc2217: dict[Rfc2217CmdId, Rfc2217Command] = {}
         self._modemstate = ModemStateFlag(0)
-        self._linestate = LineStateFlag(0)
         self._negotiated = False
 
     @property
@@ -251,7 +250,6 @@ class Rfc2217:
         self._pending_telnet.clear()
         self._pending_rfc2217.clear()
         self._modemstate = ModemStateFlag(0)
-        self._linestate = LineStateFlag(0)
         self._negotiated = False
 
     def feed(self, data: bytes) -> tuple[bytes, list[TelnetCommand]]:
@@ -369,7 +367,6 @@ class Rfc2217:
                 self._modemstate = item.modemstate
             elif isinstance(item, NotifyLinestateCmd):
                 LOGGER.debug("RX linestate notification: %r", item)
-                self._linestate = item.linestate
             elif isinstance(item, WillCmd):
                 will_rsp = self._build_will_response(item)
                 LOGGER.debug("RX %r -> %r", item, will_rsp)
