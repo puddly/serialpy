@@ -85,7 +85,7 @@ async def test_async_negotiate_timeout_silent_server() -> None:
     """Async RFC2217 negotiation times out when the server never responds."""
     with create_silent_server() as addr:
         with measure_time() as elapsed:
-            with pytest.raises(TimeoutError):
+            with pytest.raises((TimeoutError, asyncio.TimeoutError)):
                 await create_serial_connection(
                     asyncio.get_running_loop(),
                     asyncio.Protocol,
