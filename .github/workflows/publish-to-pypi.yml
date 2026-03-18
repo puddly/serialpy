@@ -17,12 +17,24 @@ on:
 
 jobs:
   build-wheels:
-    name: Build wheels on ${{ matrix.os }}
+    name: Build wheels (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Only build Rust extension wheels for Windows/macOS
-        os: [windows-latest, macos-latest]
+        # Build Windows ARM64 natively on ARM runner
+        include:
+          - name: windows-x64-x86
+            os: windows-latest
+            cibw_archs: "AMD64 x86"
+            cibw_before_all: "rustup target add i686-pc-windows-msvc"
+          - name: windows-arm64
+            os: windows-11-arm
+            cibw_archs: "ARM64"
+            cibw_before_all: "rustup target add aarch64-pc-windows-msvc"
+          - name: macos
+            os: macos-latest
+            cibw_archs: "x86_64 arm64"
+            cibw_before_all: "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
 
     steps:
       - uses: actions/checkout@v6
@@ -36,23 +48,20 @@ jobs:
         uses: pypa/cibuildwheel@v3.4
         env:
           CIBW_BUILD: "cp310-*"
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
-          CIBW_ARCHS_WINDOWS: "AMD64 x86 ARM64"
-          CIBW_BEFORE_ALL_WINDOWS: "rustup target add aarch64-pc-windows-msvc i686-pc-windows-msvc"
-          CIBW_BEFORE_ALL_MACOS: "rustup target add x86_64-apple-darwin aarch64-apple-darwin"
+          CIBW_ARCHS: "${{ matrix.cibw_archs }}"
+          CIBW_BEFORE_ALL: "${{ matrix.cibw_before_all }}"
           CIBW_ENVIRONMENT_MACOS: "MACOSX_DEPLOYMENT_TARGET=10.12"
           # Validate abi3 compliance and repair wheels
           CIBW_BEFORE_BUILD: "pip install abi3audit"
-          # Ensure wheels include a loadable Rust extension on supported test platforms.
-          CIBW_TEST_COMMAND_WINDOWS: 'python -c "import serialx._serialx_rust"'
-          CIBW_TEST_COMMAND_MACOS: 'python -c "import serialx._serialx_rust"'
+          # Ensure wheels include a loadable Rust extension on supported test platforms
+          CIBW_TEST_COMMAND: 'python -m serialx.tools.list_ports'
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: "abi3audit {wheel} && delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "abi3audit {wheel} && cp {wheel} {dest_dir}"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ matrix.name }}
           path: ./wheelhouse/*.whl
 
   build-sdist:
