@@ -69,6 +69,7 @@ class SerialQuirk(str, enum.Enum):
     NO_WRITE_TIMEOUT = "no-write-timeout"
     NO_WRITE_LIMITS = "no-write-limits"
     NO_BUFFER_CONTROL = "no-buffer-control"
+    NO_PAUSE_WRITING_CALLBACKS = "no-pause-writing-callbacks"
     NO_EXCLUSIVITY = "no-exclusivity"
     NO_UNPLUG = "no-unplug"
 
@@ -118,10 +119,10 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
     SerialBackend.RFC2217: frozenset(
         {
             SerialQuirk.NO_RTS_DTR_READBACK,
-            SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
             SerialQuirk.NO_EXCLUSIVITY,
         }
     ),

@@ -684,7 +684,9 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
         assert modem_pins.rts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_BUFFER_CONTROL, SerialQuirk.NO_PAUSE_WRITING_CALLBACKS
+)
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -755,7 +757,9 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     await asyncio.gather(input_lost, output_lost)
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_BUFFER_CONTROL, SerialQuirk.NO_PAUSE_WRITING_CALLBACKS
+)
 async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 
