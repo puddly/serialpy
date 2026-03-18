@@ -2,6 +2,15 @@
 
 from __future__ import annotations
 
+import importlib.util
+
+if importlib.util.find_spec("serial.serialcli"):
+    raise RuntimeError(
+        "serialx-compat detected a mixed installation with pyserial files. Uninstall"
+        " pyserial, pyserial-asyncio, and pyserial-asyncio-fast before installing"
+        " serialx-compat."
+    )
+
 from importlib.metadata import version
 
 from serialx import (
