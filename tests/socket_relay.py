@@ -204,6 +204,39 @@ class _SocketPairRelay:
 
 
 @contextlib.contextmanager
+def create_silent_server() -> Iterator[str]:
+    """Create a TCP server that accepts connections but never sends data."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    server.settimeout(0.1)
+
+    clients: list[socket.socket] = []
+    stop = threading.Event()
+
+    def accept_loop() -> None:
+        while not stop.is_set():
+            try:
+                client, _ = server.accept()
+            except (TimeoutError, OSError):
+                continue
+            clients.append(client)
+
+    thread = threading.Thread(target=accept_loop, daemon=True)
+    thread.start()
+
+    try:
+        yield f"127.0.0.1:{server.getsockname()[1]}"
+    finally:
+        stop.set()
+        for client in clients:
+            client.close()
+        server.close()
+        thread.join(timeout=1)
+
+
+@contextlib.contextmanager
 def create_socket_pair() -> Iterator[tuple[str, str]]:
     """Create two socket:// endpoints backed by a bidirectional relay."""
     relay = _SocketPairRelay()

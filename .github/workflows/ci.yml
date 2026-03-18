@@ -97,6 +97,72 @@ jobs:
           . venv/bin/activate
           pre-commit run --show-diff-on-failure --color=always --all-files
 
+  build-ser2net:
+    name: Build ser2net
+    runs-on: ubuntu-latest
+    env:
+      SER2NET_VERSION: "4.6.7"
+      GENSIO_VERSION: "3.0.2"
+    steps:
+      - name: Restore cached ser2net binary
+        id: cache-ser2net
+        uses: actions/cache/restore@v4
+        with:
+          path: ser2net
+          key: ser2net-${{ env.SER2NET_VERSION }}-gensio-${{ env.GENSIO_VERSION }}
+      - name: Install build dependencies
+        if: steps.cache-ser2net.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc make autoconf automake libtool pkg-config libyaml-dev
+      - name: Build gensio
+        if: steps.cache-ser2net.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth=1 -b v$GENSIO_VERSION https://github.com/cminyard/gensio.git /tmp/gensio
+          cd /tmp/gensio
+          autoreconf -i
+          ./configure \
+            --prefix=/tmp/gensio-install \
+            --enable-static \
+            --disable-shared \
+            --with-all-gensios=no \
+            --with-net=yes \
+            --with-telnet=yes \
+            --with-serialdev=yes \
+            --with-pthreads=yes \
+            --without-openssl \
+            --without-swig \
+            --without-python \
+            --without-tcl \
+            --without-glib
+          make -j$(nproc)
+          mkdir -p /tmp/gensio-install/libexec/gensio/$GENSIO_VERSION
+          make install
+      - name: Build ser2net
+        if: steps.cache-ser2net.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth=1 -b v$SER2NET_VERSION https://github.com/cminyard/ser2net.git /tmp/ser2net
+          cd /tmp/ser2net
+          autoreconf -i
+          LDFLAGS="-L/tmp/gensio-install/lib" \
+          CFLAGS="-I/tmp/gensio-install/include" \
+          CPPFLAGS="-I/tmp/gensio-install/include" \
+          LIBS="-lgensioosh -lpthread" \
+          ./configure --prefix=/usr/local --with-pam=no
+          make -j$(nproc) LDFLAGS="-all-static -L/tmp/gensio-install/lib"
+          cp ser2net $GITHUB_WORKSPACE/ser2net
+      - name: Verify ser2net binary
+        if: steps.cache-ser2net.outputs.cache-hit != 'true'
+        run: |
+          file $GITHUB_WORKSPACE/ser2net
+          $GITHUB_WORKSPACE/ser2net -v
+      - name: Cache ser2net binary
+        if: steps.cache-ser2net.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ser2net
+          key: ${{ steps.cache-ser2net.outputs.cache-primary-key }}
+
   compile-esphome:
     name: Compile ESPHome host daemon
     runs-on: ubuntu-latest
@@ -166,7 +232,7 @@ jobs:
 
   pytest:
     runs-on: ubuntu-latest
-    needs: [prepare-base, compile-esphome, build-tty0tty]
+    needs: [prepare-base, compile-esphome, build-ser2net, build-tty0tty]
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
@@ -198,6 +264,15 @@ jobs:
           key: >-
             1-esphome-daemon-${{
             hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+      - name: Restore cached ser2net binary
+        uses: actions/cache/restore@v4
+        with:
+          path: ser2net
+          key: ser2net-4.6.7-gensio-3.0.2
+      - name: Install ser2net
+        run: |
+          sudo install -m 755 ser2net /usr/local/bin/ser2net
+          ser2net -v
       - name: Get kernel version
         id: kernel
         run: echo "version=$(uname -r)" >> "$GITHUB_OUTPUT"
@@ -318,13 +393,15 @@ jobs:
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v6
-      - name: Install com0com
+      - name: Install com0com and hub4com
         shell: pwsh
         working-directory: tests/data/windows
         run: |
           Import-Certificate -FilePath com0com.cer -CertStoreLocation Cert:\LocalMachine\Root
           Import-Certificate -FilePath com0com.cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
           .\setup_com0com_W7_x64_signed.exe /S
+
+          Expand-Archive -Path hub4com.zip -DestinationPath .
       - name: Configure com0com
         shell: pwsh
         working-directory: C:\Program Files (x86)\com0com

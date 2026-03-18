@@ -8,7 +8,6 @@ import dataclasses
 import importlib
 import os
 import sys
-import time
 from unittest.mock import patch
 
 import pytest
@@ -17,13 +16,18 @@ import serialx
 import serialx.platforms
 from tests.common import (
     ESPHOME_HOST_BINARY,
+    HUB4COM_BINARY,
+    SER2NET_BINARY,
     SERIAL_PAIR_DEFAULT_QUIRKS,
     SOCAT_BINARY,
     SerialBackend,
     SerialPair,
     SerialQuirk,
     UnresolvedSerialPair,
+    create_adapter_pair,
     create_esphome_pair,
+    create_hub4com_pair,
+    create_ser2net_pair,
     create_socat_pair,
 )
 from tests.socket_relay import create_socket_pair
@@ -63,10 +67,6 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "skip_quirks(*quirks): skip test when serial_pair exposes any listed quirk",
     )
-    config.addinivalue_line(
-        "markers",
-        "skip_backends(*backends): skip test when a specific backend is used",
-    )
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -87,6 +87,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 def _get_endpoint_backend(path: str) -> SerialBackend:
     """Classify a single endpoint into a backend family."""
     lower_path = path.lower()
+    if lower_path.startswith("rfc2217://"):
+        return SerialBackend.RFC2217
     if lower_path.startswith("socket://"):
         return SerialBackend.SOCKET
     if lower_path.startswith("esphome://"):
@@ -121,7 +123,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
         adapters.append(
             UnresolvedSerialPair(
-                backends=(),
+                backends=(SerialBackend.ADAPTER,),
                 left=left,
                 right=right,
                 original_left=left,
@@ -166,6 +168,24 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         for adapter_spec in adapters:
             specs.append(adapter_spec)
 
+            if SER2NET_BINARY is not None:
+                ser2net_spec = adapter_spec.chain(
+                    SerialBackend.SER2NET, SerialBackend.RFC2217
+                )
+
+                specs.append(
+                    dataclasses.replace(
+                        ser2net_spec,
+                        # ser2net only polls modem line states every second...
+                        modem_line_propagation_delay=1.1,
+                    )
+                )
+
+            if HUB4COM_BINARY is not None:
+                specs.append(
+                    adapter_spec.chain(SerialBackend.HUB4COM, SerialBackend.RFC2217)
+                )
+
             if sys.version_info >= (3, 11) and ESPHOME_HOST_BINARY is not None:
                 specs.append(adapter_spec.chain(SerialBackend.ESPHOME_HOST))
 
@@ -207,12 +227,6 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     """Fixture for a connected serial port pair with the provided backend."""
     spec: UnresolvedSerialPair = request.param
 
-    for marker in request.node.iter_markers("skip_backends"):
-        if set(marker.args) & set(spec.backends):
-            pytest.skip(
-                f"Skipping, blocked backends {marker.args} exist in spec {spec}"
-            )
-
     for marker in request.node.iter_markers("skip_quirks"):
         if set(marker.args) & set(spec.quirks):
             pytest.skip(f"Skipping, blocked quirks {marker.args} exist in spec {spec}")
@@ -237,6 +251,25 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             case SerialBackend.ESPHOME_HOST:
                 assert left is not None and right is not None
                 left, right = stack.enter_context(create_esphome_pair(left, right))
+
+            case SerialBackend.SER2NET:
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_ser2net_pair(left, right))
+
+            case SerialBackend.HUB4COM:
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_hub4com_pair(left, right))
+
+            case SerialBackend.RFC2217:
+                # This backend doesn't require creating anything but introduces its own
+                # quirks
+                pass
+
+            case SerialBackend.ADAPTER:
+                # This doesn't actually create physical adapters, it just has fixes
+                # for OS-specific adapter quirks
+                assert left is not None and right is not None
+                left, right = stack.enter_context(create_adapter_pair(left, right))
 
             case _:
                 raise ValueError(f"Unsupported backend: {backend!r}")
@@ -276,45 +309,6 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
 
         if spec.serial_class:
             importlib.reload(serialx.platforms)
-
-
-@pytest.fixture(autouse=True)
-def _purge_com0com(request: pytest.FixtureRequest) -> None:
-    """Purge com0com buffers to prevent data leakage between tests.
-
-    com0com buffers data in its virtual cable even when the receiving port is
-    closed.  Previous tests that write without reading leave stale bytes that
-    pollute the next test.
-    """
-    if sys.platform != "win32":
-        return
-
-    if "serial_pair" not in request.fixturenames:
-        return
-
-    candidate: SerialPair = request.getfixturevalue("serial_pair")
-    if not (candidate.left.startswith("CNC") or candidate.right.startswith("CNC")):
-        return
-
-    from win32file import (  # noqa: PLC0415
-        PURGE_RXABORT,
-        PURGE_RXCLEAR,
-        PURGE_TXABORT,
-        PURGE_TXCLEAR,
-        PurgeComm,
-    )
-
-    with (
-        serialx.Serial.from_url(candidate.left, baudrate=10_000_000) as serial_left,
-        serialx.Serial.from_url(candidate.right, baudrate=10_000_000) as serial_right,
-    ):
-        flags = PURGE_TXABORT | PURGE_RXABORT | PURGE_TXCLEAR | PURGE_RXCLEAR
-        PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
-        PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]
-
-        time.sleep(0.05)
-        PurgeComm(serial_left._handle, flags)  # type: ignore[attr-defined]
-        PurgeComm(serial_right._handle, flags)  # type: ignore[attr-defined]
 
 
 def _snapshot_fds() -> dict[int, str]:

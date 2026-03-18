@@ -125,7 +125,10 @@ async def test_async_random_large(
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            or SerialBackend.SER2NET in serial_pair.backends
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -174,9 +177,9 @@ async def test_async_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("payload_size", [1024, 2048])
 async def test_async_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
-    if sys.platform == "darwin" and serial_pair.serial_class in (
-        "PosixSerial",
-        "ExtendedPosixSerial",
+    if sys.platform == "darwin" and (
+        serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        or SerialBackend.SER2NET in serial_pair.backends
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -215,7 +218,10 @@ async def test_async_sustained_throughput(
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            or SerialBackend.SER2NET in serial_pair.backends
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -240,7 +246,10 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
     if (
         baudrate > 230400
         and sys.platform == "darwin"
-        and serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        and (
+            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            or SerialBackend.SER2NET in serial_pair.backends
+        )
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
@@ -256,6 +265,9 @@ async def test_async_nonstandard_baudrate(serial_pair: SerialPair) -> None:
     """Test that a non-standard baudrate (no termios constant) is accepted."""
     if serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"):
         pytest.skip("Base POSIX backends only support standard baudrates")
+
+    if sys.platform == "darwin" and SerialBackend.SER2NET in serial_pair.backends:
+        pytest.xfail("macOS termios lacks constants above B230400")
 
     async with async_create_reader_writer_pair(
         serial_pair.left, serial_pair.right, baudrate=200000
@@ -413,7 +425,7 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await writer_left.wait_closed()
 
 
-@pytest.mark.skip_backends(SerialBackend.ESPHOME, SerialBackend.ESPHOME_HOST)
+@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
     async with async_create_reader_writer_pair(
@@ -601,6 +613,12 @@ async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
 
 async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     """Test modem pin writes are accepted on all backends."""
+    if SerialBackend.SER2NET in serial_pair.backends and (
+        SerialQuirk.NO_DTR_DSR in serial_pair.quirks
+        or SerialQuirk.NO_RTS_CTS in serial_pair.quirks
+    ):
+        pytest.skip("ser2net hangs setting modem pins on backends without support")
+
     if SerialBackend.SOCAT in serial_pair.backends and sys.platform.startswith(
         "freebsd"
     ):
@@ -666,7 +684,9 @@ async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
         assert modem_pins.rts is PinState.LOW
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_BUFFER_CONTROL, SerialQuirk.NO_PAUSE_WRITING_CALLBACKS
+)
 async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     """Test backpressure pause/resume callbacks through public async APIs."""
 
@@ -737,7 +757,9 @@ async def test_async_backpressure_callbacks(serial_pair: SerialPair) -> None:
     await asyncio.gather(input_lost, output_lost)
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
+@pytest.mark.skip_quirks(
+    SerialQuirk.NO_BUFFER_CONTROL, SerialQuirk.NO_PAUSE_WRITING_CALLBACKS
+)
 async def test_async_backpressure_writer_removal(serial_pair: SerialPair) -> None:
     """Test that large writes with backpressure are handled correctly.
 
