@@ -9,6 +9,13 @@ native asynchronous APIs for all platforms.
 pip install serialx
 ```
 
+For drop-in import compatibility (`serial`, `serial_asyncio`,
+`serial_asyncio_fast`) without runtime patching, install:
+
+```console
+pip install serialx-compat
+```
+
 # Usage
 
 Serialx features a pyserial and pyserial-asyncio compatibility layer for easy testing.
