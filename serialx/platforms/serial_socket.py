@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Generator
+from contextlib import contextmanager
 import logging
 import socket
 import urllib.parse
@@ -58,6 +60,21 @@ class SocketSerial(BaseSerial):
         """Get the connection timeout in seconds."""
         return self._connect_timeout
 
+    @contextmanager
+    def _socket_timeout(
+        self, timeout: float | None
+    ) -> Generator[float | None, None, None]:
+        """Context manager to set socket timeout temporarily."""
+        assert self._socket is not None
+
+        original_timeout = self._socket.gettimeout()
+        self._socket.settimeout(timeout)
+
+        try:
+            yield original_timeout
+        finally:
+            self._socket.settimeout(original_timeout)
+
     def _get_effective_socket_timeout(self) -> float | None:
         """Calculate effective socket timeout as min of read and write timeouts."""
         if self._read_timeout is None:
@@ -99,6 +116,20 @@ class SocketSerial(BaseSerial):
     def reset_read_buffer(self) -> None:
         """Reset the read buffer."""
 
+        # Drain all of the pending data in nonblocking mode
+        with self._socket_timeout(0):
+            while True:
+                if self._socket is None:
+                    break
+
+                try:
+                    data = self._socket.recv(1024)
+                except BlockingIOError:
+                    break
+
+                if not data:
+                    break
+
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
@@ -109,21 +140,21 @@ class SocketSerial(BaseSerial):
         """Write bytes to socket."""
         assert self._socket is not None
 
-        self._socket.settimeout(timeout)
-
         data = bytes(b)
-        self._socket.sendall(data)
+
+        with self._socket_timeout(timeout):
+            self._socket.sendall(data)
+
         return len(data)
 
     def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
         """Read bytes from socket into buffer."""
         assert self._socket is not None
 
-        self._socket.settimeout(timeout)
-
         m = memoryview(b).cast("B")
         try:
-            return self._socket.recv_into(m)
+            with self._socket_timeout(timeout):
+                return self._socket.recv_into(m)
         except TimeoutError:
             return 0
 
@@ -289,3 +320,25 @@ class SocketSerialTransport(BaseSerialTransport):
         if self._tcp_transport is not None:
             return self._tcp_transport.get_write_buffer_size()
         return 0
+
+    def get_write_buffer_limits(self) -> tuple[int, int]:
+        """Get the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            return (0, 0)
+
+        return self._tcp_transport.get_write_buffer_limits()
+
+    def set_write_buffer_limits(self, high=None, low=None) -> None:
+        """Set the write buffer low and high water marks."""
+        if self._tcp_transport is None:
+            raise RuntimeError("Transport not connected")
+
+        self._tcp_transport.set_write_buffer_limits(high=high, low=low)
+
+    def can_write_eof(self) -> bool:
+        """Return whether the underlying TCP transport supports EOF."""
+        return (
+            self._tcp_transport.can_write_eof()
+            if self._tcp_transport is not None
+            else False
+        )

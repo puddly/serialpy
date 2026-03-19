@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Generator
-from contextlib import contextmanager, suppress
+from contextlib import suppress
 from enum import IntEnum
 import logging
 import sys
@@ -404,21 +404,6 @@ class RFC2217Serial(SocketSerial):
 
         self._engine = Rfc2217()
         self._data_buffer = bytearray()
-
-    @contextmanager
-    def _socket_timeout(
-        self, timeout: float | None
-    ) -> Generator[float | None, None, None]:
-        """Context manager to set socket timeout temporarily."""
-        assert self._socket is not None
-
-        original_timeout = self._socket.gettimeout()
-        self._socket.settimeout(timeout)
-
-        try:
-            yield original_timeout
-        finally:
-            self._socket.settimeout(original_timeout)
 
     def _open(self) -> None:
         """Open the TCP connection and negotiate COM-PORT-OPTION."""
