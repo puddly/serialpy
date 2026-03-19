@@ -88,11 +88,10 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
         {
             SerialQuirk.NO_RTS_CTS,
             SerialQuirk.NO_DTR_DSR,
-            SerialQuirk.NO_RESET_READ_BUFFER,
             SerialQuirk.NO_RESET_WRITE_BUFFER,
-            SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
             SerialQuirk.NO_EXCLUSIVITY,
             SerialQuirk.NO_UNPLUG,
         }
