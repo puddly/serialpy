@@ -178,24 +178,19 @@ jobs:
         shell: python
         run: |
           import os
-          import re
           from pathlib import Path
 
           version = os.environ["SERIALX_PIN_VERSION"]
           path = Path("serialx_compat/pyproject.toml")
           text = path.read_text()
-          updated = re.sub(
-              r'^dependencies\s*=\s*\["serialx"(?:==[^"]+)?\]\s*(?:#.*)?$',
-              f'dependencies = ["serialx=={version}"]',
-              text,
-              count=1,
-              flags=re.MULTILINE,
+
+          assert 'version = "0.0.0"' in text
+          assert 'dependencies = ["serialx"]' in text
+
+          path.write_text(
+              text.replace('version = "0.0.0"', f'version = "{version}"')
+                  .replace('dependencies = ["serialx"]', f'dependencies = ["serialx=={version}"]')
           )
-          if updated == text:
-              raise SystemExit(
-                  "Failed to pin serialx dependency in serialx_compat/pyproject.toml"
-              )
-          path.write_text(updated)
 
       - name: Build serialx-compat
         run: python -m build --sdist --wheel --outdir dist-serialx-compat serialx_compat

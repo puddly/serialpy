@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=80", "setuptools-scm[simple]>=8"]
+requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "serialx-compat"
-dynamic = ["version"]
+version = "0.0.0"  # Rewritten by CI to match the serialx version
 description = "Compatibility package exposing pyserial-style imports backed by serialx"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -37,6 +37,3 @@ testpaths = ["tests"]
 check_untyped_defs = true
 show_error_codes = true
 show_error_context = true
-
-[tool.setuptools_scm]
-root = ".."
