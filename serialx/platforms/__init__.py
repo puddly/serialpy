@@ -30,6 +30,9 @@ with suppress(ImportError):
 with suppress(ImportError):
     from . import serial_esphome  # noqa: F401
 
+with suppress(ImportError):
+    from . import serial_pyodide  # noqa: F401
+
 if TYPE_CHECKING:
     from ..common import BaseSerial as Serial, BaseSerialTransport as SerialTransport
 else:
