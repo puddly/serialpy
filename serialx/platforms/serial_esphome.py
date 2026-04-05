@@ -106,11 +106,12 @@ class ESPHomeSerial(BaseSerial):
 
     def _open(self) -> None:
         """Open the serial port."""
-        self._loop = asyncio.new_event_loop()
-        self._read_event = asyncio.Event()
-        self._loop_thread = threading.Thread(target=self._loop.run_forever)
-        self._loop_thread.start()
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
+            self._loop_thread = threading.Thread(target=self._loop.run_forever)
+            self._loop_thread.start()
 
+        self._read_event = asyncio.Event()
         self._call_on_loop(self._async_open())
         self._call_on_loop(self._async_subscribe())
 
@@ -318,6 +319,7 @@ class ESPHomeSerial(BaseSerial):
             self._loop.call_soon_threadsafe(self._loop.stop)
             self._loop_thread.join()
             self._loop.close()
+            self._loop = None
             self._loop_thread = None
 
 
@@ -369,8 +371,13 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._unsub()
             self._unsub = None
 
-        if self._serial is not None and self._serial._api is not None:
-            self._serial._unsubscribe_instance()
+        if self._serial is None or self._serial._api is None:
+            self._call_protocol_connection_lost(None)
+            return
+
+        self._serial._unsubscribe_instance()
+
+        if self._serial._disconnect_api:
             api = self._serial._api
             self._serial._api = None
             self._loop.create_task(self._async_close(api))

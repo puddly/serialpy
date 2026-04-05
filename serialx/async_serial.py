@@ -26,23 +26,30 @@ class SerialStreamWriter(asyncio.StreamWriter, Generic[_T]):
 async def create_serial_connection(
     loop,
     protocol_factory: Callable[[], asyncio.Protocol],
-    url,
-    baudrate,
+    url: str | None,
+    baudrate: int,
     parity=Parity.NONE,
     stopbits=StopBits.ONE,
     xonxoff=False,
     rtscts=False,
     exclusive=True,
+    *,
+    transport_cls: type[BaseSerialTransport] | None = None,
     **kwargs,
 ) -> tuple[BaseSerialTransport, asyncio.Protocol]:
     """Create a serial port connection with asyncio."""
     if not exclusive:
         raise ValueError("Only exclusive=True is supported")
 
-    _, transport_cls = await asyncio.get_running_loop().run_in_executor(
-        None, get_serial_classes, url
-    )
+    if transport_cls is None:
+        if url is None:
+            raise ValueError("One of `url` or `transport_cls` must be provided.")
 
+        _, transport_cls = await asyncio.get_running_loop().run_in_executor(
+            None, get_serial_classes, url
+        )
+
+    assert transport_cls is not None
     protocol = protocol_factory()
     transport = transport_cls(loop=loop, protocol=protocol)
 

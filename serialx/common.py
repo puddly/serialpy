@@ -638,7 +638,7 @@ class BaseSerialTransport(asyncio.Transport):
     async def connect(
         self,
         *,
-        path: str,
+        path: str | None,
         baudrate: int,
         parity: Parity = Parity.NONE,
         stopbits: StopBits = StopBits.ONE,
