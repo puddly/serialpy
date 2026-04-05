@@ -1,9 +1,13 @@
 """ESPHome serial port tests."""
 
-import urllib.parse
-
-from aioesphomeapi import APIClient
 import pytest
+
+try:
+    from aioesphomeapi import APIClient
+except ImportError:
+    pytest.skip("aioesphomeapi is required to run esphome transport tests")
+
+import urllib.parse
 
 from serialx import open_serial_connection
 from serialx.platforms.serial_esphome import (
