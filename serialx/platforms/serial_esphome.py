@@ -128,8 +128,8 @@ class ESPHomeSerial(BaseSerial):
             parsed = urllib.parse.urlparse(str(self._path))
             params = urllib.parse.parse_qs(parsed.query)
 
-            if "port" in params:
-                port_value = params["port"][0]
+            if "port_name" in params:
+                port_value = params["port_name"][0]
             else:
                 # Backwards compat: esphome://host:port/{instance_id}
                 port_value = urllib.parse.unquote(parsed.path.strip("/"))

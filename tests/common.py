@@ -313,8 +313,8 @@ def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, st
         api_port = _get_listening_ports(process.pid)[0]
 
         yield (
-            f"esphome://127.0.0.1:{api_port}?port=Serial+Proxy+Left",
-            f"esphome://127.0.0.1:{api_port}?port=Serial+Proxy+Right",
+            f"esphome://127.0.0.1:{api_port}?port_name=Serial+Proxy+Left",
+            f"esphome://127.0.0.1:{api_port}?port_name=Serial+Proxy+Right",
         )
     finally:
         if process.poll() is None:
