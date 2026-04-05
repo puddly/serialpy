@@ -74,3 +74,25 @@ async def test_externally_passed_api_close_after_disconnect() -> None:
 
             writer.close()
             await writer.wait_closed()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_connect_by_instance_id() -> None:
+    """Test connecting to an ESPHome serial proxy by instance ID."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+
+            # Connect by instance ID instead of name
+            url = f"esphome://{parsed.hostname}:{parsed.port}/0"
+
+            reader, writer = await open_serial_connection(
+                url=url,
+                baudrate=115200,
+            )
+
+            writer.write(b"test")
+            await writer.drain()
+
+            writer.close()
+            await writer.wait_closed()

@@ -126,14 +126,19 @@ class ESPHomeSerial(BaseSerial):
         if self._api is None:
             assert self._path is not None
             parsed = urllib.parse.urlparse(str(self._path))
-            path_str = parsed.path.strip("/")
-
-            if path_str.isdigit():
-                self._instance_id = int(path_str)
-            else:
-                self._port_name = path_str
-
             params = urllib.parse.parse_qs(parsed.query)
+
+            if "port" in params:
+                port_value = params["port"][0]
+            else:
+                # Backwards compat: esphome://host:port/{instance_id}
+                port_value = urllib.parse.unquote(parsed.path.strip("/"))
+
+            if port_value.isdigit():
+                self._instance_id = int(port_value)
+            else:
+                self._port_name = port_value
+
             self._api = aioesphomeapi.APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
@@ -374,10 +379,6 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         if self._unsub is not None:
             self._unsub()
             self._unsub = None
-
-        if self._serial is None or self._serial._api is None:
-            self._call_protocol_connection_lost(None)
-            return
 
         self._serial._unsubscribe_instance()
 
