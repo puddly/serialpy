@@ -5,7 +5,10 @@ import pytest
 try:
     from aioesphomeapi import APIClient
 except ImportError:
-    pytest.skip("aioesphomeapi is required to run esphome transport tests")
+    pytest.skip(
+        "aioesphomeapi is required to run esphome transport tests",
+        allow_module_level=True,
+    )
 
 import urllib.parse
 
