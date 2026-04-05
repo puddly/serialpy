@@ -246,7 +246,7 @@ class ESPHomeSerial(BaseSerial):
             line_states=self._last_line_state,
         )
 
-        await self._ping(timeout=2.0)
+        await self._async_get_modem_pins()
 
     def _get_modem_pins(self) -> ModemPins:
         return self._call_on_loop(self._async_get_modem_pins())
