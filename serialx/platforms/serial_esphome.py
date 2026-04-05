@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Coroutine
+from contextlib import suppress
 from enum import IntFlag
 import logging
 import threading
@@ -12,7 +13,7 @@ import urllib.parse
 
 import aioesphomeapi
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
-from aioesphomeapi.core import PingRequest, PingResponse
+from aioesphomeapi.core import APIConnectionError, PingRequest, PingResponse
 from typing_extensions import Buffer
 
 from serialx import UnsupportedSetting
@@ -199,7 +200,10 @@ class ESPHomeSerial(BaseSerial):
         """Unsubscribe serial proxy streaming for this instance if supported."""
         if self._api is None or not self._instance_subscribed:
             return
-        self._api.serial_proxy_unsubscribe(self._instance_id)
+
+        with suppress(APIConnectionError):
+            self._api.serial_proxy_unsubscribe(self._instance_id)
+
         self._instance_subscribed = False
 
     def _configure_port(self) -> None:

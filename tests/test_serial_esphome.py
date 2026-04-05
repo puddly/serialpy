@@ -46,3 +46,31 @@ async def test_externally_passed_api() -> None:
 
             # The API is still connected
             await api.device_info()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_externally_passed_api_close_after_disconnect() -> None:
+    """Test closing the transport after the API has been disconnected."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            api = APIClient(
+                address=parsed.hostname,
+                port=parsed.port or ESPHOME_DEFAULT_PORT,
+                password=None,
+            )
+            await api.connect(login=True)
+
+            reader, writer = await open_serial_connection(
+                url=None,
+                transport_cls=ESPHomeSerialTransport,
+                api=api,
+                port_name="Serial Proxy Left",
+                baudrate=115200,
+            )
+
+            # Disconnect the API before closing the transport
+            await api.disconnect()
+
+            writer.close()
+            await writer.wait_closed()
