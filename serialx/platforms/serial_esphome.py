@@ -82,38 +82,10 @@ class ESPHomeSerial(BaseSerial):
         self._loop_thread: threading.Thread | None = None
         self._connect_timeout = connect_timeout
 
-        self._api: APIClient | None = None
-        self._port_name: str | None = None
-        self._instance_id: int | None = None
-
-        if api is None:
-            if self._path is None:
-                raise ValueError("Either `path` or `api` must be provided")
-
-            parsed = urllib.parse.urlparse(str(self._path))
-
-            path_str = parsed.path.strip("/")
-            if not path_str:
-                raise ValueError(f"URI does not contain a port name: {self._path!r}")
-
-            if path_str.isdigit():
-                self._instance_id = int(path_str)
-            else:
-                self._port_name = path_str
-
-            params = urllib.parse.parse_qs(parsed.query)
-            self._api = aioesphomeapi.APIClient(
-                address=parsed.hostname,
-                port=parsed.port or ESPHOME_DEFAULT_PORT,
-                password=params["password"][0] if "password" in params else None,
-                noise_psk=params["noise_psk"][0] if "noise_psk" in params else None,
-            )
-            self._api_connect = True
-        else:
-            self._api = api
-            self._api_connect = False
-            self._port_name = port_name
-            self._instance_id = port_instance
+        self._api: APIClient | None = api
+        self._port_name: str | None = port_name
+        self._instance_id: int | None = port_instance
+        self._disconnect_api: bool = False
 
         self._read_buffer = bytearray()
         self._read_event = asyncio.Event()
@@ -149,10 +121,29 @@ class ESPHomeSerial(BaseSerial):
 
     async def _async_open(self) -> None:
         # Only connect if the API was not passed in externally
-        assert self._api is not None
+        if self._api is None:
+            assert self._path is not None
+            parsed = urllib.parse.urlparse(str(self._path))
+            path_str = parsed.path.strip("/")
 
-        if self._api_connect:
+            if path_str.isdigit():
+                self._instance_id = int(path_str)
+            else:
+                self._port_name = path_str
+
+            params = urllib.parse.parse_qs(parsed.query)
+            self._api = aioesphomeapi.APIClient(
+                address=parsed.hostname,
+                port=parsed.port or ESPHOME_DEFAULT_PORT,
+                password=params["password"][0] if "password" in params else None,
+                noise_psk=params["noise_psk"][0] if "noise_psk" in params else None,
+            )
+
+            self._disconnect_api = True
             await self._api.connect(login=True)
+        else:
+            # Don't disconnect an externally-passed API
+            self._disconnect_api = False
 
     async def _async_subscribe(self) -> None:
         assert self._api is not None
@@ -317,7 +308,7 @@ class ESPHomeSerial(BaseSerial):
             self._unsub()
             self._unsub = None
 
-        if self._api is not None:
+        if self._disconnect_api and self._api is not None:
             self._unsubscribe_instance()
             self._call_on_loop(self._api.disconnect())
             self._api = None
