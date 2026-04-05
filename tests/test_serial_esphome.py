@@ -96,3 +96,18 @@ async def test_connect_by_instance_id() -> None:
 
             writer.close()
             await writer.wait_closed()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_connect_by_invalid_name() -> None:
+    """Test that connecting with an invalid port name raises ValueError."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            url = f"esphome://{parsed.hostname}:{parsed.port}?port=Nonexistent"
+
+            with pytest.raises(ValueError, match="does not exist"):
+                await open_serial_connection(
+                    url=url,
+                    baudrate=115200,
+                )
