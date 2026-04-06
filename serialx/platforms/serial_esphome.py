@@ -6,17 +6,23 @@ import asyncio
 from collections.abc import Callable, Coroutine
 from contextlib import suppress
 from enum import IntFlag
+import functools
 import logging
 import threading
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 import urllib.parse
 
 import aioesphomeapi
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
-from aioesphomeapi.core import APIConnectionError, PingRequest, PingResponse
+from aioesphomeapi.core import (
+    APIConnectionError,
+    PingRequest,
+    PingResponse,
+    TimeoutAPIError,
+)
 from typing_extensions import Buffer
 
-from serialx import UnsupportedSetting
+from serialx import SerialException, UnsupportedSetting
 from serialx.common import (
     BaseSerial,
     BaseSerialTransport,
@@ -27,6 +33,7 @@ from serialx.common import (
 )
 
 _T = TypeVar("_T")
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,6 +49,21 @@ STOP_BITS_MAP = {
     StopBits.ONE: 1,
     StopBits.TWO: 2,
 }
+
+
+def translate_esphome_errors(func: _F) -> _F:
+    """Translate aioesphomeapi errors into standard serialx exceptions."""
+
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except TimeoutAPIError as exc:
+            raise TimeoutError(str(exc)) from exc
+        except APIConnectionError as exc:
+            raise SerialException(str(exc)) from exc
+
+    return cast(_F, wrapper)
 
 
 class LineStateFlag(IntFlag):
@@ -121,6 +143,7 @@ class ESPHomeSerial(BaseSerial):
         """Return whether the serial port is open."""
         return self._api is not None
 
+    @translate_esphome_errors
     async def _async_open(self) -> None:
         # Only connect if the API was not passed in externally
         if self._api is None:
@@ -152,6 +175,7 @@ class ESPHomeSerial(BaseSerial):
             # Don't disconnect an externally-passed API
             self._disconnect_api = False
 
+    @translate_esphome_errors
     async def _async_subscribe(self) -> None:
         assert self._api is not None
         await self._subscribe_instance()
@@ -227,6 +251,7 @@ class ESPHomeSerial(BaseSerial):
         """Set modem control bits."""
         self._call_on_loop(self._async_set_modem_pins(modem_pins))
 
+    @translate_esphome_errors
     async def _async_set_modem_pins(self, modem_pins: ModemPins) -> None:
         assert self._api is not None
         line_states = self._last_line_state
@@ -252,6 +277,7 @@ class ESPHomeSerial(BaseSerial):
     def _get_modem_pins(self) -> ModemPins:
         return self._call_on_loop(self._async_get_modem_pins())
 
+    @translate_esphome_errors
     async def _async_get_modem_pins(self) -> ModemPins:
         assert self._api is not None
         rsp = await self._api.serial_proxy_get_modem_pins(instance=self._instance_id)
@@ -277,6 +303,7 @@ class ESPHomeSerial(BaseSerial):
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
+    @translate_esphome_errors
     async def _async_flush(self) -> None:
         """Flush write buffers."""
         assert self._api is not None
@@ -345,6 +372,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         super().__init__(loop, protocol)
         self._unsub: Callable[[], None] | None = None
 
+    @translate_esphome_errors
     async def _connect(self, **kwargs) -> None:
         self._serial = ESPHomeSerial(loop=self._loop, **kwargs)
         self._extra["serial"] = self._serial
