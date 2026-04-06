@@ -18,6 +18,7 @@ host:
 
 api:
   port: ${api_port}
+  encryption:
 
 logger:
   level: INFO

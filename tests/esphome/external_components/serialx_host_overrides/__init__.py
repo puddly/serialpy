@@ -9,12 +9,14 @@ CODEOWNERS = ["@puddly"]
 DEPENDENCIES = ["api", "uart"]
 
 CONF_API_PORT_ENV = "api_port_env"
+CONF_NOISE_PSK_ENV = "noise_psk_env"
 CONF_LEFT_UART_ENV = "left_uart_env"
 CONF_LEFT_UART_ID = "left_uart_id"
 CONF_RIGHT_UART_ENV = "right_uart_env"
 CONF_RIGHT_UART_ID = "right_uart_id"
 
 DEFAULT_API_PORT_ENV = "SERIALX_API_PORT"
+DEFAULT_NOISE_PSK_ENV = "SERIALX_NOISE_PSK"
 DEFAULT_LEFT_UART_ENV = "SERIALX_UART_LEFT"
 DEFAULT_RIGHT_UART_ENV = "SERIALX_UART_RIGHT"
 
@@ -39,6 +41,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(
                 CONF_API_PORT_ENV, default=DEFAULT_API_PORT_ENV
             ): cv.string_strict,
+            cv.Optional(
+                CONF_NOISE_PSK_ENV, default=DEFAULT_NOISE_PSK_ENV
+            ): cv.string_strict,
         }
     ).extend(cv.COMPONENT_SCHEMA),
     cv.only_on(PLATFORM_HOST),
@@ -58,3 +63,4 @@ async def to_code(config):
     cg.add(var.set_left_uart_env(config[CONF_LEFT_UART_ENV]))
     cg.add(var.set_right_uart_env(config[CONF_RIGHT_UART_ENV]))
     cg.add(var.set_api_port_env(config[CONF_API_PORT_ENV]))
+    cg.add(var.set_noise_psk_env(config[CONF_NOISE_PSK_ENV]))

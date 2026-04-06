@@ -3,6 +3,7 @@
 #include "serialx_host_overrides.h"
 
 #include "esphome/components/api/api_server.h"
+#include "esphome/core/helpers.h"
 #include "esphome/core/log.h"
 
 #include <cerrno>
@@ -50,6 +51,24 @@ void SerialxHostOverridesComponent::setup() {
 
   api::global_api_server->set_port(static_cast<uint16_t>(parsed));
   ESP_LOGI(TAG, "Overrode API port from %s", this->api_port_env_.c_str());
+
+#ifdef USE_API_NOISE
+  const char *noise_psk_value = std::getenv(this->noise_psk_env_.c_str());
+  if (noise_psk_value != nullptr) {
+    if (noise_psk_value[0] == '\0') {
+      // Empty string: disable encryption
+      api::global_api_server->set_noise_psk({});
+      ESP_LOGI(TAG, "Disabled noise encryption from %s", this->noise_psk_env_.c_str());
+    } else {
+      // Base64-encoded PSK
+      auto decoded = base64_decode(noise_psk_value);
+      api::psk_t psk{};
+      std::copy_n(decoded.begin(), std::min(decoded.size(), psk.size()), psk.begin());
+      api::global_api_server->set_noise_psk(psk);
+      ESP_LOGI(TAG, "Overrode noise PSK from %s", this->noise_psk_env_.c_str());
+    }
+  }
+#endif  // USE_API_NOISE
 }
 
 void SerialxHostOverridesComponent::loop() {

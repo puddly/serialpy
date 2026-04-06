@@ -20,6 +20,7 @@ class SerialxHostOverridesComponent : public Component {
   void set_left_uart_env(std::string env_name) { this->left_uart_env_ = std::move(env_name); }
   void set_right_uart_env(std::string env_name) { this->right_uart_env_ = std::move(env_name); }
   void set_api_port_env(std::string env_name) { this->api_port_env_ = std::move(env_name); }
+  void set_noise_psk_env(std::string env_name) { this->noise_psk_env_ = std::move(env_name); }
 
  protected:
   uart::HostUartComponent *left_uart_{nullptr};
@@ -27,6 +28,7 @@ class SerialxHostOverridesComponent : public Component {
   std::string left_uart_env_;
   std::string right_uart_env_;
   std::string api_port_env_;
+  std::string noise_psk_env_;
   bool ready_printed_{false};
 };
 

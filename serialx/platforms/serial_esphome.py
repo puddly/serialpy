@@ -88,6 +88,8 @@ class ESPHomeSerial(BaseSerial):
         api: APIClient | None = None,
         port_name: str | None = None,
         port_instance: int | None = None,
+        password: str | None = None,
+        noise_psk: str | None = None,
         **kwargs,
     ) -> None:
         """Initialize ESPHome serial port."""
@@ -108,6 +110,8 @@ class ESPHomeSerial(BaseSerial):
         self._api: APIClient | None = api
         self._port_name: str | None = port_name
         self._instance_id: int | None = port_instance
+        self._password: str | None = password
+        self._noise_psk: str | None = noise_psk
         self._disconnect_api: bool = False
 
         self._read_buffer = bytearray()
@@ -162,11 +166,17 @@ class ESPHomeSerial(BaseSerial):
             else:
                 self._port_name = port_value
 
+            if "password" in params:
+                self._password = params["password"][0]
+
+            if "noise_psk" in params:
+                self._noise_psk = params["noise_psk"][0]
+
             self._api = aioesphomeapi.APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
-                password=params["password"][0] if "password" in params else None,
-                noise_psk=params["noise_psk"][0] if "noise_psk" in params else None,
+                password=self._password,
+                noise_psk=self._noise_psk,
             )
 
             self._disconnect_api = True

@@ -286,7 +286,12 @@ def create_adapter_pair(left: str, right: str) -> Iterator[tuple[str, str]]:
 
 
 @contextlib.contextmanager
-def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, str]]:
+def create_esphome_pair(
+    left_tty: str,
+    right_tty: str,
+    *,
+    noise_psk: str = "",
+) -> Iterator[tuple[str, str]]:
     """Create an esphome:// pair."""
     assert ESPHOME_HOST_BINARY is not None
 
@@ -294,6 +299,7 @@ def create_esphome_pair(left_tty: str, right_tty: str) -> Iterator[tuple[str, st
     env["SERIALX_UART_LEFT"] = left_tty
     env["SERIALX_UART_RIGHT"] = right_tty
     env["SERIALX_API_PORT"] = "0"
+    env["SERIALX_NOISE_PSK"] = noise_psk
 
     process = subprocess.Popen(  # noqa: S603
         [ESPHOME_HOST_BINARY],
