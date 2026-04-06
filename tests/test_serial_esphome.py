@@ -98,8 +98,8 @@ async def test_connect_by_instance_id() -> None:
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
 
-            # Connect by instance ID instead of name
-            url = f"esphome://{parsed.hostname}:{parsed.port}/0"
+            # Connect by instance ID instead of name, with a password
+            url = f"esphome://{parsed.hostname}:{parsed.port}/0?password=unused"
 
             reader, writer = await open_serial_connection(
                 url=url,
@@ -158,15 +158,15 @@ async def test_connect_encrypted_plaintext_to_server() -> None:
             socat_right,
         ) as (left, _right):
             parsed = urllib.parse.urlparse(left)
+            noise_psk = base64(b"An unnecessary noise PSK we use.")
+
             url = (
-                f"esphome://{parsed.hostname}:{parsed.port}?port_name=Serial+Proxy+Left"
+                f"esphome://{parsed.hostname}:{parsed.port}"
+                f"?port_name=Serial+Proxy+Left"
+                f"&noise_psk={noise_psk}"
             )
 
             with pytest.raises(
                 SerialException, match="The device is using plaintext protocol"
             ):
-                await open_serial_connection(
-                    url=url,
-                    baudrate=115200,
-                    noise_psk=base64(b"An unnecessary noise PSK we use."),
-                )
+                await open_serial_connection(url=url, baudrate=115200)

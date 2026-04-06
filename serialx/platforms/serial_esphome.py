@@ -191,6 +191,7 @@ class ESPHomeSerial(BaseSerial):
         await self._subscribe_instance()
         self._unsub = self._api.subscribe_serial_proxy_data(self._on_data)
 
+    @translate_esphome_errors
     async def _ping(self, *, timeout: float) -> None:
         """Ping the ESPHome API."""
         assert self._api is not None
