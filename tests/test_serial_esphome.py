@@ -10,15 +10,24 @@ except ImportError:
         allow_module_level=True,
     )
 
+from base64 import b64encode
+from unittest.mock import patch
 import urllib.parse
 
-from serialx import open_serial_connection
+from serialx import SerialException, open_serial_connection
 from serialx.platforms.serial_esphome import (
     ESPHOME_DEFAULT_PORT,
     ESPHomeSerialTransport,
 )
 
 from .common import ESPHOME_HOST_BINARY, create_esphome_pair, create_socat_pair
+
+
+def base64(key: bytes) -> str:
+    """Base64 encode a Noise key."""
+    assert len(key) == 32
+
+    return b64encode(key).decode("ascii")
 
 
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
@@ -90,8 +99,8 @@ async def test_connect_by_instance_id() -> None:
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
 
-            # Connect by instance ID instead of name
-            url = f"esphome://{parsed.hostname}:{parsed.port}/0"
+            # Connect by instance ID instead of name, with a password
+            url = f"esphome://{parsed.hostname}:{parsed.port}/0?password=unused"
 
             reader, writer = await open_serial_connection(
                 url=url,
@@ -118,3 +127,58 @@ async def test_connect_by_invalid_name() -> None:
                     url=url,
                     baudrate=115200,
                 )
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_connect_plaintext_to_encrypted_server() -> None:
+    """Test that connecting without encryption to an encrypted server raises."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(
+            socat_left,
+            socat_right,
+            noise_psk=base64(b"A noise PSK we do not provide..."),
+        ) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            url = (
+                f"esphome://{parsed.hostname}:{parsed.port}?port_name=Serial+Proxy+Left"
+            )
+
+            with pytest.raises(SerialException, match="Connection requires encryption"):
+                await open_serial_connection(
+                    url=url,
+                    baudrate=115200,
+                )
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_connect_encrypted_plaintext_to_server() -> None:
+    """Test that connecting with encryption to an unencrypted server raises."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(
+            socat_left,
+            socat_right,
+        ) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            noise_psk = base64(b"An unnecessary noise PSK we use.")
+
+            url = (
+                f"esphome://{parsed.hostname}:{parsed.port}"
+                f"?port_name=Serial+Proxy+Left"
+                f"&noise_psk={noise_psk}"
+            )
+
+            with pytest.raises(
+                SerialException, match="The device is using plaintext protocol"
+            ):
+                await open_serial_connection(url=url, baudrate=115200)
+
+
+async def test_connect_timeout_raises_timeout_error() -> None:
+    """Test that a TCP connect timeout is translated to TimeoutError."""
+
+    with patch("aioesphomeapi.connection.TCP_CONNECT_TIMEOUT", 1.0):
+        with pytest.raises(TimeoutError, match="Timeout while connecting"):
+            # 192.0.2.1 is TEST-NET-1 (RFC 5737), packets are silently dropped
+            await open_serial_connection(
+                url="esphome://192.0.2.1:6053?port_name=test", baudrate=115200
+            )
