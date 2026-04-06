@@ -11,6 +11,7 @@ except ImportError:
     )
 
 from base64 import b64encode
+from unittest.mock import patch
 import urllib.parse
 
 from serialx import SerialException, open_serial_connection
@@ -170,3 +171,14 @@ async def test_connect_encrypted_plaintext_to_server() -> None:
                 SerialException, match="The device is using plaintext protocol"
             ):
                 await open_serial_connection(url=url, baudrate=115200)
+
+
+async def test_connect_timeout_raises_timeout_error() -> None:
+    """Test that a TCP connect timeout is translated to TimeoutError."""
+
+    with patch("aioesphomeapi.connection.TCP_CONNECT_TIMEOUT", 1.0):
+        with pytest.raises(TimeoutError, match="Timeout while connecting"):
+            # 192.0.2.1 is TEST-NET-1 (RFC 5737), packets are silently dropped
+            await open_serial_connection(
+                url="esphome://192.0.2.1:6053?port_name=test", baudrate=115200
+            )
