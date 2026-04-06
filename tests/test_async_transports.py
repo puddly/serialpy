@@ -598,6 +598,19 @@ async def test_async_invalid_uri() -> None:
         )
 
 
+async def test_create_serial_connection_no_url_no_transport() -> None:
+    """Test that create_serial_connection requires url or transport_cls."""
+    loop = asyncio.get_running_loop()
+
+    with pytest.raises(ValueError, match="url.*transport_cls"):
+        await create_serial_connection(
+            loop,
+            asyncio.Protocol,
+            url=None,
+            baudrate=115200,
+        )
+
+
 async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
     """Test reading modem control bits."""
     async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (

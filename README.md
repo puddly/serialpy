@@ -83,6 +83,39 @@ async def main():
 	await transport.set_modem_pins(rts=True, dtr=True)
 ```
 
+## ESPHome serial proxy
+Serialx can communicate with serial devices exposed by [ESPHome](https://esphome.io/).
+
+It can either create the API instance directly, for simplicity:
+
+```python
+from serialx import open_serial_connection
+
+reader, writer = await open_serial_connection(
+    url="esphome://192.168.1.42:6053/?port_name=Zigbee&noise_psk=...",
+    baudrate=115200,
+)
+```
+
+Or reuse an existing API instance, for efficiency:
+```python
+from aioesphomeapi import APIClient
+from serialx import open_serial_connection
+from serialx.platforms.serial_esphome import ESPHomeSerialTransport
+
+# An external API instance
+api = APIClient(address="192.168.1.42", port=6053, noise_psk="...", password=None)
+await api.connect(login=True)
+
+reader, writer = await open_serial_connection(
+    url=None,
+    transport_cls=ESPHomeSerialTransport,
+    api=api,
+    port_name="Zigbee",
+    baudrate=115200,
+)
+```
+
 # Development
 All development dependencies are listed in `pyproject.toml`. To install them, use:
 ```bash

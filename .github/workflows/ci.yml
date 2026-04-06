@@ -175,7 +175,7 @@ jobs:
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            1-esphome-daemon-${{
+            2-esphome-daemon-${{
             hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Set up Python 3.13
         if: steps.cache-esphome.outputs.cache-hit != 'true'
@@ -190,7 +190,7 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv venv esphome-venv
           . esphome-venv/bin/activate
-          uv pip install 'git+https://github.com/esphome/esphome@3f143d9f19ae29a408f1024e202aa869e86a7787'
+          uv pip install 'esphome>=2026.3.2'
           esphome compile tests/esphome/host_daemon.yaml
       - name: Cache ESPHome binary
         if: steps.cache-esphome.outputs.cache-hit != 'true'
@@ -262,7 +262,7 @@ jobs:
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            1-esphome-daemon-${{
+            2-esphome-daemon-${{
             hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Restore cached ser2net binary
         uses: actions/cache/restore@v4

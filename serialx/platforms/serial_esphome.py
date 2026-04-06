@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Coroutine
+from contextlib import suppress
 from enum import IntFlag
 import logging
 import threading
@@ -12,7 +13,7 @@ import urllib.parse
 
 import aioesphomeapi
 from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
-from aioesphomeapi.core import PingRequest, PingResponse
+from aioesphomeapi.core import APIConnectionError, PingRequest, PingResponse
 from typing_extensions import Buffer
 
 from serialx import UnsupportedSetting
@@ -62,6 +63,9 @@ class ESPHomeSerial(BaseSerial):
         *args,
         connect_timeout: float = 10.0,
         loop: asyncio.AbstractEventLoop | None = None,
+        api: APIClient | None = None,
+        port_name: str | None = None,
+        port_instance: int | None = None,
         **kwargs,
     ) -> None:
         """Initialize ESPHome serial port."""
@@ -77,22 +81,13 @@ class ESPHomeSerial(BaseSerial):
         # a temporary event loop while the async one passes through its own.
         self._loop = loop
         self._loop_thread: threading.Thread | None = None
-
         self._connect_timeout = connect_timeout
 
-        parsed = urllib.parse.urlparse(str(self._path))
-        params = urllib.parse.parse_qs(parsed.query)
+        self._api: APIClient | None = api
+        self._port_name: str | None = port_name
+        self._instance_id: int | None = port_instance
+        self._disconnect_api: bool = False
 
-        self._host = parsed.hostname
-        self._port = parsed.port or ESPHOME_DEFAULT_PORT
-
-        path_str = parsed.path.strip("/")
-        self.instance = int(path_str) if path_str else 0
-
-        self._password = params["password"][0] if "password" in params else None
-        self._noise_psk = params["noise_psk"][0] if "noise_psk" in params else None
-
-        self._api: APIClient | None = None
         self._read_buffer = bytearray()
         self._read_event = asyncio.Event()
         self._unsub: Callable[[], None] | None = None
@@ -106,17 +101,18 @@ class ESPHomeSerial(BaseSerial):
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 
     def _on_data(self, msg: SerialProxyDataReceived) -> None:
-        if msg.instance == self.instance:
+        if msg.instance == self._instance_id:
             self._read_buffer.extend(msg.data)
             self._read_event.set()
 
     def _open(self) -> None:
         """Open the serial port."""
-        self._loop = asyncio.new_event_loop()
-        self._read_event = asyncio.Event()
-        self._loop_thread = threading.Thread(target=self._loop.run_forever)
-        self._loop_thread.start()
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
+            self._loop_thread = threading.Thread(target=self._loop.run_forever)
+            self._loop_thread.start()
 
+        self._read_event = asyncio.Event()
         self._call_on_loop(self._async_open())
         self._call_on_loop(self._async_subscribe())
 
@@ -126,13 +122,35 @@ class ESPHomeSerial(BaseSerial):
         return self._api is not None
 
     async def _async_open(self) -> None:
-        self._api = aioesphomeapi.APIClient(
-            self._host,
-            self._port,
-            password=self._password,
-            noise_psk=self._noise_psk,
-        )
-        await self._api.connect(login=True)
+        # Only connect if the API was not passed in externally
+        if self._api is None:
+            assert self._path is not None
+            parsed = urllib.parse.urlparse(str(self._path))
+            params = urllib.parse.parse_qs(parsed.query)
+
+            if "port_name" in params:
+                port_value = params["port_name"][0]
+            else:
+                # Backwards compat: esphome://host:port/{instance_id}
+                port_value = urllib.parse.unquote(parsed.path.strip("/"))
+
+            if port_value.isdigit():
+                self._instance_id = int(port_value)
+            else:
+                self._port_name = port_value
+
+            self._api = aioesphomeapi.APIClient(
+                address=parsed.hostname,
+                port=parsed.port or ESPHOME_DEFAULT_PORT,
+                password=params["password"][0] if "password" in params else None,
+                noise_psk=params["noise_psk"][0] if "noise_psk" in params else None,
+            )
+
+            self._disconnect_api = True
+            await self._api.connect(login=True)
+        else:
+            # Don't disconnect an externally-passed API
+            self._disconnect_api = False
 
     async def _async_subscribe(self) -> None:
         assert self._api is not None
@@ -156,7 +174,27 @@ class ESPHomeSerial(BaseSerial):
         """Subscribe serial proxy streaming for this instance if supported."""
         if self._api is None or self._instance_subscribed:
             return
-        self._api.serial_proxy_subscribe(self.instance)
+
+        info = await self._api.device_info()
+
+        if self._instance_id is None:
+            assert self._port_name is not None
+
+            name_to_info_mapping = {
+                proxy_info.name: (index, proxy_info)
+                for index, proxy_info in enumerate(info.serial_proxies)
+            }
+
+            if self._port_name not in name_to_info_mapping:
+                raise ValueError(
+                    f"Serial proxy with name {self._port_name!r}"
+                    f" does not exist in {name_to_info_mapping!r}"
+                )
+
+            instance_id, _proxy_info = name_to_info_mapping[self._port_name]
+            self._instance_id = instance_id
+
+        self._api.serial_proxy_subscribe(self._instance_id)
 
         # Ping to ensure the daemon has processed the subscribe
         await self._ping(timeout=self._connect_timeout)
@@ -167,14 +205,17 @@ class ESPHomeSerial(BaseSerial):
         """Unsubscribe serial proxy streaming for this instance if supported."""
         if self._api is None or not self._instance_subscribed:
             return
-        self._api.serial_proxy_unsubscribe(self.instance)
+
+        with suppress(APIConnectionError):
+            self._api.serial_proxy_unsubscribe(self._instance_id)
+
         self._instance_subscribed = False
 
     def _configure_port(self) -> None:
         """Configure the serial port settings."""
         assert self._api is not None
         self._api.serial_proxy_configure(
-            instance=self.instance,
+            instance=self._instance_id,
             baudrate=self._baudrate,
             flow_control=self._rtscts,
             parity=PARITY_MAP[self._parity],
@@ -202,18 +243,18 @@ class ESPHomeSerial(BaseSerial):
 
         self._last_line_state = line_states
         self._api.serial_proxy_set_modem_pins(
-            instance=self.instance,
+            instance=self._instance_id,
             line_states=self._last_line_state,
         )
 
-        await self._ping(timeout=2.0)
+        await self._async_get_modem_pins()
 
     def _get_modem_pins(self) -> ModemPins:
         return self._call_on_loop(self._async_get_modem_pins())
 
     async def _async_get_modem_pins(self) -> ModemPins:
         assert self._api is not None
-        rsp = await self._api.serial_proxy_get_modem_pins(instance=self.instance)
+        rsp = await self._api.serial_proxy_get_modem_pins(instance=self._instance_id)
         self._last_line_state = rsp.line_states
 
         return ModemPins(
@@ -239,7 +280,7 @@ class ESPHomeSerial(BaseSerial):
     async def _async_flush(self) -> None:
         """Flush write buffers."""
         assert self._api is not None
-        await self._api.serial_proxy_flush(instance=self.instance)
+        await self._api.serial_proxy_flush(instance=self._instance_id)
 
     def flush(self) -> None:
         """Flush write buffers."""
@@ -249,7 +290,7 @@ class ESPHomeSerial(BaseSerial):
         """Write bytes to serial port."""
         assert self._api is not None
         data = bytes(b)
-        self._api.serial_proxy_write(instance=self.instance, data=data)
+        self._api.serial_proxy_write(instance=self._instance_id, data=data)
         return len(data)
 
     def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
@@ -277,7 +318,7 @@ class ESPHomeSerial(BaseSerial):
             self._unsub()
             self._unsub = None
 
-        if self._api is not None:
+        if self._disconnect_api and self._api is not None:
             self._unsubscribe_instance()
             self._call_on_loop(self._api.disconnect())
             self._api = None
@@ -287,6 +328,7 @@ class ESPHomeSerial(BaseSerial):
             self._loop.call_soon_threadsafe(self._loop.stop)
             self._loop_thread.join()
             self._loop.close()
+            self._loop = None
             self._loop_thread = None
 
 
@@ -317,7 +359,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._protocol.connection_made(self)
 
     def _on_data(self, msg: SerialProxyDataReceived) -> None:
-        if msg.instance == self._serial.instance:
+        if msg.instance == self._serial._instance_id:
             self._protocol.data_received(msg.data)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
@@ -338,8 +380,9 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._unsub()
             self._unsub = None
 
-        if self._serial is not None and self._serial._api is not None:
-            self._serial._unsubscribe_instance()
+        self._serial._unsubscribe_instance()
+
+        if self._serial._disconnect_api:
             api = self._serial._api
             self._serial._api = None
             self._loop.create_task(self._async_close(api))
