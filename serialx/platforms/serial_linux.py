@@ -20,6 +20,9 @@ LOGGER = logging.getLogger(__name__)
 SYS_ROOT = Path("/sys")
 DEV_ROOT = Path("/dev")
 
+# From `include/uapi/linux/serial.h`
+PORT_UNKNOWN = 0
+
 ASYNC_LOW_LATENCY = 1 << 13
 CMSPAR = 0o10000000000
 TCGETS = 0x5401
@@ -277,6 +280,15 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
                 LOGGER.debug("USB device %r disappeared during iteration", usb_device)
                 continue
         elif subsystem == "serial-base":
+            try:
+                port_type = (path / "type").read_text()
+            except OSError:
+                LOGGER.debug("Port %r disappeared during iteration", device)
+                continue
+
+            if int(port_type) == PORT_UNKNOWN:
+                continue
+
             # Native serial ports
             info = SerialPortInfo(
                 device=str(unique_device),
