@@ -141,6 +141,7 @@ def create_native_serial_device(
     *,
     tty_name: str,
     device_path: str,
+    port_type: int,
 ) -> None:
     """Create a fake native serial device (ttyAMA*) in the fake sysfs."""
     full_device_path = sys_root / device_path.lstrip("/")
@@ -151,6 +152,8 @@ def create_native_serial_device(
     tty_class.symlink_to(Path("../..") / device_path.lstrip("/"))
 
     full_device_path.mkdir(parents=True, exist_ok=True)
+
+    (full_device_path / "type").write_text(f"{port_type}\n")
     (full_device_path / "device").symlink_to(serial_base_path)
 
     serial_base_path.mkdir(parents=True, exist_ok=True)
@@ -274,6 +277,7 @@ def fake_sysfs(tmp_path):
         dev_root,
         tty_name="ttyAMA0",
         device_path="devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0",
+        port_type=32,
     )
 
     # /dev/ttyAMA1: Another Raspberry Pi native UART
@@ -282,6 +286,7 @@ def fake_sysfs(tmp_path):
         dev_root,
         tty_name="ttyAMA1",
         device_path="devices/platform/soc/fe201800.serial/fe201800.serial:0/fe201800.serial:0.0/tty/ttyAMA1",
+        port_type=32,
     )
 
     # /dev/ttyAMA2: Third Raspberry Pi native UART
@@ -290,7 +295,18 @@ def fake_sysfs(tmp_path):
         dev_root,
         tty_name="ttyAMA2",
         device_path="devices/platform/soc/fe201a00.serial/fe201a00.serial:0/fe201a00.serial:0.0/tty/ttyAMA2",
+        port_type=32,
     )
+
+    # /dev/ttyS0-ttyS3: Phantom serial8250 ports (no hardware, PORT_UNKNOWN)
+    for i in range(4):
+        create_native_serial_device(
+            sys_root,
+            dev_root,
+            tty_name=f"ttyS{i}",
+            device_path=f"devices/platform/serial8250/serial8250:0/serial8250:0.{i}/tty/ttyS{i}",
+            port_type=0,
+        )
 
     with (
         patch.object(serial_linux, "SYS_ROOT", sys_root),
@@ -525,6 +541,7 @@ def test_list_serial_ports_device_disappears_during_scan(tmp_path: Path) -> None
         dev_root,
         tty_name="ttyAMA0",
         device_path="devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0",
+        port_type=32,
     )
 
     # Delete a sysfs file to simulate the device being unplugged mid-scan
