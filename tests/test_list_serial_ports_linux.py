@@ -436,3 +436,132 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
         interface_description=None,
         interface_num=None,
     )
+
+
+def test_list_serial_ports_no_sysfs(tmp_path: Path) -> None:
+    """Test listing serial ports when /sys/class/tty doesn't exist."""
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    # Don't create /sys/class/tty at all
+    with (
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    assert ports == []
+
+
+def test_list_serial_ports_no_by_id_dir(tmp_path: Path) -> None:
+    """Test listing serial ports when /dev/serial/by-id doesn't exist."""
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    create_usb_serial_device(
+        sys_root,
+        dev_root,
+        tty_name="ttyUSB0",
+        device_path="devices/platform/soc/fe980000.usb/usb1/1-1/1-1.1/1-1.1.1/1-1.1.1.1/1-1.1.1.1:1.0/ttyUSB0/tty/ttyUSB0",
+        vid="10c4",
+        pid="ea60",
+        serial="ec4903cb",
+        manufacturer="Silicon Labs",
+        product="CP2102 USB to UART Bridge Controller",
+        bcd_device="0100",
+        # No by_id_name: /dev/serial/by-id directory won't be created
+    )
+
+    with (
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    assert len(ports) == 1
+    assert ports[0].device == dev_root / "ttyUSB0"
+    assert ports[0].resolved_device == dev_root / "ttyUSB0"
+    assert ports[0].vid == 0x10C4
+
+
+def test_list_serial_ports_device_disappears_during_scan(tmp_path: Path) -> None:
+    """Test that a USB device disappearing mid-scan is handled gracefully."""
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    # Create a device that will "disappear"
+    create_usb_serial_device(
+        sys_root,
+        dev_root,
+        tty_name="ttyUSB0",
+        device_path="devices/platform/soc/fe980000.usb/usb1/1-1/1-1.1/1-1.1.1/1-1.1.1.1/1-1.1.1.1:1.0/ttyUSB0/tty/ttyUSB0",
+        vid="10c4",
+        pid="ea60",
+        serial="ec4903cb",
+        manufacturer="Silicon Labs",
+        product="CP2102 USB to UART Bridge Controller",
+        bcd_device="0100",
+    )
+
+    # Create a device that stays
+    create_native_serial_device(
+        sys_root,
+        dev_root,
+        tty_name="ttyAMA0",
+        device_path="devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0",
+    )
+
+    # Delete a sysfs file to simulate the device being unplugged mid-scan
+    usb_device = (
+        sys_root / "devices/platform/soc/fe980000.usb/usb1/1-1/1-1.1/1-1.1.1/1-1.1.1.1"
+    )
+    (usb_device / "idVendor").unlink()
+
+    with (
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    # The disappeared USB device should be skipped, native UART remains
+    assert len(ports) == 1
+    assert ports[0].device == dev_root / "ttyAMA0"
+
+
+def test_list_serial_ports_cdc_acm_device_disappears(tmp_path: Path) -> None:
+    """Test that a CDC ACM device disappearing mid-scan is handled gracefully."""
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    create_cdc_acm_device(
+        sys_root,
+        dev_root,
+        tty_name="ttyACM0",
+        device_path="devices/platform/soc/fe980000.usb/usb1/1-1/1-1.2/1-1.2:1.0/tty/ttyACM0",
+        vid="303a",
+        pid="4005",
+        serial="80B54EEFAE18",
+        manufacturer="Nabu Casa",
+        product="ZBT-2",
+        bcd_device="0100",
+    )
+
+    # Delete a sysfs file to simulate the device being unplugged mid-scan
+    usb_device = sys_root / "devices/platform/soc/fe980000.usb/usb1/1-1/1-1.2"
+    (usb_device / "idVendor").unlink()
+
+    with (
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    assert ports == []

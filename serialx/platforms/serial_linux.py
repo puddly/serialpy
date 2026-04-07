@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import array
+from collections.abc import Iterator
+from contextlib import suppress
 import ctypes
 import errno
 import fcntl
@@ -185,18 +187,25 @@ class LinuxSerialTransport(ExtendedPosixSerialTransport):
     _serial_cls = LinuxSerial
 
 
+def iterdir_safe(path: Path) -> Iterator[Path]:
+    """Safely iterate over a dir, yielding nothing on error."""
+
+    with suppress(OSError):
+        yield from path.iterdir()
+
+
 def linux_list_serial_ports() -> list[SerialPortInfo]:
     """List serial ports on Linux."""
     by_id_symlinks = {}
     by_id_path = DEV_ROOT / "serial/by-id"
 
-    if by_id_path.exists():
-        for symlink in by_id_path.iterdir():
-            by_id_symlinks[symlink.resolve()] = symlink
+    # `/dev/serial/by-id/` can disappear if nothing is plugged in
+    for symlink in iterdir_safe(by_id_path):
+        by_id_symlinks[symlink.resolve()] = symlink
 
     results = []
 
-    for path in (SYS_ROOT / "class/tty").iterdir():
+    for path in iterdir_safe(SYS_ROOT / "class/tty"):
         if not path.name.startswith("tty"):
             continue
 
@@ -214,39 +223,59 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
             usb_interface = resolved.parent
             usb_device = usb_interface.parent
             interface_file = usb_interface / "interface"
-            info = SerialPortInfo(
-                device=unique_device,
-                resolved_device=device,
-                vid=int((usb_device / "idVendor").read_text(), 16),
-                pid=int((usb_device / "idProduct").read_text(), 16),
-                serial_number=(usb_device / "serial").read_text()[:-1],
-                manufacturer=(usb_device / "manufacturer").read_text()[:-1],
-                product=(usb_device / "product").read_text()[:-1],
-                bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                interface_description=(
-                    interface_file.read_text()[:-1] if interface_file.exists() else None
-                ),
-                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
-            )
+
+            try:
+                info = SerialPortInfo(
+                    device=unique_device,
+                    resolved_device=device,
+                    vid=int((usb_device / "idVendor").read_text(), 16),
+                    pid=int((usb_device / "idProduct").read_text(), 16),
+                    serial_number=(usb_device / "serial").read_text()[:-1],
+                    manufacturer=(usb_device / "manufacturer").read_text()[:-1],
+                    product=(usb_device / "product").read_text()[:-1],
+                    bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
+                    interface_description=(
+                        interface_file.read_text()[:-1]
+                        if interface_file.exists()
+                        else None
+                    ),
+                    interface_num=int(
+                        (usb_interface / "bInterfaceNumber").read_text(), 16
+                    ),
+                )
+            except OSError:
+                LOGGER.debug(
+                    "Serial device %r disappeared during iteration", usb_device
+                )
+                continue
         elif subsystem == "usb":
             # CDC ACM devices
             usb_interface = resolved
             usb_device = usb_interface.parent
             interface_file = usb_interface / "interface"
-            info = SerialPortInfo(
-                device=unique_device,
-                resolved_device=device,
-                vid=int((usb_device / "idVendor").read_text(), 16),
-                pid=int((usb_device / "idProduct").read_text(), 16),
-                serial_number=(usb_device / "serial").read_text()[:-1],
-                manufacturer=(usb_device / "manufacturer").read_text()[:-1],
-                product=(usb_device / "product").read_text()[:-1],
-                bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                interface_description=(
-                    interface_file.read_text()[:-1] if interface_file.exists() else None
-                ),
-                interface_num=int((usb_interface / "bInterfaceNumber").read_text(), 16),
-            )
+
+            try:
+                info = SerialPortInfo(
+                    device=unique_device,
+                    resolved_device=device,
+                    vid=int((usb_device / "idVendor").read_text(), 16),
+                    pid=int((usb_device / "idProduct").read_text(), 16),
+                    serial_number=(usb_device / "serial").read_text()[:-1],
+                    manufacturer=(usb_device / "manufacturer").read_text()[:-1],
+                    product=(usb_device / "product").read_text()[:-1],
+                    bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
+                    interface_description=(
+                        interface_file.read_text()[:-1]
+                        if interface_file.exists()
+                        else None
+                    ),
+                    interface_num=int(
+                        (usb_interface / "bInterfaceNumber").read_text(), 16
+                    ),
+                )
+            except OSError:
+                LOGGER.debug("USB device %r disappeared during iteration", usb_device)
+                continue
         elif subsystem == "serial-base":
             # Native serial ports
             info = SerialPortInfo(
