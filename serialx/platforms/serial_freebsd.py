@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 import re
 import subprocess
 
@@ -116,15 +115,15 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
 
         manufacturer, product = usb_strings.get(location["ugen"], (None, None))
 
-        device = Path(f"/dev/cua{ttyname}")
+        device = f"/dev/cua{ttyname}"
         vid_str = pnpinfo.get("vendor")
         pid_str = pnpinfo.get("product")
         release_str = pnpinfo.get("release")
 
         results.append(
             SerialPortInfo(
-                device=str(device),
-                resolved_device=str(device),
+                device=device,
+                resolved_device=device,
                 vid=int(vid_str, 16) if vid_str else None,
                 pid=int(pid_str, 16) if pid_str else None,
                 serial_number=pnpinfo.get("sernum"),
