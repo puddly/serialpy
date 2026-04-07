@@ -10,7 +10,6 @@ from contextlib import contextmanager
 import dataclasses
 from enum import Enum
 import io
-import os
 from pathlib import Path
 import time
 from typing import Any
@@ -757,8 +756,8 @@ def get_serial_classes(
 class SerialPortInfo:
     """A serial port."""
 
-    device: os.PathLike
-    resolved_device: os.PathLike
+    device: str
+    resolved_device: str
 
     vid: int | None
     pid: int | None

@@ -310,9 +310,11 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyUSB0: CP2102
     assert ports_by_name["ttyUSB0"] == SerialPortInfo(
-        device=dev_root
-        / "serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_ec4903cb-if00-port0",
-        resolved_device=dev_root / "ttyUSB0",
+        device=str(
+            dev_root
+            / "serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_ec4903cb-if00-port0"
+        ),
+        resolved_device=str(dev_root / "ttyUSB0"),
         vid=0x10C4,
         pid=0xEA60,
         serial_number="ec4903cb",
@@ -325,9 +327,11 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyUSB1: Another CP2102
     assert ports_by_name["ttyUSB1"] == SerialPortInfo(
-        device=dev_root
-        / "serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_41b06ea8-if00-port0",
-        resolved_device=dev_root / "ttyUSB1",
+        device=str(
+            dev_root
+            / "serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_41b06ea8-if00-port0"
+        ),
+        resolved_device=str(dev_root / "ttyUSB1"),
         vid=0x10C4,
         pid=0xEA60,
         serial_number="41b06ea8",
@@ -340,8 +344,10 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyUSB2: FTDI
     assert ports_by_name["ttyUSB2"] == SerialPortInfo(
-        device=dev_root / "serial/by-id/usb-FTDI_FT232R_USB_UART_A5069RR4-if00-port0",
-        resolved_device=dev_root / "ttyUSB2",
+        device=str(
+            dev_root / "serial/by-id/usb-FTDI_FT232R_USB_UART_A5069RR4-if00-port0"
+        ),
+        resolved_device=str(dev_root / "ttyUSB2"),
         vid=0x0403,
         pid=0x6001,
         serial_number="A5069RR4",
@@ -354,9 +360,11 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyUSB3: Prolific
     assert ports_by_name["ttyUSB3"] == SerialPortInfo(
-        device=dev_root
-        / "serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_DSDCb147613-if00-port0",
-        resolved_device=dev_root / "ttyUSB3",
+        device=str(
+            dev_root
+            / "serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_DSDCb147613-if00-port0"
+        ),
+        resolved_device=str(dev_root / "ttyUSB3"),
         vid=0x067B,
         pid=0x23A3,
         serial_number="DSDCb147613",
@@ -369,8 +377,10 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyUSB4: FTDI with custom serial
     assert ports_by_name["ttyUSB4"] == SerialPortInfo(
-        device=dev_root / "serial/by-id/usb-FTDI_FT232R_USB_UART_rutabaga-if00-port0",
-        resolved_device=dev_root / "ttyUSB4",
+        device=str(
+            dev_root / "serial/by-id/usb-FTDI_FT232R_USB_UART_rutabaga-if00-port0"
+        ),
+        resolved_device=str(dev_root / "ttyUSB4"),
         vid=0x0403,
         pid=0x6001,
         serial_number="rutabaga",
@@ -383,8 +393,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyACM0: ZBT-2 CDC ACM
     assert ports_by_name["ttyACM0"] == SerialPortInfo(
-        device=dev_root / "serial/by-id/usb-Nabu_Casa_ZBT-2_80B54EEFAE18-if00",
-        resolved_device=dev_root / "ttyACM0",
+        device=str(dev_root / "serial/by-id/usb-Nabu_Casa_ZBT-2_80B54EEFAE18-if00"),
+        resolved_device=str(dev_root / "ttyACM0"),
         vid=0x303A,
         pid=0x4005,
         serial_number="80B54EEFAE18",
@@ -397,8 +407,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyAMA0: Native UART
     assert ports_by_name["ttyAMA0"] == SerialPortInfo(
-        device=dev_root / "ttyAMA0",
-        resolved_device=dev_root / "ttyAMA0",
+        device=str(dev_root / "ttyAMA0"),
+        resolved_device=str(dev_root / "ttyAMA0"),
         vid=None,
         pid=None,
         serial_number=None,
@@ -411,8 +421,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyAMA1: Native UART
     assert ports_by_name["ttyAMA1"] == SerialPortInfo(
-        device=dev_root / "ttyAMA1",
-        resolved_device=dev_root / "ttyAMA1",
+        device=str(dev_root / "ttyAMA1"),
+        resolved_device=str(dev_root / "ttyAMA1"),
         vid=None,
         pid=None,
         serial_number=None,
@@ -425,8 +435,8 @@ def test_list_serial_ports_linux(fake_sysfs) -> None:
 
     # /dev/ttyAMA2: Native UART
     assert ports_by_name["ttyAMA2"] == SerialPortInfo(
-        device=dev_root / "ttyAMA2",
-        resolved_device=dev_root / "ttyAMA2",
+        device=str(dev_root / "ttyAMA2"),
+        resolved_device=str(dev_root / "ttyAMA2"),
         vid=None,
         pid=None,
         serial_number=None,
@@ -483,8 +493,8 @@ def test_list_serial_ports_no_by_id_dir(tmp_path: Path) -> None:
         ports = linux_list_serial_ports()
 
     assert len(ports) == 1
-    assert ports[0].device == dev_root / "ttyUSB0"
-    assert ports[0].resolved_device == dev_root / "ttyUSB0"
+    assert ports[0].device == str(dev_root / "ttyUSB0")
+    assert ports[0].resolved_device == str(dev_root / "ttyUSB0")
     assert ports[0].vid == 0x10C4
 
 
@@ -531,7 +541,7 @@ def test_list_serial_ports_device_disappears_during_scan(tmp_path: Path) -> None
 
     # The disappeared USB device should be skipped, native UART remains
     assert len(ports) == 1
-    assert ports[0].device == dev_root / "ttyAMA0"
+    assert ports[0].device == str(dev_root / "ttyAMA0")
 
 
 def test_list_serial_ports_cdc_acm_device_disappears(tmp_path: Path) -> None:

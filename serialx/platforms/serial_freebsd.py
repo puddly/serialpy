@@ -123,8 +123,8 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
 
         results.append(
             SerialPortInfo(
-                device=device,
-                resolved_device=device,
+                device=str(device),
+                resolved_device=str(device),
                 vid=int(vid_str, 16) if vid_str else None,
                 pid=int(pid_str, 16) if pid_str else None,
                 serial_number=pnpinfo.get("sernum"),
