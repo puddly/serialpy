@@ -47,8 +47,8 @@ def test_freebsd_list_serial_ports() -> None:
 
     # /dev/cuaU0: Nabu Casa ZBT-2 (CDC ACM via umodem)
     assert ports_by_device["/dev/cuaU0"] == SerialPortInfo(
-        device=Path("/dev/cuaU0"),
-        resolved_device=Path("/dev/cuaU0"),
+        device="/dev/cuaU0",
+        resolved_device="/dev/cuaU0",
         vid=0x303A,
         pid=0x4001,
         serial_number="80B54EEFAE18",
@@ -61,8 +61,8 @@ def test_freebsd_list_serial_ports() -> None:
 
     # /dev/cuaU1: FTDI FT232R (ugen8.2)
     assert ports_by_device["/dev/cuaU1"] == SerialPortInfo(
-        device=Path("/dev/cuaU1"),
-        resolved_device=Path("/dev/cuaU1"),
+        device="/dev/cuaU1",
+        resolved_device="/dev/cuaU1",
         vid=0x0403,
         pid=0x6001,
         serial_number="A5069RR4",
@@ -75,8 +75,8 @@ def test_freebsd_list_serial_ports() -> None:
 
     # /dev/cuaU2: FTDI FT232R (ugen8.3)
     assert ports_by_device["/dev/cuaU2"] == SerialPortInfo(
-        device=Path("/dev/cuaU2"),
-        resolved_device=Path("/dev/cuaU2"),
+        device="/dev/cuaU2",
+        resolved_device="/dev/cuaU2",
         vid=0x0403,
         pid=0x6001,
         serial_number="A5069RR4",
@@ -89,8 +89,8 @@ def test_freebsd_list_serial_ports() -> None:
 
     # /dev/cuaU3: Silicon Labs CP2102 (ugen8.5)
     assert ports_by_device["/dev/cuaU3"] == SerialPortInfo(
-        device=Path("/dev/cuaU3"),
-        resolved_device=Path("/dev/cuaU3"),
+        device="/dev/cuaU3",
+        resolved_device="/dev/cuaU3",
         vid=0x10C4,
         pid=0xEA60,
         serial_number="ec4903cb",
@@ -103,8 +103,8 @@ def test_freebsd_list_serial_ports() -> None:
 
     # /dev/cuaU4: FTDI FT232R with custom serial (ugen8.6)
     assert ports_by_device["/dev/cuaU4"] == SerialPortInfo(
-        device=Path("/dev/cuaU4"),
-        resolved_device=Path("/dev/cuaU4"),
+        device="/dev/cuaU4",
+        resolved_device="/dev/cuaU4",
         vid=0x0403,
         pid=0x6001,
         serial_number="rutabaga",

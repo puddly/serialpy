@@ -226,8 +226,8 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
 
             try:
                 info = SerialPortInfo(
-                    device=unique_device,
-                    resolved_device=device,
+                    device=str(unique_device),
+                    resolved_device=str(device),
                     vid=int((usb_device / "idVendor").read_text(), 16),
                     pid=int((usb_device / "idProduct").read_text(), 16),
                     serial_number=(usb_device / "serial").read_text()[:-1],
@@ -256,8 +256,8 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
 
             try:
                 info = SerialPortInfo(
-                    device=unique_device,
-                    resolved_device=device,
+                    device=str(unique_device),
+                    resolved_device=str(device),
                     vid=int((usb_device / "idVendor").read_text(), 16),
                     pid=int((usb_device / "idProduct").read_text(), 16),
                     serial_number=(usb_device / "serial").read_text()[:-1],
@@ -279,8 +279,8 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
         elif subsystem == "serial-base":
             # Native serial ports
             info = SerialPortInfo(
-                device=unique_device,
-                resolved_device=device,
+                device=str(unique_device),
+                resolved_device=str(device),
                 vid=None,
                 pid=None,
                 serial_number=None,
