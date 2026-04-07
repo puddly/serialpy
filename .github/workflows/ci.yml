@@ -288,7 +288,7 @@ jobs:
           sudo apt-get install -y socat libudev-dev
       - name: Load tty0tty kernel module
         run: |
-          sudo insmod --force tty0tty.ko
+          sudo insmod -f tty0tty.ko
           sudo chmod 666 /dev/tnt0 /dev/tnt1
       - name: Set up uv
         run: |
