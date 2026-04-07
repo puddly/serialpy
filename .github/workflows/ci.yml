@@ -281,13 +281,14 @@ jobs:
         with:
           path: tty0tty.ko
           key: tty0tty-dac0a105bee6997ebb3a06441c7befe3164c9fd1-${{ steps.kernel.outputs.version }}
+          restore-keys: tty0tty-dac0a105bee6997ebb3a06441c7befe3164c9fd1-
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y socat libudev-dev
       - name: Load tty0tty kernel module
         run: |
-          sudo insmod tty0tty.ko
+          sudo insmod --force tty0tty.ko
           sudo chmod 666 /dev/tnt0 /dev/tnt1
       - name: Set up uv
         run: |
