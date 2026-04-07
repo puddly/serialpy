@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import array
-from collections.abc import Generator
+from collections.abc import Iterator
 from contextlib import suppress
 import ctypes
 import errno
@@ -187,7 +187,7 @@ class LinuxSerialTransport(ExtendedPosixSerialTransport):
     _serial_cls = LinuxSerial
 
 
-def iterdir_safe(path: Path) -> Generator[Path]:
+def iterdir_safe(path: Path) -> Iterator[Path]:
     """Safely iterate over a dir, yielding nothing on error."""
 
     with suppress(OSError):
