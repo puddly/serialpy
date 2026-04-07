@@ -592,3 +592,34 @@ def test_list_serial_ports_cdc_acm_device_disappears(tmp_path: Path) -> None:
         ports = linux_list_serial_ports()
 
     assert ports == []
+
+
+def test_list_serial_ports_native_device_disappears(tmp_path: Path) -> None:
+    """Test that a native serial device disappearing mid-scan is handled gracefully."""
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    create_native_serial_device(
+        sys_root,
+        dev_root,
+        tty_name="ttyAMA0",
+        device_path="devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0",
+        port_type=32,
+    )
+
+    # Delete the type file to simulate the device disappearing mid-scan
+    tty_dir = (
+        sys_root
+        / "devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0"
+    )
+    (tty_dir / "type").unlink()
+
+    with (
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    assert ports == []
