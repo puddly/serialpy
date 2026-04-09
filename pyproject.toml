@@ -70,6 +70,7 @@ disallow_untyped_globals = true
 warn_return_any = false
 disable_error_code = [
     "explicit-any",
+    "mutable-override",
     "no-any-return",
     "no-any-unimported",
 ]
@@ -104,7 +105,7 @@ enable_error_code = [
     "metaclass",
     "method-assign",
     # "misc",
-    "mutable-override",
+    # "mutable-override",
     "name-defined",
     "name-match",
     "narrowed-type-not-subtype",

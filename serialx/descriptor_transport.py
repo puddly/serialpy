@@ -7,7 +7,7 @@ from collections.abc import Coroutine
 import errno
 import logging
 import os
-import typing
+from typing import Any
 import warnings
 
 from .common import BaseSerialTransport
@@ -16,10 +16,10 @@ LOGGER = logging.getLogger(__name__)
 LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
 
 # Prevent tasks from being garbage collected.
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
+_BACKGROUND_TASKS: set[asyncio.Task[None]] = set()
 
 
-def _create_background_task(coro: Coroutine) -> asyncio.Task[None]:
+def _create_background_task(coro: Coroutine[Any, Any, None]) -> asyncio.Task[None]:
     """Create a background task that will not be garbage collected."""
     task = asyncio.create_task(coro)
     _BACKGROUND_TASKS.add(task)
@@ -49,7 +49,7 @@ class DescriptorTransport(BaseSerialTransport):
         self,
         loop: asyncio.AbstractEventLoop,
         protocol: asyncio.Protocol,
-        extra: dict[str, typing.Any] | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the descriptor transport."""
         super().__init__(loop, protocol)
@@ -61,14 +61,14 @@ class DescriptorTransport(BaseSerialTransport):
         self._buffer = bytearray()
         self._conn_lost_count = 0
         self._paused = False
-        self._empty_waiter: asyncio.Future | None = None
+        self._empty_waiter: asyncio.Future[None] | None = None
         if extra is not None:
             self._extra.update(extra)
 
         self._close_task: asyncio.Task[None] | None = None
         self._connection_made: bool = False
 
-    async def _open(self, path: os.PathLike) -> None:
+    async def _open(self, path: str | os.PathLike[str]) -> None:
         self._fileno = await self._loop.run_in_executor(
             None, os.open, path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
         )
@@ -76,7 +76,7 @@ class DescriptorTransport(BaseSerialTransport):
         if self._closing:
             self._maybe_background_close(None)
 
-    async def _connect(self, **_kwargs) -> None:
+    async def _connect(self, **_kwargs: Any) -> None:
         assert self._fileno is not None
         self._loop.add_reader(self._fileno, self._read_ready)
         self._connection_made = True
@@ -165,7 +165,9 @@ class DescriptorTransport(BaseSerialTransport):
         """Get the write buffer low and high water limits."""
         return (self._low_water, self._high_water)
 
-    def _set_write_buffer_limits(self, high=None, low=None):
+    def _set_write_buffer_limits(
+        self, high: int | None = None, low: int | None = None
+    ) -> None:
         if high is None:
             if low is None:  # noqa: SIM108
                 high = 64 * 1024
@@ -180,7 +182,9 @@ class DescriptorTransport(BaseSerialTransport):
         self._high_water = high
         self._low_water = low
 
-    def set_write_buffer_limits(self, high=None, low=None) -> None:
+    def set_write_buffer_limits(
+        self, high: int | None = None, low: int | None = None
+    ) -> None:
         """Set the write buffer low and high water limits."""
         self._set_write_buffer_limits(high=high, low=low)
         self._maybe_pause_protocol()
@@ -189,7 +193,7 @@ class DescriptorTransport(BaseSerialTransport):
         """Get the number of bytes currently in the write buffer."""
         return len(self._buffer)
 
-    def _make_empty_waiter(self) -> asyncio.Future:
+    def _make_empty_waiter(self) -> asyncio.Future[None]:
         """Create a future that resolves when the write buffer is empty."""
         if self._empty_waiter is not None:
             raise RuntimeError("Empty waiter is already set")
@@ -202,7 +206,7 @@ class DescriptorTransport(BaseSerialTransport):
         """Reset the empty waiter."""
         self._empty_waiter = None
 
-    def write(self, data) -> None:
+    def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the file descriptor."""
         assert isinstance(data, (bytes, bytearray, memoryview)), repr(data)
         LOGGER.debug("Immediately writing %r", data)

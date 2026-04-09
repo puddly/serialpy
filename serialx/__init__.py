@@ -1,5 +1,7 @@
 """serialx serial port implementation."""
 
+from typing import Any
+
 from .async_serial import (
     SerialStreamWriter,
     create_serial_connection,
@@ -62,7 +64,7 @@ __all__ = [
 ]
 
 
-def serial_for_url(url, *args, **kwargs) -> BaseSerial:
+def serial_for_url(url: str, *args: Any, **kwargs: Any) -> BaseSerial:
     """Create a serial port for the given URL."""
     serial_cls, _serial_transport = get_serial_classes(url)
     return serial_cls(url, *args, **kwargs)

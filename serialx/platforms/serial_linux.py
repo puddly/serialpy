@@ -11,6 +11,7 @@ import fcntl
 import logging
 from pathlib import Path
 import termios
+from typing import Any
 
 from ..common import Parity, SerialPortInfo, UnsupportedSetting
 from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
@@ -43,23 +44,23 @@ NON_POSIX_FALLBACK_BAUDRATE_CONST = termios.B115200
 class TermiosStruct(ctypes.Structure):
     """The `termios` struct."""
 
-    _fields_ = [
+    _fields_ = (
         ("c_iflag", ctypes.c_uint32),
         ("c_oflag", ctypes.c_uint32),
         ("c_cflag", ctypes.c_uint32),
         ("c_lflag", ctypes.c_uint32),
         ("c_line", ctypes.c_uint8),
         ("c_cc", ctypes.c_uint8 * 64),  # NCCS is usually 19 bytes, let's be safe
-    ]
+    )
 
 
 class Termios2SpeedStruct(ctypes.Structure):
     """The extra `c_ispeed` and `c_ospeed` members at the end of `struct termios2`."""
 
-    _fields_ = [
+    _fields_ = (
         ("c_ispeed", ctypes.c_uint32),
         ("c_ospeed", ctypes.c_uint32),
-    ]
+    )
 
 
 class LinuxSerial(ExtendedPosixSerial):
@@ -67,10 +68,10 @@ class LinuxSerial(ExtendedPosixSerial):
 
     def __init__(
         self,
-        *args,
+        *args: Any,
         low_latency: bool = True,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Initialize Linux serial port."""
         super().__init__(*args, **kwargs)
         self._low_latency = low_latency

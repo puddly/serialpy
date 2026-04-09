@@ -102,7 +102,7 @@ WIN32_STOPBITS_MAP = {
 }
 
 
-def _normalize_windows_port_path(path: os.PathLike | str) -> str:
+def _normalize_windows_port_path(path: os.PathLike[str] | str) -> str:
     """Normalize a Windows serial device path for CreateFile."""
     path = str(path)
 
@@ -113,7 +113,7 @@ def _normalize_windows_port_path(path: os.PathLike | str) -> str:
     return path
 
 
-def _safe_close_handle(handle) -> None:
+def _safe_close_handle(handle: Any) -> None:
     """Close a Win32 handle, suppressing and logging errors."""
     try:
         CloseHandle(handle)
@@ -126,13 +126,13 @@ class Win32Serial(BaseSerial):
 
     def __init__(
         self,
-        *args,
+        *args: Any,
         handle: int | None = None,
         inter_byte_timeout: float = 0.01,
         read_buffer_size: int = 4096,
         write_buffer_size: int = 4096,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Initialize the Windows serial port."""
         super().__init__(*args, **kwargs)
         self._handle = handle
@@ -264,7 +264,7 @@ class Win32Serial(BaseSerial):
         assert self._handle is not None
         return int(self._handle)
 
-    def _close(self):
+    def _close(self) -> None:
         """Close the serial port and release all handles."""
         if self._handle is not None:
             # Windows has no way to automatically do this on close, we do it manually
@@ -433,11 +433,12 @@ class Win32SerialTransport(BaseSerialTransport):
         super().__init__(loop, protocol)
 
         self._handle: int | None = None
-        self._internal_transport = None
+        self._internal_transport: Any | None = None
+        self._close_future: asyncio.Future[None] | None = None
         self._closing: bool = False
         self._connect_in_progress: bool = False
 
-    def serial_close(self):
+    def serial_close(self) -> None:
         """Close the serial port."""
 
         def _close_then_notify() -> None:
@@ -451,9 +452,9 @@ class Win32SerialTransport(BaseSerialTransport):
 
             self._loop.call_soon_threadsafe(self._call_protocol_connection_lost, exc)
 
-        self._loop.run_in_executor(None, _close_then_notify)
+        self._close_future = self._loop.run_in_executor(None, _close_then_notify)
 
-    def serial_shutdown(self, how) -> None:
+    def serial_shutdown(self, how: Any) -> None:
         """Shutdown the serial connection."""
         # Intentionally ignored
 
@@ -484,7 +485,7 @@ class Win32SerialTransport(BaseSerialTransport):
         """Forward resume_writing to the protocol."""
         self._protocol.resume_writing()
 
-    async def _open(self, path: os.PathLike) -> None:
+    async def _open(self, path: str | os.PathLike[str]) -> None:
         """Open the serial port."""
         normalized_path = _normalize_windows_port_path(path)
         self._handle = await self._loop.run_in_executor(
@@ -500,14 +501,16 @@ class Win32SerialTransport(BaseSerialTransport):
             ),
         )
 
-    async def _connect(self, **kwargs) -> None:
+    async def _connect(self, **kwargs: Any) -> None:
         """Connect to the serial port."""
         if self._closing:
             self._resolve_closed_waiter()
             return
 
         self._connect_in_progress = True
-        path = kwargs.pop("path")
+        path = kwargs.pop("path", None)
+        if path is None:
+            raise ValueError("A serial path is required")
         await self._open(path)
 
         try:
@@ -528,7 +531,7 @@ class Win32SerialTransport(BaseSerialTransport):
             await self._loop.run_in_executor(None, self._serial.configure_port)
 
             if self._closing:
-                await self._loop.run_in_executor(None, self._serial.close)
+                await self._loop.run_in_executor(None, self._serial.close)  # type: ignore[unreachable]
                 self._serial = None
                 self._handle = None
                 self._resolve_closed_waiter()
@@ -560,7 +563,7 @@ class Win32SerialTransport(BaseSerialTransport):
                 extra=self._extra,
             )
             if self._closing:
-                self._internal_transport.close()
+                self._internal_transport.close()  # type: ignore[unreachable]
         except BaseException:
             await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
             self._serial = None
@@ -583,14 +586,16 @@ class Win32SerialTransport(BaseSerialTransport):
 
         return self._internal_transport.get_write_buffer_limits()
 
-    def set_write_buffer_limits(self, high=None, low=None) -> None:
+    def set_write_buffer_limits(
+        self, high: int | None = None, low: int | None = None
+    ) -> None:
         """Set the write buffer limits."""
         if self._internal_transport is None:
             raise RuntimeError("Transport not connected")
 
         self._internal_transport.set_write_buffer_limits(high=high, low=low)
 
-    def write(self, data):
+    def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the transport."""
         if self._internal_transport is None:
             raise RuntimeError("Transport not connected")
@@ -614,12 +619,12 @@ class Win32SerialTransport(BaseSerialTransport):
         elif not self._connect_in_progress:
             self._resolve_closed_waiter()
 
-    def pause_reading(self):
+    def pause_reading(self) -> None:
         """Pause reading from the transport."""
         if self._internal_transport is not None:
             self._internal_transport.pause_reading()
 
-    def resume_reading(self):
+    def resume_reading(self) -> None:
         """Resume reading from the transport."""
         if self._internal_transport is not None:
             self._internal_transport.resume_reading()

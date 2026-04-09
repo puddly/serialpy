@@ -7,6 +7,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 import logging
 import socket
+from typing import Any
 import urllib.parse
 
 from typing_extensions import Buffer
@@ -21,10 +22,10 @@ class SocketSerial(BaseSerial):
 
     def __init__(
         self,
-        *args,
+        *args: Any,
         # Socket-specific kwargs
         connect_timeout: float | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Initialize socket serial port."""
         super().__init__(*args, **kwargs)
@@ -189,7 +190,6 @@ class SocketSerialTransport(BaseSerialTransport):
     """Serial transport over a TCP socket."""
 
     transport_name = "socket"
-    _serial: SocketSerial
 
     def __init__(
         self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
@@ -210,7 +210,7 @@ class SocketSerialTransport(BaseSerialTransport):
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         self._serial = SocketSerial(
             path=path,
@@ -328,7 +328,9 @@ class SocketSerialTransport(BaseSerialTransport):
 
         return self._tcp_transport.get_write_buffer_limits()
 
-    def set_write_buffer_limits(self, high=None, low=None) -> None:
+    def set_write_buffer_limits(
+        self, high: int | None = None, low: int | None = None
+    ) -> None:
         """Set the write buffer low and high water marks."""
         if self._tcp_transport is None:
             raise RuntimeError("Transport not connected")
