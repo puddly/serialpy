@@ -20,6 +20,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
+          check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
         uses: actions/cache/restore@v4
@@ -62,6 +63,7 @@ jobs:
         id: python
         with:
           python-version: "3.10"
+          check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
         uses: actions/cache/restore@v4
@@ -462,6 +464,7 @@ jobs:
         id: python
         with:
           python-version: "3.10"
+          check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
         uses: actions/cache/restore@v4
