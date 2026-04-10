@@ -341,7 +341,7 @@ class ESPHomeSerial(BaseSerial):
             return 0
 
     async def _async_readinto(self, b: Buffer, timeout: float | None) -> int:
-        async with asyncio.timeout(timeout):
+        async with asyncio.timeout(timeout):  # type:ignore[unused-ignore,attr-defined]
             while not self._read_buffer:
                 self._read_event.clear()
                 await self._read_event.wait()
