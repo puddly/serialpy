@@ -220,10 +220,6 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
 
         try:
             resolved = tty_device.resolve(strict=True)
-        except OSError:
-            continue
-
-        try:
             # Some devices have no subsystem (GitHub Actions runner VM)
             subsystem = (resolved / "subsystem").resolve(strict=True).name
         except OSError:
