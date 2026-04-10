@@ -285,6 +285,7 @@ jobs:
         run: |
           . venv/bin/activate
           uv pip install pytest-xdist pytest-cov
+          python -m serialx.tools.list_ports
           pytest \
             -n auto \
             -qq \
