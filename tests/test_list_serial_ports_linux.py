@@ -136,47 +136,17 @@ def create_cdc_acm_device(
         (by_id_dir / by_id_name).symlink_to(dev_root / tty_name)
 
 
-def create_native_serial_device(
+def create_device(
     sys_root: Path,
     dev_root: Path,
     *,
     tty_name: str,
     device_path: str,
-    port_type: int,
+    bus: str | None,
+    subsystem: str | None,
+    port_type: int | None = None,
 ) -> None:
-    """Create a fake native serial device (ttyAMA*) in the fake sysfs."""
-    full_device_path = sys_root / device_path.lstrip("/")
-    serial_base_path = full_device_path.parent.parent
-
-    tty_class = sys_root / "class/tty" / tty_name
-    tty_class.parent.mkdir(parents=True, exist_ok=True)
-    tty_class.symlink_to(Path("../..") / device_path.lstrip("/"))
-
-    full_device_path.mkdir(parents=True, exist_ok=True)
-
-    (full_device_path / "type").write_text(f"{port_type}\n")
-    (full_device_path / "device").symlink_to(serial_base_path)
-
-    serial_base_path.mkdir(parents=True, exist_ok=True)
-
-    # Create driver and subsystem directories, then symlink to them
-    driver_dir = sys_root / "bus/serial-base/drivers/port"
-    driver_dir.mkdir(parents=True, exist_ok=True)
-    (serial_base_path / "driver").symlink_to(driver_dir)
-
-    subsystem_dir = sys_root / "bus/serial-base"
-    (serial_base_path / "subsystem").symlink_to(subsystem_dir)
-
-
-def create_unknown_subsystem_device(
-    sys_root: Path,
-    dev_root: Path,
-    *,
-    tty_name: str,
-    device_path: str,
-    subsystem_name: str | None,
-) -> None:
-    """Create a fake device with an unknown/unsupported subsystem."""
+    """Create a fake device in the fake sysfs."""
     full_device_path = sys_root / device_path.lstrip("/")
     device_dir = full_device_path.parent.parent
 
@@ -187,14 +157,18 @@ def create_unknown_subsystem_device(
     full_device_path.mkdir(parents=True, exist_ok=True)
     (full_device_path / "device").symlink_to(device_dir)
 
+    if port_type is not None:
+        (full_device_path / "type").write_text(f"{port_type}\n")
+
     device_dir.mkdir(parents=True, exist_ok=True)
 
-    if subsystem_name is not None:
-        driver_dir = sys_root / f"bus/{subsystem_name}/drivers/some_driver"
+    if bus is not None:
+        driver_dir = sys_root / f"bus/{bus}/drivers/some_driver"
         driver_dir.mkdir(parents=True, exist_ok=True)
         (device_dir / "driver").symlink_to(driver_dir)
 
-        subsystem_dir = sys_root / f"bus/{subsystem_name}"
+    if subsystem is not None:
+        subsystem_dir = sys_root / f"bus/{subsystem}"
         (device_dir / "subsystem").symlink_to(subsystem_dir)
 
 
@@ -303,39 +277,47 @@ def fake_sysfs(tmp_path):
     )
 
     # /dev/ttyAMA0: Raspberry Pi native UART
-    create_native_serial_device(
+    create_device(
         sys_root,
         dev_root,
         tty_name="ttyAMA0",
         device_path="devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0",
+        bus="serial-base",
+        subsystem="serial-base",
         port_type=32,
     )
 
     # /dev/ttyAMA1: Another Raspberry Pi native UART
-    create_native_serial_device(
+    create_device(
         sys_root,
         dev_root,
         tty_name="ttyAMA1",
         device_path="devices/platform/soc/fe201800.serial/fe201800.serial:0/fe201800.serial:0.0/tty/ttyAMA1",
+        bus="serial-base",
+        subsystem="serial-base",
         port_type=32,
     )
 
     # /dev/ttyAMA2: Third Raspberry Pi native UART
-    create_native_serial_device(
+    create_device(
         sys_root,
         dev_root,
         tty_name="ttyAMA2",
         device_path="devices/platform/soc/fe201a00.serial/fe201a00.serial:0/fe201a00.serial:0.0/tty/ttyAMA2",
+        bus="serial-base",
+        subsystem="serial-base",
         port_type=32,
     )
 
     # /dev/ttyS0-ttyS3: Phantom serial8250 ports (no hardware, PORT_UNKNOWN)
     for i in range(4):
-        create_native_serial_device(
+        create_device(
             sys_root,
             dev_root,
             tty_name=f"ttyS{i}",
             device_path=f"devices/platform/serial8250/serial8250:0/serial8250:0.{i}/tty/ttyS{i}",
+            bus="serial-base",
+            subsystem="serial-base",
             port_type=0,
         )
 
@@ -567,11 +549,13 @@ def test_list_serial_ports_device_disappears_during_scan(tmp_path: Path) -> None
     )
 
     # Create a device that stays
-    create_native_serial_device(
+    create_device(
         sys_root,
         dev_root,
         tty_name="ttyAMA0",
         device_path="devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0",
+        bus="serial-base",
+        subsystem="serial-base",
         port_type=32,
     )
 
@@ -632,11 +616,13 @@ def test_list_serial_ports_native_device_disappears(tmp_path: Path) -> None:
     sys_root.mkdir()
     dev_root.mkdir()
 
-    create_native_serial_device(
+    create_device(
         sys_root,
         dev_root,
         tty_name="ttyAMA0",
         device_path="devices/platform/soc/fe201000.serial/fe201000.serial:0/fe201000.serial:0.0/tty/ttyAMA0",
+        bus="serial-base",
+        subsystem="serial-base",
         port_type=32,
     )
 
@@ -665,12 +651,13 @@ def test_list_serial_ports_unknown_subsystem(
     sys_root.mkdir()
     dev_root.mkdir()
 
-    create_unknown_subsystem_device(
+    create_device(
         sys_root,
         dev_root,
         tty_name="ttyXR0",
         device_path="devices/platform/soc/fe123000.serial/fe123000.serial:0/fe123000.serial:0.0/tty/ttyXR0",
-        subsystem_name="some-unknown-bus",
+        bus="some-unknown-bus",
+        subsystem="some-unknown-bus",
     )
 
     with (
@@ -694,12 +681,13 @@ def test_list_serial_ports_no_subsystem(
     dev_root.mkdir()
 
     # Seen in GitHub Actions runner VM
-    create_unknown_subsystem_device(
+    create_device(
         sys_root,
         dev_root,
         tty_name="tty28",
         device_path="devices/platform/soc/fe123000.serial/fe123000.serial:0/fe123000.serial:0.0/tty/tty28",
-        subsystem_name=None,
+        bus="some-bus",
+        subsystem=None,
     )
 
     with (
