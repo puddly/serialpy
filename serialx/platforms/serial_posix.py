@@ -11,7 +11,7 @@ import select
 import sys
 import termios
 import time
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
@@ -204,13 +204,13 @@ class PosixSerial(BaseSerial):
 
     def _build_ispeed(self) -> int:
         try:
-            return getattr(termios, f"B{self._baudrate}")
+            return cast(int, getattr(termios, f"B{self._baudrate}"))
         except AttributeError as exc:
             raise UnsupportedSetting(f"Unsupported baudrate {self._baudrate}") from exc
 
     def _build_ospeed(self) -> int:
         try:
-            return getattr(termios, f"B{self._baudrate}")
+            return cast(int, getattr(termios, f"B{self._baudrate}"))
         except AttributeError as exc:
             raise UnsupportedSetting(f"Unsupported baudrate {self._baudrate}") from exc
 
