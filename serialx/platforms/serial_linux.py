@@ -217,8 +217,14 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
             continue
 
         device = DEV_ROOT / path.name
-        resolved = tty_device.resolve()
-        subsystem = (resolved / "subsystem").resolve().name
+
+        try:
+            resolved = tty_device.resolve(strict=True)
+            # Some devices have no subsystem (GitHub Actions runner VM)
+            subsystem = (resolved / "subsystem").resolve(strict=True).name
+        except OSError:
+            continue
+
         unique_device = by_id_symlinks.get(device, device)
 
         if subsystem == "usb-serial":
@@ -308,6 +314,7 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
                 subsystem,
                 device,
             )
+            continue
 
         results.append(info)
 
