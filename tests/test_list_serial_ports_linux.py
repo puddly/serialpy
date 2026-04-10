@@ -623,3 +623,19 @@ def test_list_serial_ports_native_device_disappears(tmp_path: Path) -> None:
         ports = linux_list_serial_ports()
 
     assert ports == []
+
+
+def test_list_serial_ports_empty(tmp_path: Path) -> None:
+    """Test that listing serial ports still works when there are no ports."""
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    with (
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    assert ports == []

@@ -308,6 +308,7 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
                 subsystem,
                 device,
             )
+            continue
 
         results.append(info)
 
