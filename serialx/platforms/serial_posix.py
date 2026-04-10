@@ -11,7 +11,7 @@ import select
 import sys
 import termios
 import time
-from typing import NamedTuple
+from typing import Any, NamedTuple, cast
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
@@ -95,12 +95,12 @@ class PosixSerial(BaseSerial):
 
     def __init__(
         self,
-        *args,
+        *args: Any,
         fileno: int | None = None,
         inter_byte_timeout: float = 0.01,
         min_read_size: int = 1,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         """Initialize POSIX serial port."""
         super().__init__(*args, **kwargs)
         self._fileno: int | None = fileno
@@ -204,13 +204,13 @@ class PosixSerial(BaseSerial):
 
     def _build_ispeed(self) -> int:
         try:
-            return getattr(termios, f"B{self._baudrate}")
+            return cast(int, getattr(termios, f"B{self._baudrate}"))
         except AttributeError as exc:
             raise UnsupportedSetting(f"Unsupported baudrate {self._baudrate}") from exc
 
     def _build_ospeed(self) -> int:
         try:
-            return getattr(termios, f"B{self._baudrate}")
+            return cast(int, getattr(termios, f"B{self._baudrate}"))
         except AttributeError as exc:
             raise UnsupportedSetting(f"Unsupported baudrate {self._baudrate}") from exc
 
@@ -450,7 +450,7 @@ class PosixSerial(BaseSerial):
             if not ready:
                 raise TimeoutError("Write timeout")
 
-        return os.write(self._fileno, data)  # type: ignore[arg-type]
+        return os.write(self._fileno, data)
 
     def num_unread_bytes(self) -> int:
         """Return the number of bytes waiting to be read."""
@@ -484,15 +484,18 @@ class PosixSerial(BaseSerial):
 class PosixSerialTransport(DescriptorTransport):
     """POSIX serial port transport using asyncio."""
 
-    _serial_cls = PosixSerial
+    _serial_cls: type[PosixSerial] = PosixSerial
 
-    async def _connect(self, *, path: os.PathLike, **kwargs) -> None:  # type: ignore[override]
+    async def _connect(  # type: ignore[override]
+        self, *, path: str | os.PathLike[str], **kwargs: Any
+    ) -> None:
         """Connect to serial port."""
-        await super()._open(path)
+        normalized_path = str(path)
+        await super()._open(normalized_path)
 
         self._serial = self._serial_cls(
             **kwargs,
-            path=path,
+            path=normalized_path,
             # `DescriptorTransport` opened the port
             fileno=self._fileno,
             # Nonblocking mode

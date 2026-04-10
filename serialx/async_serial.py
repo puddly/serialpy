@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import logging
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from .common import BaseSerialTransport, Parity, StopBits, get_serial_classes
 
@@ -18,24 +18,24 @@ class SerialStreamWriter(asyncio.StreamWriter, Generic[_T]):
     """StreamWriter with properly typed transport."""
 
     @property
-    def transport(self) -> _T:  # type: ignore[override]
+    def transport(self) -> _T:
         """Return the underlying transport."""
-        return super().transport  # type: ignore[return-value]
+        return cast(_T, super().transport)
 
 
 async def create_serial_connection(
-    loop,
+    loop: asyncio.AbstractEventLoop,
     protocol_factory: Callable[[], asyncio.Protocol],
     url: str | None,
     baudrate: int,
-    parity=Parity.NONE,
-    stopbits=StopBits.ONE,
-    xonxoff=False,
-    rtscts=False,
-    exclusive=True,
+    parity: Parity = Parity.NONE,
+    stopbits: StopBits = StopBits.ONE,
+    xonxoff: bool = False,
+    rtscts: bool = False,
+    exclusive: bool = True,
     *,
     transport_cls: type[BaseSerialTransport] | None = None,
-    **kwargs,
+    **kwargs: Any,
 ) -> tuple[BaseSerialTransport, asyncio.Protocol]:
     """Create a serial port connection with asyncio."""
     if not exclusive:
@@ -67,7 +67,7 @@ async def create_serial_connection(
 
 
 async def open_serial_connection(
-    *args, **kwargs
+    *args: Any, **kwargs: Any
 ) -> tuple[asyncio.StreamReader, SerialStreamWriter[BaseSerialTransport]]:
     """Open a serial port connection using StreamReader and StreamWriter."""
     loop = asyncio.get_running_loop()

@@ -12,6 +12,7 @@ from enum import Enum
 import io
 from pathlib import Path
 import time
+from types import TracebackType
 from typing import Any
 import urllib.parse
 import warnings
@@ -106,8 +107,8 @@ class ModemPins:
 @contextmanager
 def measure_time() -> Iterator[Callable[[], float]]:
     """Measure elapsed time in a context."""
-    start = time.monotonic()
-    end = None
+    start: float = time.monotonic()
+    end: float | None = None
 
     def get_result() -> float:
         if end is None:
@@ -416,7 +417,12 @@ class BaseSerial(io.RawIOBase):
         self.open()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Exit context manager."""
         self.close()
 
@@ -630,7 +636,7 @@ class BaseSerialTransport(asyncio.Transport):
         return self._serial.exclusive
 
     @abstractmethod
-    async def _connect(self, **kwargs) -> None:
+    async def _connect(self, **kwargs: Any) -> None:
         """Connect to serial port."""
         raise NotImplementedError
 
@@ -644,7 +650,7 @@ class BaseSerialTransport(asyncio.Transport):
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         """Connect to serial port."""
         return await self._connect(

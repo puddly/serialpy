@@ -206,28 +206,28 @@ class TelnetOptionCommand(TelnetCommand, ABC):
 class WillCmd(TelnetOptionCommand):
     """IAC WILL <option> — offer to perform an option."""
 
-    CMD_ID = TelnetCmdId.WILL
+    CMD_ID: ClassVar[TelnetCmdId] = TelnetCmdId.WILL
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class WontCmd(TelnetOptionCommand):
     """IAC WONT <option> — refuse to perform an option."""  # codespell:ignore wont
 
-    CMD_ID = TelnetCmdId.WONT  # codespell:ignore wont
+    CMD_ID: ClassVar[TelnetCmdId] = TelnetCmdId.WONT  # codespell:ignore wont
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DoCmd(TelnetOptionCommand):
     """IAC DO <option> — request the other side perform an option."""
 
-    CMD_ID = TelnetCmdId.DO
+    CMD_ID: ClassVar[TelnetCmdId] = TelnetCmdId.DO
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class DontCmd(TelnetOptionCommand):
     """IAC DONT <option> — demand the other side stop performing an option."""
 
-    CMD_ID = TelnetCmdId.DONT
+    CMD_ID: ClassVar[TelnetCmdId] = TelnetCmdId.DONT
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +245,7 @@ class Rfc2217Command(BaseCommand):
 class SignatureCmd(Rfc2217Command):
     """Exchange signature/identity strings. Empty = request."""
 
-    CMD_ID = Rfc2217CmdId.SIGNATURE
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SIGNATURE
     signature: bytes = b""
 
     def to_bytes(self) -> bytes:
@@ -262,7 +262,7 @@ class SignatureCmd(Rfc2217Command):
 class SetBaudrateCmd(Rfc2217Command):
     """Set baud rate. 0 = query current value."""
 
-    CMD_ID = Rfc2217CmdId.SET_BAUDRATE
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SET_BAUDRATE
     baudrate: int
 
     def to_bytes(self) -> bytes:
@@ -279,7 +279,7 @@ class SetBaudrateCmd(Rfc2217Command):
 class SetDatasizeCmd(Rfc2217Command):
     """Set data bit size. 0 = query, 5-8 = actual size."""
 
-    CMD_ID = Rfc2217CmdId.SET_DATASIZE
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SET_DATASIZE
     size: int
 
     def to_bytes(self) -> bytes:
@@ -296,7 +296,7 @@ class SetDatasizeCmd(Rfc2217Command):
 class SetParityCmd(Rfc2217Command):
     """Set parity."""
 
-    CMD_ID = Rfc2217CmdId.SET_PARITY
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SET_PARITY
     parity: Rfc2217Parity
 
     def to_bytes(self) -> bytes:
@@ -313,7 +313,7 @@ class SetParityCmd(Rfc2217Command):
 class SetStopsizeCmd(Rfc2217Command):
     """Set stop bits."""
 
-    CMD_ID = Rfc2217CmdId.SET_STOPSIZE
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SET_STOPSIZE
     size: Rfc2217StopSize
 
     def to_bytes(self) -> bytes:
@@ -330,7 +330,7 @@ class SetStopsizeCmd(Rfc2217Command):
 class SetControlCmd(Rfc2217Command):
     """Set flow control, break, DTR, or RTS."""
 
-    CMD_ID = Rfc2217CmdId.SET_CONTROL
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SET_CONTROL
     control: ControlCmdId
 
     def to_bytes(self) -> bytes:
@@ -347,7 +347,7 @@ class SetControlCmd(Rfc2217Command):
 class NotifyLinestateCmd(Rfc2217Command):
     """Server notification of UART line state change."""
 
-    CMD_ID = Rfc2217CmdId.NOTIFY_LINESTATE
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.NOTIFY_LINESTATE
     linestate: LineStateFlag
 
     def to_bytes(self) -> bytes:
@@ -364,7 +364,7 @@ class NotifyLinestateCmd(Rfc2217Command):
 class NotifyModemstateCmd(Rfc2217Command):
     """Server notification of modem state change."""
 
-    CMD_ID = Rfc2217CmdId.NOTIFY_MODEMSTATE
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.NOTIFY_MODEMSTATE
     modemstate: ModemStateFlag
 
     def to_bytes(self) -> bytes:
@@ -381,7 +381,7 @@ class NotifyModemstateCmd(Rfc2217Command):
 class FlowcontrolSuspendCmd(Rfc2217Command):
     """Request the receiver suspend transmission."""
 
-    CMD_ID = Rfc2217CmdId.FLOWCONTROL_SUSPEND
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.FLOWCONTROL_SUSPEND
 
     def to_bytes(self) -> bytes:
         """Serialize to bytes."""
@@ -397,7 +397,7 @@ class FlowcontrolSuspendCmd(Rfc2217Command):
 class FlowcontrolResumeCmd(Rfc2217Command):
     """Request the receiver resume transmission."""
 
-    CMD_ID = Rfc2217CmdId.FLOWCONTROL_RESUME
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.FLOWCONTROL_RESUME
 
     def to_bytes(self) -> bytes:
         """Serialize to bytes."""
@@ -413,7 +413,7 @@ class FlowcontrolResumeCmd(Rfc2217Command):
 class SetLinestateMaskCmd(Rfc2217Command):
     """Set which line state changes trigger NOTIFY_LINESTATE. Default: 0."""
 
-    CMD_ID = Rfc2217CmdId.SET_LINESTATE_MASK
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SET_LINESTATE_MASK
     mask: LineStateFlag
 
     def to_bytes(self) -> bytes:
@@ -430,7 +430,7 @@ class SetLinestateMaskCmd(Rfc2217Command):
 class SetModemstateMaskCmd(Rfc2217Command):
     """Set which modem state changes trigger NOTIFY_MODEMSTATE. Default: 255."""
 
-    CMD_ID = Rfc2217CmdId.SET_MODEMSTATE_MASK
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.SET_MODEMSTATE_MASK
     mask: ModemStateFlag
 
     def to_bytes(self) -> bytes:
@@ -447,7 +447,7 @@ class SetModemstateMaskCmd(Rfc2217Command):
 class PurgeDataCmd(Rfc2217Command):
     """Purge access server data buffers."""
 
-    CMD_ID = Rfc2217CmdId.PURGE_DATA
+    CMD_ID: ClassVar[Rfc2217CmdId] = Rfc2217CmdId.PURGE_DATA
     what: PurgeDataValue
 
     def to_bytes(self) -> bytes:
@@ -460,7 +460,7 @@ class PurgeDataCmd(Rfc2217Command):
         return cls(what=PurgeDataValue(payload[0]))
 
 
-CMD_ID_TO_CLASS: dict[int, type[Rfc2217Command]] = {
+CMD_ID_TO_CLASS: dict[Rfc2217CmdId, type[Rfc2217Command]] = {
     cls.CMD_ID: cls
     for cls in (
         SignatureCmd,

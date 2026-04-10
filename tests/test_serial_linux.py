@@ -29,7 +29,7 @@ def test_tiocgserial_ioctl_not_supported() -> None:
     """Test that TIOCGSERIAL ioctl not supported is handled gracefully."""
     ioctl_orig = fcntl.ioctl
 
-    def ioctl(fd: int, request: int, arg: Any = 0, mutate_flag: bool = True) -> None:
+    def ioctl(fd: int, request: int, arg: Any = 0, mutate_flag: bool = True) -> Any:
         if request in (TIOCGSERIAL, TIOCSSERIAL):
             raise OSError(errno.EOPNOTSUPP, "Not supported")
 
@@ -52,7 +52,7 @@ def test_tiocgserial_ioctl_unexpected() -> None:
     """Test that TIOCGSERIAL ioctl not supported is handled gracefully."""
     ioctl_orig = fcntl.ioctl
 
-    def ioctl(fd: int, request: int, arg: Any = 0, mutate_flag: bool = True) -> None:
+    def ioctl(fd: int, request: int, arg: Any = 0, mutate_flag: bool = True) -> Any:
         if request in (TIOCGSERIAL, TIOCSSERIAL):
             raise OSError(errno.EINVAL, "Invalid argument")
 

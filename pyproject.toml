@@ -57,9 +57,101 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
 [tool.mypy]
+strict = true
 check_untyped_defs = true
 show_error_codes = true
 show_error_context = true
+warn_unreachable = true
+disallow_any_expr = false
+disallow_any_decorated = false
+enable_error_code = [
+    "abstract",
+    "annotation-unchecked",
+    "arg-type",
+    "assert-type",
+    "assignment",
+    "attr-defined",
+    "await-not-async",
+    "call-arg",
+    "call-overload",
+    "comparison-overlap",
+    "deprecated",
+    "dict-item",
+    "empty-body",
+    "exhaustive-match",
+    "exit-return",
+    # "explicit-any",
+    # "explicit-override",
+    "func-returns-value",
+    "has-type",
+    "ignore-without-code",
+    "import",
+    "import-not-found",
+    "import-untyped",
+    "index",
+    "list-item",
+    "literal-required",
+    "maybe-unrecognized-str-typeform",
+    "metaclass",
+    "method-assign",
+    # "misc",
+    # "mutable-override",
+    "name-defined",
+    "name-match",
+    "narrowed-type-not-subtype",
+    # "no-any-return",
+    # "no-any-unimported",
+    "no-overload-impl",
+    "no-redef",
+    "no-untyped-call",
+    "no-untyped-def",
+    "operator",
+    "overload-cannot-match",
+    "overload-overlap",
+    "override",
+    "possibly-undefined",
+    "prop-decorator",
+    "redundant-cast",
+    "redundant-expr",
+    "redundant-self",
+    "return",
+    "return-value",
+    "safe-super",
+    "str-bytes-safe",
+    "str-format",
+    "syntax",
+    "top-level-await",
+    "truthy-bool",
+    "truthy-function",
+    "truthy-iterable",
+    "type-abstract",
+    "type-arg",
+    "type-var",
+    "typeddict-item",
+    "typeddict-readonly-mutated",
+    "typeddict-unknown-key",
+    "unimported-reveal",
+    "union-attr",
+    "unreachable",
+    "untyped-decorator",
+    "unused-awaitable",
+    "unused-coroutine",
+    "unused-ignore",
+    "used-before-def",
+    "valid-newtype",
+    "valid-type",
+    "var-annotated",
+]
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disable_error_code = [
+    "no-untyped-call",
+    "no-untyped-def",
+    "redundant-expr",
+    "unreachable",
+    "untyped-decorator",
+]
 
 [tool.coverage.run]
 source = ["serialx"]
