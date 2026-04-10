@@ -391,28 +391,25 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._serial = ESPHomeSerial(loop=self._loop, **kwargs)
         self._extra["serial"] = self._serial
 
-        serial = self._serial
-        assert serial is not None
-        await serial._async_open()
-        serial.configure_port()
+        assert self._serial is not None
+        await self._serial._async_open()
+        self._serial.configure_port()
 
-        assert serial._api is not None
-        await serial._subscribe_instance()
-        self._unsub = serial._api.subscribe_serial_proxy_data(self._on_data)
+        assert self._serial._api is not None
+        await self._serial._subscribe_instance()
+        self._unsub = self._serial._api.subscribe_serial_proxy_data(self._on_data)
 
         self._protocol.connection_made(self)
 
     def _on_data(self, msg: SerialProxyDataReceived) -> None:
-        serial = self._serial
-        assert serial is not None
-        if msg.instance == serial._instance_id:
+        assert self._serial is not None
+        if msg.instance == self._serial._instance_id:
             self._protocol.data_received(msg.data)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial proxy."""
-        serial = self._serial
-        assert serial is not None
-        serial.write(data)
+        assert self._serial is not None
+        self._serial.write(data)
 
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
@@ -428,13 +425,12 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._unsub()
             self._unsub = None
 
-        serial = self._serial
-        assert serial is not None
-        serial._unsubscribe_instance()
+        assert self._serial is not None
+        self._serial._unsubscribe_instance()
 
-        if serial._disconnect_api:
-            api = serial._api
-            serial._api = None
+        if self._serial._disconnect_api:
+            api = self._serial._api
+            self._serial._api = None
             if api is not None:
                 self._close_task = self._loop.create_task(self._async_close(api))
             else:
@@ -455,15 +451,13 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     async def flush(self) -> None:
         """Flush write buffers."""
-        serial = self._serial
-        assert serial is not None
-        await serial._async_flush()
+        assert self._serial is not None
+        await self._serial._async_flush()
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
-        serial = self._serial
-        assert serial is not None
-        return await serial._async_get_modem_pins()
+        assert self._serial is not None
+        return await self._serial._async_get_modem_pins()
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
