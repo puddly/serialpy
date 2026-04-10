@@ -361,6 +361,7 @@ jobs:
       - name: Run tests
         run: |
           . venv/bin/activate
+          python -m serialx.tools.list_ports
           pytest --timeout=20 --cov=serialx tests
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
