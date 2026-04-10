@@ -168,35 +168,6 @@ def create_native_serial_device(
     (serial_base_path / "subsystem").symlink_to(subsystem_dir)
 
 
-def create_unknown_subsystem_device(
-    sys_root: Path,
-    dev_root: Path,
-    *,
-    tty_name: str,
-    device_path: str,
-    subsystem_name: str,
-) -> None:
-    """Create a fake device with an unknown/unsupported subsystem."""
-    full_device_path = sys_root / device_path.lstrip("/")
-    device_dir = full_device_path.parent.parent
-
-    tty_class = sys_root / "class/tty" / tty_name
-    tty_class.parent.mkdir(parents=True, exist_ok=True)
-    tty_class.symlink_to(Path("../..") / device_path.lstrip("/"))
-
-    full_device_path.mkdir(parents=True, exist_ok=True)
-    (full_device_path / "device").symlink_to(device_dir)
-
-    device_dir.mkdir(parents=True, exist_ok=True)
-
-    driver_dir = sys_root / f"bus/{subsystem_name}/drivers/some_driver"
-    driver_dir.mkdir(parents=True, exist_ok=True)
-    (device_dir / "driver").symlink_to(driver_dir)
-
-    subsystem_dir = sys_root / f"bus/{subsystem_name}"
-    (device_dir / "subsystem").symlink_to(subsystem_dir)
-
-
 @pytest.fixture
 def fake_sysfs(tmp_path):
     """Create a fake sysfs structure mimicking Home Assistant OS with a few devices."""
@@ -655,22 +626,34 @@ def test_list_serial_ports_native_device_disappears(tmp_path: Path) -> None:
     assert ports == []
 
 
-def test_list_serial_ports_unknown_subsystem(
+def test_list_serial_ports_no_subsystem(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Test that devices with unknown subsystems are skipped without error."""
+    """Test that virtual consoles without a subsystem are filtered out."""
     sys_root = tmp_path / "sys"
     dev_root = tmp_path / "dev"
     sys_root.mkdir()
     dev_root.mkdir()
 
-    create_unknown_subsystem_device(
-        sys_root,
-        dev_root,
-        tty_name="ttyXR0",
-        device_path="devices/platform/soc/fe123000.serial/fe123000.serial:0/fe123000.serial:0.0/tty/ttyXR0",
-        subsystem_name="some-unknown-bus",
-    )
+    # Seen in GitHub Actions runner VM
+    tty_name = "tty28"
+    device_path = f"devices/virtual/tty/{tty_name}"
+    full_device_path = sys_root / device_path
+    device_dir = full_device_path.parent
+
+    tty_class = sys_root / "class/tty" / tty_name
+    tty_class.parent.mkdir(parents=True, exist_ok=True)
+    tty_class.symlink_to(Path("../..") / device_path)
+
+    full_device_path.mkdir(parents=True, exist_ok=True)
+    (full_device_path / "device").symlink_to(device_dir)
+
+    device_dir.mkdir(parents=True, exist_ok=True)
+
+    driver_dir = sys_root / "bus/platform/drivers/vtconsole"
+    driver_dir.mkdir(parents=True, exist_ok=True)
+    (device_dir / "driver").symlink_to(driver_dir)
+    # No subsystem symlink
 
     with (
         caplog.at_level(logging.WARNING),
@@ -680,7 +663,7 @@ def test_list_serial_ports_unknown_subsystem(
         ports = linux_list_serial_ports()
 
     assert ports == []
-    assert "Unknown serial device subsystem 'some-unknown-bus'" in caplog.text
+    assert not caplog.text
 
 
 def test_list_serial_ports_empty(tmp_path: Path) -> None:
