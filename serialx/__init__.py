@@ -1,7 +1,5 @@
 """serialx serial port implementation."""
 
-from typing import Any
-
 from .async_serial import (
     SerialStreamWriter,
     create_serial_connection,
@@ -33,11 +31,15 @@ from .compat import (
 )
 from .platforms import Serial, SerialTransport, list_serial_ports
 
+# Backwards compatibility export
+serial_for_url = Serial.from_url
+
 __all__ = [
     "create_serial_connection",
     "get_serial_classes",
     "list_serial_ports",
     "open_serial_connection",
+    "serial_for_url",
     "ModemPins",
     "Parity",
     "PinState",
@@ -62,9 +64,3 @@ __all__ = [
     "CR",
     "LF",
 ]
-
-
-def serial_for_url(url: str, *args: Any, **kwargs: Any) -> BaseSerial:
-    """Create a serial port for the given URL."""
-    serial_cls, _serial_transport = get_serial_classes(url)
-    return serial_cls(url, *args, **kwargs)
