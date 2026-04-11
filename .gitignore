@@ -81,3 +81,4 @@ TI Z-Stack/
 
 zigpy-znp-*.*.*/
 .esphome/
+site/

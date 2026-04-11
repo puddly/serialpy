@@ -9,8 +9,27 @@ nav = [
     { "Overview" = "index.md" },
     { "Installation" = "installation.md" },
     { "Usage" = "usage.md" },
+    { "API: Core" = "api.md" },
+    { "API: POSIX" = "api/platforms/posix.md" },
+    { "API: Extended POSIX" = "api/platforms/extended-posix.md" },
+    { "API: Linux" = "api/platforms/linux.md" },
+    { "API: macOS" = "api/platforms/darwin.md" },
+    { "API: FreeBSD" = "api/platforms/freebsd.md" },
+    { "API: Windows" = "api/platforms/win32.md" },
+    { "API: Socket" = "api/platforms/socket.md" },
+    { "API: RFC2217" = "api/platforms/rfc2217.md" },
+    { "API: ESPHome" = "api/platforms/esphome.md" },
     { "Development" = "development.md" },
 ]
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["serialx"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+show_source = false
+docstring_style = "google"
+inherited_members = true
 
 [project.theme]
 language = "en"

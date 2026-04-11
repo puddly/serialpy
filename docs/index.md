@@ -12,3 +12,5 @@ It supports a variety of URI schemes to communicate with various serial backends
 - ESPHome: `esphome://host:port?port_name=Serial+1`
 
 Each backend has protocol-specific options that can be passed as keyword arguments to the serial constructor or as URI parameters.
+
+See [API Reference](api.md) for the generated API docs.
