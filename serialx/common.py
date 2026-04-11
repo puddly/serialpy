@@ -460,12 +460,20 @@ class BaseSerial(io.RawIOBase):
     # Deprecated aliases
     @property
     def port(self) -> str | None:
-        """Deprecated: use `path` instead."""
+        """Deprecated alias for `path`.
+
+        Warning: Deprecated
+            Use `path` instead.
+        """
         return str(self.path) if self.path is not None else None
 
     @property
     def timeout(self) -> float | None:
-        """Deprecated: use `read_timeout` instead."""
+        """Deprecated alias for `read_timeout`.
+
+        Warning: Deprecated
+            Use `read_timeout` instead.
+        """
         return self.read_timeout
 
     @timeout.setter
@@ -474,47 +482,87 @@ class BaseSerial(io.RawIOBase):
 
     @property
     def bytesize(self) -> int:
-        """Deprecated: use `byte_size` instead."""
+        """Deprecated alias for `byte_size`.
+
+        Warning: Deprecated
+            Use `byte_size` instead.
+        """
         return self.byte_size
 
     @property
     def writeTimeout(self) -> float | None:
-        """Deprecated: use `write_timeout` instead."""
+        """Deprecated alias for `write_timeout`.
+
+        Warning: Deprecated
+            Use `write_timeout` instead.
+        """
         return self.write_timeout
 
     def reset_input_buffer(self) -> None:
-        """Reset the read buffer (deprecated: use `reset_read_buffer`)."""
+        """Reset the read buffer.
+
+        Warning: Deprecated
+            Use `reset_read_buffer` instead.
+        """
         self.reset_read_buffer()
 
     def reset_output_buffer(self) -> None:
-        """Reset the write buffer (deprecated: use `reset_write_buffer`)."""
+        """Reset the write buffer.
+
+        Warning: Deprecated
+            Use `reset_write_buffer` instead.
+        """
         self.reset_write_buffer()
 
     def flushInput(self) -> None:
-        """Reset the read buffer (deprecated: use `reset_read_buffer`)."""
+        """Reset the read buffer.
+
+        Warning: Deprecated
+            Use `reset_read_buffer` instead.
+        """
         self.reset_read_buffer()
 
     def flushOutput(self) -> None:
-        """Reset the write buffer (deprecated: use `reset_write_buffer`)."""
+        """Reset the write buffer.
+
+        Warning: Deprecated
+            Use `reset_write_buffer` instead.
+        """
         self.reset_write_buffer()
 
     @property
     def in_waiting(self) -> int:
-        """Deprecated: use `num_unread_bytes` instead."""
+        """Deprecated alias for `num_unread_bytes`.
+
+        Warning: Deprecated
+            Use `num_unread_bytes` instead.
+        """
         return self.num_unread_bytes()
 
     @property
     def out_waiting(self) -> int:
-        """Deprecated: use `num_unwritten_bytes` instead."""
+        """Deprecated alias for `num_unwritten_bytes`.
+
+        Warning: Deprecated
+            Use `num_unwritten_bytes` instead.
+        """
         return self.num_unwritten_bytes()
 
     @property
     def inWaiting(self) -> int:
-        """Deprecated: use `num_unread_bytes` instead."""
+        """Deprecated alias for `num_unread_bytes`.
+
+        Warning: Deprecated
+            Use `num_unread_bytes` instead.
+        """
         return self.in_waiting
 
     def isOpen(self) -> bool:
-        """Return whether the serial port is open (deprecated: use `is_open`)."""
+        """Return whether the serial port is open.
+
+        Warning: Deprecated
+            Use `is_open` instead.
+        """
         return self.is_open
 
     @property
@@ -785,7 +833,11 @@ class SerialPortInfo:
 
     @property
     def description(self) -> str | None:
-        """Deprecated alias for `product`."""
+        """Deprecated alias for `product`.
+
+        Warning: Deprecated
+            Use `product` instead.
+        """
         warnings.warn(
             "`description` is deprecated, use `product` instead",
             DeprecationWarning,
