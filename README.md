@@ -17,20 +17,6 @@ pip install serialx-compat
 ```
 
 # Usage
-
-Serialx features a pyserial and pyserial-asyncio compatibility layer for easy testing.
-As early as possible, run `serialx.patch_pyserial()` and it will provide API-compatible
-replacements.
-
-```python
-import serialx
-serialx.patch_pyserial()
-
-# These will now use serialx
-import serial
-import serial_asyncio
-```
-
 Serialx features a familiar synchronous API:
 
 ```Python

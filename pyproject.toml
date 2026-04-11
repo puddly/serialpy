@@ -32,6 +32,9 @@ dev = [
     "psutil",
     "aioesphomeapi>=44.6.0 ; python_version >= '3.11'",
 ]
+docs = [
+    "zensical==0.0.32",
+]
 
 [tool.setuptools.packages.find]
 exclude = ["tests", "tests.*"]
