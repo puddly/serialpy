@@ -30,8 +30,10 @@ paths = ["serialx"]
 show_source = false
 docstring_style = "google"
 inherited_members = true
+show_root_heading = true
 
 [project.theme]
+variant = "classic"
 language = "en"
 features = [
     "announce.dismiss",
