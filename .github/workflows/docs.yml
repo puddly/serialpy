@@ -19,11 +19,11 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - uses: astral-sh/setup-uv@v8
         with:
           enable-cache: true
-      - run: uv run --extra docs zensical build --clean
+      - run: uv run --extra docs sphinx-build -b html docs site
       - uses: actions/upload-pages-artifact@v4
         with:
           path: site

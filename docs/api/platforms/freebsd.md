@@ -1,11 +1,17 @@
----
-icon: lucide/server
----
-
 # FreeBSD
 
-::: serialx.platforms.serial_freebsd.FreeBSDSerial
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_freebsd.FreeBSDSerial
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_freebsd.FreeBSDSerialTransport
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_freebsd.FreeBSDSerialTransport
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_freebsd.freebsd_list_serial_ports
+```{eval-rst}
+.. autofunction:: serialx.platforms.serial_freebsd.freebsd_list_serial_ports
+```

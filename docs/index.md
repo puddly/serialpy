@@ -1,7 +1,3 @@
----
-icon: lucide/rocket
----
-
 # serialx
 serialx is a serial communication library for Python with both synchronous and native asynchronous APIs across Linux, macOS, and Windows.
 It supports a variety of URI schemes to communicate with various serial backends:
@@ -13,4 +9,19 @@ It supports a variety of URI schemes to communicate with various serial backends
 
 Each backend has protocol-specific options that can be passed as keyword arguments to the serial constructor or as URI parameters.
 
-See [API Reference](api.md) for the generated API docs.
+```{toctree}
+:maxdepth: 2
+:hidden:
+
+quickstart
+installation
+usage
+api
+```
+
+```{toctree}
+:caption: Development
+:hidden:
+
+development
+```

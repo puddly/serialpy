@@ -1,11 +1,17 @@
----
-icon: lucide/monitor
----
-
 # Linux
 
-::: serialx.platforms.serial_linux.LinuxSerial
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_linux.LinuxSerial
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_linux.LinuxSerialTransport
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_linux.LinuxSerialTransport
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_linux.linux_list_serial_ports
+```{eval-rst}
+.. autofunction:: serialx.platforms.serial_linux.linux_list_serial_ports
+```

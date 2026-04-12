@@ -1,8 +1,4 @@
----
-icon: lucide/wrench
----
-
-# Development
+# Setup
 All development dependencies are listed in `pyproject.toml`. To install them, use:
 ```bash
 uv pip install '.[dev]'

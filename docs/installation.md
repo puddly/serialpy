@@ -1,7 +1,3 @@
----
-icon: lucide/download
----
-
 # Installation
 Install the Python package with your package manager of choice:
 ```bash
@@ -13,7 +9,7 @@ If you want to take advantage of the ESPHome transport, you can install the opti
 pip install 'serialx[esphome]'
 ```
 
-# Compatibility
+## Compatibility
 serialx provides a backwards-compatibility module that exposes pyserial, pyserial-asyncio, and pyserial-asyncio-fast compatible constants and methods. It aims to be a drop-in replacement for existing code.
 
 Make sure to uninstall the existing modules, as Python packaging tools will merge the module trees otherwise:

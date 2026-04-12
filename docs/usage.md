@@ -1,11 +1,7 @@
----
-icon: lucide/code-2
----
-
 # Usage
 serialx supports both synchronous and asynchronous APIs on all platforms.
 
-# Sync
+## Sync
 ```python
 import serialx
 
@@ -14,7 +10,7 @@ with serialx.serial_for_url("/dev/serial/by-id/port", baudrate=115200) as serial
     serial.write(b"test")
 ```
 
-# Async (`StreamReader` and `StreamWriter`)
+## Async (`StreamReader` and `StreamWriter`)
 ```python
 import serialx
 
@@ -32,7 +28,7 @@ finally:
     await writer.wait_closed()
 ```
 
-# Async (transport)
+## Async (transport)
 ```python
 import asyncio
 import serialx

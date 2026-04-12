@@ -1,9 +1,13 @@
----
-icon: lucide/radio
----
-
 # ESPHome
 
-::: serialx.platforms.serial_esphome.ESPHomeSerial
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_esphome.ESPHomeSerial
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_esphome.ESPHomeSerialTransport
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_esphome.ESPHomeSerialTransport
+   :members:
+   :member-order: bysource
+```

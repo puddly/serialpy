@@ -1,11 +1,17 @@
----
-icon: lucide/laptop
----
-
 # macOS
 
-::: serialx.platforms.serial_darwin.DarwinSerial
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_darwin.DarwinSerial
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_darwin.DarwinSerialTransport
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_darwin.DarwinSerialTransport
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_darwin.darwin_list_serial_ports
+```{eval-rst}
+.. autofunction:: serialx.platforms.serial_darwin.darwin_list_serial_ports
+```

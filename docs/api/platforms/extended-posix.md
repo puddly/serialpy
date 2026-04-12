@@ -1,9 +1,13 @@
----
-icon: lucide/terminal-square
----
-
 # Extended POSIX
 
-::: serialx.platforms.serial_extended_posix.ExtendedPosixSerial
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_extended_posix.ExtendedPosixSerial
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_extended_posix.ExtendedPosixSerialTransport
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_extended_posix.ExtendedPosixSerialTransport
+   :members:
+   :member-order: bysource
+```

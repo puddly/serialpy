@@ -1,9 +1,13 @@
----
-icon: lucide/network
----
-
 # Socket
 
-::: serialx.platforms.serial_socket.SocketSerial
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_socket.SocketSerial
+   :members:
+   :member-order: bysource
+```
 
-::: serialx.platforms.serial_socket.SocketSerialTransport
+```{eval-rst}
+.. autoclass:: serialx.platforms.serial_socket.SocketSerialTransport
+   :members:
+   :member-order: bysource
+```
