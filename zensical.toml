@@ -1,10 +1,7 @@
 [project]
 site_name = "serialx"
-site_description = "Serial communication library for Linux, macOS, and Windows."
+site_description = "Serial communication library for Linux, macOS, and Windows"
 site_author = "puddly"
-copyright = """
-Copyright &copy; 2026 serialx contributors
-"""
 nav = [
     { "Overview" = "index.md" },
     { "Installation" = "installation.md" },
@@ -22,6 +19,9 @@ nav = [
     { "Development" = "development.md" },
 ]
 
+[project.plugins.mkdocstrings]
+custom_templates = "docs/_mkdocstrings"
+
 [project.plugins.mkdocstrings.handlers.python]
 inventories = ["https://docs.python.org/3/objects.inv"]
 paths = ["serialx"]
@@ -30,6 +30,7 @@ paths = ["serialx"]
 show_source = false
 docstring_style = "google"
 inherited_members = true
+members_order = "source"
 show_root_heading = true
 
 [project.theme]
