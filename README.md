@@ -3,40 +3,25 @@ Serialx is a no-compromise serial communication library for Python targeting com
 platforms such as Linux (POSIX), macOS, and Windows. It provides both synchronous and
 native asynchronous APIs for all platforms.
 
-# Installation
+**For more information, visit serialx's documentation: https://puddly.github.io/serialx/**
 
+# Installation
 ```console
 pip install serialx
 ```
 
-For drop-in import compatibility (`serial`, `serial_asyncio`,
-`serial_asyncio_fast`) without runtime patching, install:
-
+For drop-in import compatibility (`serial`, `serial_asyncio`, `serial_asyncio_fast`), install:
 ```console
 pip install serialx-compat
 ```
 
 # Usage
-
-Serialx features a pyserial and pyserial-asyncio compatibility layer for easy testing.
-As early as possible, run `serialx.patch_pyserial()` and it will provide API-compatible
-replacements.
-
-```python
-import serialx
-serialx.patch_pyserial()
-
-# These will now use serialx
-import serial
-import serial_asyncio
-```
-
 Serialx features a familiar synchronous API:
 
 ```Python
 import serialx
 
-with serialx.Serial("/dev/serial/by-id/port", baudrate=115200) as serial:
+with serialx.serial_for_url("/dev/serial/by-id/port", baudrate=115200) as serial:
     data = serial.readexactly(5)
     serial.write(b"test")
 

@@ -78,8 +78,10 @@ class LineStateFlag(IntFlag):
 class ESPHomeSerial(BaseSerial):
     """Synchronous serial interface over ESPHome serial proxy API.
 
-    ESPHome does not have a native synchronous API, using this interface is heavily
-    discouraged. Please use the async API.
+    Warning:
+        ESPHome does not have a native synchronous API, using this interface is
+        heavily discouraged. Please use the async API.
+
     """
 
     def __init__(
