@@ -13,7 +13,7 @@ import io
 from pathlib import Path
 import time
 from types import TracebackType
-from typing import Any
+from typing import Any, cast
 import urllib.parse
 import warnings
 
@@ -488,6 +488,34 @@ class BaseSerial(io.RawIOBase):
             Use `byte_size` instead.
         """
         return self.byte_size
+
+    @property
+    def data_bits(self) -> int:
+        """Deprecated alias for `byte_size`.
+
+        Warning: Deprecated
+            Use `byte_size` instead.
+        """
+        return self.byte_size
+
+    @data_bits.setter
+    def data_bits(self, value: int) -> None:
+        """Set the byte size (deprecated)."""
+        self._byte_size = value
+
+    @property
+    def stop_bits(self) -> int | float:
+        """Deprecated alias for `stopbits`.
+
+        Warning: Deprecated
+            Use `stopbits` instead.
+        """
+        return cast(int | float, self._stopbits.value)
+
+    @stop_bits.setter
+    def stop_bits(self, value: int | float) -> None:
+        """Set the number of stop bits (deprecated)."""
+        self._stopbits = StopBits(value)
 
     @property
     def writeTimeout(self) -> float | None:

@@ -80,6 +80,36 @@ def test_compat_baudrate_setter(serial_pair: SerialPair) -> None:
         assert s.baudrate == 115200
 
 
+def test_compat_data_bits(serial_pair: SerialPair) -> None:
+    """Test that `data_bits` is a read/write alias for `byte_size`."""
+    with Serial.from_url(serial_pair.left, baudrate=9600, bytesize=7) as s:
+        assert s.data_bits == 7
+        assert s.byte_size == 7
+
+        s.data_bits = 8
+        assert s.data_bits == 8
+        assert s.byte_size == 8
+        assert s.bytesize == 8
+
+
+def test_compat_stop_bits(serial_pair: SerialPair) -> None:
+    """Test that `stop_bits` reads/writes as int/float and maps to `stopbits`."""
+    with Serial.from_url(serial_pair.left, baudrate=9600) as s:
+        assert s.stop_bits == 1
+        assert s.stopbits.value == 1
+
+        s.stop_bits = 2
+        assert s.stop_bits == 2
+        assert s.stopbits.value == 2
+
+        s.stop_bits = 1.5
+        assert s.stop_bits == 1.5
+        assert s.stopbits.value == 1.5
+
+        with pytest.raises(ValueError):
+            s.stop_bits = 3
+
+
 def test_compat_no_arg_construction() -> None:
     """Test that Serial can be constructed with no args (deferred open pattern)."""
     s = Serial()
