@@ -788,6 +788,8 @@ class BaseSerialTransport(asyncio.Transport):
                 **kwargs,
             )
         except BaseException:
+            # Intentionally catch cancellation too: callers should only observe
+            # connect failure/cancel after transport resources are released.
             self.close()
             await self.wait_closed()
 
