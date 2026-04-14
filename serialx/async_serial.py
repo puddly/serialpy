@@ -57,6 +57,7 @@ async def create_serial_connection(
         stopbits=stopbits,
         xonxoff=xonxoff,
         rtscts=rtscts,
+        exclusive=exclusive,
         **kwargs,
     )
 
