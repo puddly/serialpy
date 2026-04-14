@@ -116,7 +116,7 @@ def _normalize_windows_port_path(path: os.PathLike[str] | str) -> str:
     return path
 
 
-def _safe_close_handle(handle: Any) -> None:
+def _safe_close_handle(handle: int) -> None:
     """Close a Win32 handle, suppressing and logging errors."""
     try:
         CloseHandle(handle)
@@ -591,7 +591,9 @@ class Win32SerialTransport(BaseSerialTransport):
             if self._closing:
                 self._internal_transport.close()  # type: ignore[unreachable]
         except BaseException:
-            await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+            if self._handle is not None:
+                await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+
             self._serial = None
             self._handle = None
             raise
