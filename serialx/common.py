@@ -515,6 +515,15 @@ class BaseSerial(io.RawIOBase):
         return str(self.path) if self.path is not None else None
 
     @property
+    def portstr(self) -> str | None:
+        """Deprecated alias for `path`.
+
+        Warning: Deprecated
+            Use `path` instead.
+        """
+        return str(self.path) if self.path is not None else None
+
+    @property
     def timeout(self) -> float | None:
         """Deprecated alias for `read_timeout`.
 

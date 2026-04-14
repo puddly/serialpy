@@ -24,6 +24,7 @@ def test_compat_constructor_kwargs(serial_pair: SerialPair) -> None:
 
         # pyserial deprecated property aliases read back correctly
         assert s.port == str(s.path)
+        assert s.portstr == str(s.path)
         assert s.timeout == 1.5
         assert s.writeTimeout == 2.0
         assert s.bytesize == 7
