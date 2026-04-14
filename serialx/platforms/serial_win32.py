@@ -499,21 +499,29 @@ class Win32SerialTransport(BaseSerialTransport):
         """Forward resume_writing to the protocol."""
         self._protocol.resume_writing()
 
-    async def _open(self, path: str | os.PathLike[str]) -> None:
+    async def _open(
+        self, path: str | os.PathLike[str], *, exclusive: bool = True
+    ) -> None:
         """Open the serial port."""
         normalized_path = _normalize_windows_port_path(path)
-        handle = await self._loop.run_in_executor(
-            None,
-            lambda: CreateFile(
-                normalized_path,
-                GENERIC_READ | GENERIC_WRITE,
-                0,  # Exclusive access
+        share_mode = 0 if exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
+
+        try:
+            handle = await self._loop.run_in_executor(
                 None,
-                OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                None,
-            ),
-        )
+                lambda: CreateFile(
+                    normalized_path,
+                    GENERIC_READ | GENERIC_WRITE,
+                    share_mode,
+                    None,
+                    OPEN_EXISTING,
+                    FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                    None,
+                ),
+            )
+        except pywintypes.error as e:
+            raise OSError(e.winerror, e.strerror, normalized_path) from e
+
         self._handle = cast(int, handle)
 
     async def _connect(self, **kwargs: Any) -> None:
@@ -523,12 +531,15 @@ class Win32SerialTransport(BaseSerialTransport):
             return
 
         self._connect_in_progress = True
+
         path = kwargs.pop("path", None)
         if path is None:
             raise ValueError("A serial path is required")
-        await self._open(path)
 
         try:
+            exclusive = kwargs.get("exclusive", True)
+            await self._open(path, exclusive=exclusive)
+
             # Ensure inter_byte_timeout is set to a small value to enable
             # "Wait for first byte, then return on gap" behavior for ReadFile.
             # If 0 (default), ReadFile with default timeouts might wait for full buffer.

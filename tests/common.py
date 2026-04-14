@@ -112,6 +112,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             # Host binary does not support flow control
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RTS_CTS,
+            SerialQuirk.NO_EXCLUSIVITY,
             SerialQuirk.NO_UNPLUG,
         }
     ),
