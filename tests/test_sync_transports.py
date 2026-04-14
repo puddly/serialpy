@@ -351,6 +351,16 @@ def test_sync_valid_byte_size(serial_pair: SerialPair, byte_size: int) -> None:
         serial.write(b"test")
 
 
+def test_sync_invalid_byte_size(serial_pair: SerialPair) -> None:
+    """Test that an invalid byte size is rejected."""
+    if SerialBackend.SOCKET in serial_pair.backends:
+        pytest.skip("socket transport does not validate serial settings")
+
+    with pytest.raises(Exception):
+        with Serial.from_url(serial_pair.left, baudrate=115200, byte_size=123):
+            pass
+
+
 @pytest.mark.parametrize("xonxoff", [True, False])
 def test_sync_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
     """Test that xonxoff setting is accepted."""
