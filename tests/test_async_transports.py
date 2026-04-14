@@ -510,6 +510,7 @@ async def test_async_close_before_connect(serial_pair: SerialPair) -> None:
         await asyncio.wait_for(connect_task, timeout=2.0)
 
     await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
 
     assert transport.is_closing()
     assert protocol.connection_made_calls <= 1
@@ -1076,3 +1077,48 @@ async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
             serial_pair.left, baudrate=115200, exclusive=False
         ) as (_, writer2):
             writer2.write(b"test")
+
+
+async def test_async_connect_nonexistent_port() -> None:
+    """Test that a failed connect still leaves a closed transport."""
+    loop = asyncio.get_running_loop()
+    path = "COM25" if sys.platform == "win32" else "/dev/this_port_does_not_exist"
+    _, transport_cls = await loop.run_in_executor(None, get_serial_classes, path)
+    transport = transport_cls(loop=loop, protocol=asyncio.Protocol())
+
+    with pytest.raises(OSError):
+        await asyncio.wait_for(
+            transport.connect(path=path, baudrate=115200),
+            timeout=5.0,
+        )
+
+    # Closing and `wait_closed` are both idempotent
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    transport.close()
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
+
+
+async def test_async_connect_cancel(serial_pair: SerialPair) -> None:
+    """Test that cancelling connect still leaves a closed transport."""
+    loop = asyncio.get_running_loop()
+    _, transport_cls = await loop.run_in_executor(
+        None, get_serial_classes, serial_pair.left
+    )
+
+    protocol = asyncio.Protocol()
+    transport = transport_cls(loop=loop, protocol=protocol)
+
+    connect_task = asyncio.create_task(
+        transport.connect(path=serial_pair.left, baudrate=115200)
+    )
+    await asyncio.sleep(0)
+    connect_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(connect_task, timeout=5.0)
+
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
