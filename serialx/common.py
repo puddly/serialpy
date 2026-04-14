@@ -304,9 +304,13 @@ class BaseSerial(io.RawIOBase):
         """Write bytes to serial port, internal."""
         raise NotImplementedError
 
-    @abstractmethod
     def flush(self) -> None:
         """Flush write buffers."""
+        self._flush()
+
+    @abstractmethod
+    def _flush(self) -> None:
+        """Flush write buffers, internal."""
         raise NotImplementedError
 
     @property
@@ -441,14 +445,22 @@ class BaseSerial(io.RawIOBase):
         """Return the number of bytes waiting to be written."""
         raise NotImplementedError
 
-    @abstractmethod
     def reset_read_buffer(self) -> None:
         """Reset the read buffer."""
-        raise NotImplementedError
+        self._reset_read_buffer()
 
     @abstractmethod
+    def _reset_read_buffer(self) -> None:
+        """Reset the read buffer, internal."""
+        raise NotImplementedError
+
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
+        self._reset_write_buffer()
+
+    @abstractmethod
+    def _reset_write_buffer(self) -> None:
+        """Reset the write buffer, internal."""
         raise NotImplementedError
 
     @property

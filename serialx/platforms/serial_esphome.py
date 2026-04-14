@@ -311,11 +311,11 @@ class ESPHomeSerial(BaseSerial):
         """Return the number of bytes waiting to be written."""
         return 0
 
-    def reset_read_buffer(self) -> None:
+    def _reset_read_buffer(self) -> None:
         """Reset the read buffer."""
         self._read_buffer.clear()
 
-    def reset_write_buffer(self) -> None:
+    def _reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
     @translate_esphome_errors
@@ -324,7 +324,7 @@ class ESPHomeSerial(BaseSerial):
         assert self._api is not None
         await self._api.serial_proxy_flush(instance=self._instance_id)
 
-    def flush(self) -> None:
+    def _flush(self) -> None:
         """Flush write buffers."""
         self._call_on_loop(self._async_flush())
 

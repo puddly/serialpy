@@ -575,11 +575,11 @@ class RFC2217Serial(SocketSerial):
         """Return the number of buffered serial data bytes waiting to be read."""
         return len(self._data_buffer)
 
-    def reset_write_buffer(self) -> None:
+    def _reset_write_buffer(self) -> None:
         """Reset the write buffer."""
         self._send_and_wait(PurgeDataCmd(what=PurgeDataValue.RECEIVE))
 
-    def reset_read_buffer(self) -> None:
+    def _reset_read_buffer(self) -> None:
         """Reset the read buffer."""
         self._send_and_wait(PurgeDataCmd(what=PurgeDataValue.TRANSMIT))
         self._data_buffer.clear()
@@ -663,7 +663,7 @@ class RFC2217Serial(SocketSerial):
 
         return self._engine.get_modem_pins()
 
-    def flush(self) -> None:
+    def _flush(self) -> None:
         """Flush write buffers (no-op, TCP handles buffering)."""
 
 
