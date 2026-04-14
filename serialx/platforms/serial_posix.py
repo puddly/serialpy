@@ -142,13 +142,6 @@ class PosixSerial(BaseSerial):
                 f"Serial port {self._path!r} is already locked by another process",
             ) from exc
 
-    def _unlock(self) -> None:
-        """Unlock the serial port."""
-        LOGGER.debug("Unlocking serial port %r", self._path)
-
-        assert self._fileno is not None
-        fcntl.flock(self._fileno, fcntl.LOCK_UN)
-
     def _build_parity_flags(self) -> int:
         if self._parity == Parity.NONE:
             return 0
@@ -389,9 +382,6 @@ class PosixSerial(BaseSerial):
     def _close(self) -> None:
         """Close the serial port."""
         if self._fileno is not None:
-            if self._exclusive:
-                self._unlock()
-
             os.close(self._fileno)
             self._fileno = None
 
