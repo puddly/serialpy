@@ -468,7 +468,7 @@ class Win32SerialTransport(BaseSerialTransport):
 
         self._close_future = self._loop.run_in_executor(None, _close_then_notify)
 
-    def serial_shutdown(self, how: Any) -> None:
+    def serial_shutdown(self, how: int) -> None:
         """Shutdown the serial connection."""
         # Intentionally ignored
 
