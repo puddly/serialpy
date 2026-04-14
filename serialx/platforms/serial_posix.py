@@ -504,6 +504,9 @@ class PosixSerialTransport(DescriptorTransport):
         )
         self._extra["serial"] = self._serial
 
+        if self._serial._exclusive:
+            await self._loop.run_in_executor(None, self._serial._lock)
+
         await asyncio.sleep(AFTER_OPEN_DELAY)
 
         await self._loop.run_in_executor(None, self._serial.configure_port)

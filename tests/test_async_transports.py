@@ -1033,3 +1033,16 @@ async def test_async_deassert_on_open_with_rtscts(
         ) as (reader_right, writer_right):
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is expected_state
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
+async def test_async_exclusive(serial_pair: SerialPair) -> None:
+    """Test that exclusive setting is respected for async connections."""
+    async with async_create_reader_writer(
+        serial_pair.left, baudrate=115200, exclusive=True
+    ):
+        with pytest.raises(OSError):
+            async with async_create_reader_writer(
+                serial_pair.left, baudrate=115200, exclusive=True
+            ):
+                pass
