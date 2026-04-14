@@ -12,6 +12,7 @@ if importlib.util.find_spec("serial.serialcli"):
     )
 
 from importlib.metadata import version
+from typing import Any
 
 from serialx import (
     CR,
@@ -28,7 +29,7 @@ from serialx import (
     ModemPins,
     Parity,
     PinState,
-    Serial,
+    Serial as SerialxSerial,
     SerialException,
     SerialPortInfo,
     SerialStreamWriter,
@@ -40,7 +41,6 @@ from serialx import (
     get_serial_classes,
     list_serial_ports,
     open_serial_connection,
-    serial_for_url,
 )
 
 VERSION = version("serialx-compat")
@@ -77,3 +77,16 @@ __all__ = [
     "VERSION",
     "__version__",
 ]
+
+
+class CompatSerial(SerialxSerial):
+    """Compatibility base class, maintaining runtime-compatibility with pyserial."""
+
+    @classmethod
+    def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
+        """Create the appropriate serial port subclass for the given URL."""
+        return super().from_url(url, *args, _wrap_exceptions=True, **kwargs)
+
+
+Serial = CompatSerial
+serial_for_url = CompatSerial.from_url

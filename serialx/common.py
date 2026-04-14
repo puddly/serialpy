@@ -9,11 +9,12 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import dataclasses
 from enum import Enum
+import functools
 import io
 from pathlib import Path
 import time
 from types import TracebackType
-from typing import Any
+from typing import Any, Concatenate, ParamSpec, TypeVar, cast
 import urllib.parse
 import warnings
 
@@ -122,6 +123,28 @@ def measure_time() -> Iterator[Callable[[], float]]:
         end = time.monotonic()
 
 
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def maybe_wrap_exceptions(
+    func: Callable[Concatenate[BaseSerial, _P], _R],
+) -> Callable[Concatenate[BaseSerial, _P], _R]:
+    """Re-raise all exceptions as `SerialException` when the flag is set."""
+
+    @functools.wraps(func)
+    def replacement(self: BaseSerial, /, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        try:
+            return func(self, *args, **kwargs)
+        except Exception as exc:
+            if self._wrap_exceptions:
+                raise SerialException(str(exc)) from exc
+
+            raise
+
+    return replacement
+
+
 class BaseSerial(io.RawIOBase):
     """Base class for serial port communication."""
 
@@ -148,6 +171,8 @@ class BaseSerial(io.RawIOBase):
         do_not_open: bool | None = None,
         writeTimeout: float | None = None,
         inter_byte_timeout: int | None = None,
+        # Internal pyserial compatibility signal
+        _wrap_exceptions: bool = False,
     ) -> None:
         """Initialize serial port configuration."""
         super().__init__()
@@ -191,12 +216,15 @@ class BaseSerial(io.RawIOBase):
         if do_not_open is False:
             raise RuntimeError("do_not_open=False is not supported")
 
+        self._wrap_exceptions = _wrap_exceptions
+
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
         """Create the appropriate serial port subclass for the given URL."""
         serial_cls, _ = get_serial_classes(url)
         return serial_cls(url, *args, **kwargs)
 
+    @maybe_wrap_exceptions
     def open(self) -> None:
         """Open the serial port."""
         self._open()
@@ -207,6 +235,7 @@ class BaseSerial(io.RawIOBase):
             self.close()
             raise
 
+    @maybe_wrap_exceptions
     def configure_port(self) -> None:
         """Configure the serial port settings."""
         self._configure_port()
@@ -221,6 +250,7 @@ class BaseSerial(io.RawIOBase):
         """Configure the serial port settings (platform-specific)."""
         raise NotImplementedError
 
+    @maybe_wrap_exceptions
     def close(self) -> None:
         """Close the serial port."""
         self._close()
@@ -244,6 +274,7 @@ class BaseSerial(io.RawIOBase):
         """Get modem control bits."""
         return self._get_modem_pins()
 
+    @maybe_wrap_exceptions
     def set_modem_pins(
         self,
         modem_pins: ModemPins | None = None,
@@ -284,6 +315,7 @@ class BaseSerial(io.RawIOBase):
         """Set modem control bits, internal."""
         raise NotImplementedError
 
+    @maybe_wrap_exceptions
     def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
         """Read bytes from serial port into buffer."""
         timeout = self._read_timeout if timeout is None else timeout
@@ -294,6 +326,7 @@ class BaseSerial(io.RawIOBase):
         """Read bytes from serial port into buffer, internal."""
         raise NotImplementedError
 
+    @maybe_wrap_exceptions
     def write(self, data: Buffer, *, timeout: float | None = None) -> int:
         """Write bytes to serial port."""
         timeout = self._write_timeout if timeout is None else timeout
@@ -304,9 +337,13 @@ class BaseSerial(io.RawIOBase):
         """Write bytes to serial port, internal."""
         raise NotImplementedError
 
-    @abstractmethod
     def flush(self) -> None:
         """Flush write buffers."""
+        self._flush()
+
+    @abstractmethod
+    def _flush(self) -> None:
+        """Flush write buffers, internal."""
         raise NotImplementedError
 
     @property
@@ -441,14 +478,24 @@ class BaseSerial(io.RawIOBase):
         """Return the number of bytes waiting to be written."""
         raise NotImplementedError
 
-    @abstractmethod
+    @maybe_wrap_exceptions
     def reset_read_buffer(self) -> None:
         """Reset the read buffer."""
-        raise NotImplementedError
+        self._reset_read_buffer()
 
     @abstractmethod
+    def _reset_read_buffer(self) -> None:
+        """Reset the read buffer, internal."""
+        raise NotImplementedError
+
+    @maybe_wrap_exceptions
     def reset_write_buffer(self) -> None:
         """Reset the write buffer."""
+        self._reset_write_buffer()
+
+    @abstractmethod
+    def _reset_write_buffer(self) -> None:
+        """Reset the write buffer, internal."""
         raise NotImplementedError
 
     @property
@@ -488,6 +535,34 @@ class BaseSerial(io.RawIOBase):
             Use `byte_size` instead.
         """
         return self.byte_size
+
+    @property
+    def data_bits(self) -> int:
+        """Deprecated alias for `byte_size`.
+
+        Warning: Deprecated
+            Use `byte_size` instead.
+        """
+        return self.byte_size
+
+    @data_bits.setter
+    def data_bits(self, value: int) -> None:
+        """Set the byte size (deprecated)."""
+        self._byte_size = value
+
+    @property
+    def stop_bits(self) -> int | float:
+        """Deprecated alias for `stopbits`.
+
+        Warning: Deprecated
+            Use `stopbits` instead.
+        """
+        return cast(int | float, self._stopbits.value)
+
+    @stop_bits.setter
+    def stop_bits(self, value: int | float) -> None:
+        """Set the number of stop bits (deprecated)."""
+        self._stopbits = StopBits(value)
 
     @property
     def writeTimeout(self) -> float | None:

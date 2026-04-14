@@ -380,7 +380,7 @@ class PosixSerial(BaseSerial):
             if exc.errno == errno.ENOTTY:
                 LOGGER.debug("Device is not a serial port, cannot set modem pins")
 
-    def flush(self) -> None:
+    def _flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         assert self._fileno is not None
         LOGGER.debug("Flushing file descriptor %r", self._fileno)
@@ -470,12 +470,12 @@ class PosixSerial(BaseSerial):
 
         return int.from_bytes(buffer, "little")
 
-    def reset_read_buffer(self) -> None:
+    def _reset_read_buffer(self) -> None:
         """Reset the read buffer."""
         assert self._fileno is not None
         termios.tcflush(self._fileno, termios.TCIFLUSH)
 
-    def reset_write_buffer(self) -> None:
+    def _reset_write_buffer(self) -> None:
         """Reset the write buffer."""
         assert self._fileno is not None
         termios.tcflush(self._fileno, termios.TCOFLUSH)

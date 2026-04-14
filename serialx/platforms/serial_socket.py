@@ -114,7 +114,7 @@ class SocketSerial(BaseSerial):
         """Return the number of bytes waiting to be written."""
         return 0
 
-    def reset_read_buffer(self) -> None:
+    def _reset_read_buffer(self) -> None:
         """Reset the read buffer."""
 
         # Drain all of the pending data in nonblocking mode
@@ -131,10 +131,10 @@ class SocketSerial(BaseSerial):
                 if not data:
                     break
 
-    def reset_write_buffer(self) -> None:
+    def _reset_write_buffer(self) -> None:
         """Reset the write buffer."""
 
-    def flush(self) -> None:
+    def _flush(self) -> None:
         """Flush write buffers (no-op for sockets)."""
 
     def _write(self, b: Buffer, *, timeout: float | None) -> int:
