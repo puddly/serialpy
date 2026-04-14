@@ -1046,3 +1046,21 @@ async def test_async_exclusive(serial_pair: SerialPair) -> None:
                 serial_pair.left, baudrate=115200, exclusive=True
             ):
                 pass
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
+async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
+    """Test that non-exclusive mode allows multiple opens."""
+    if sys.platform == "win32":
+        pytest.skip("Windows does not support shared access")
+
+    if SerialBackend.SER2NET in serial_pair.backends:
+        pytest.skip("ser2net only allows one connection per port")
+
+    async with async_create_reader_writer(
+        serial_pair.left, baudrate=115200, exclusive=False
+    ) as (_, writer1):
+        async with async_create_reader_writer(
+            serial_pair.left, baudrate=115200, exclusive=False
+        ) as (_, writer2):
+            writer2.write(b"test")
