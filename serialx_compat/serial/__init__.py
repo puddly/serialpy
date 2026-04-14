@@ -82,6 +82,11 @@ __all__ = [
 class CompatSerial(SerialxSerial):
     """Compatibility base class, maintaining runtime-compatibility with pyserial."""
 
+    def __init__(
+        self, *args: Any, _wrap_exceptions: bool = True, **kwargs: Any
+    ) -> None:
+        super().__init__(*args, _wrap_exceptions=_wrap_exceptions, **kwargs)
+
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
         """Create the appropriate serial port subclass for the given URL."""
