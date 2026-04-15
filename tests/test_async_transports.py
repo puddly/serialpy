@@ -1122,3 +1122,16 @@ async def test_async_connect_cancel(serial_pair: SerialPair) -> None:
     await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
     await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
     assert transport.is_closing()
+
+
+async def test_async_abort_before_connect_wait_closed(serial_pair: SerialPair) -> None:
+    """Test abort-before-connect still resolves wait_closed."""
+    loop = asyncio.get_running_loop()
+    _serial_cls, transport_cls = get_serial_classes(serial_pair.left)
+
+    transport = transport_cls(loop=loop, protocol=asyncio.Protocol())
+    transport.abort()
+
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()

@@ -397,11 +397,13 @@ class DescriptorTransport(BaseSerialTransport):
 
     def _close(self, exc: Exception | None = None) -> None:
         self._closing = True
-        assert self._fileno is not None
-        if self._buffer:
-            self._loop.remove_writer(self._fileno)
-        self._buffer.clear()
-        self._loop.remove_reader(self._fileno)
+
+        if self._fileno is not None:
+            if self._buffer:
+                self._loop.remove_writer(self._fileno)
+            self._buffer.clear()
+            self._loop.remove_reader(self._fileno)
+
         self._maybe_background_close(exc)
 
     def _maybe_background_close(self, exc: Exception | None) -> None:
