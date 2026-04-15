@@ -5,6 +5,7 @@ import contextlib
 import logging
 import os
 import sys
+from unittest.mock import Mock
 
 if sys.version_info >= (3, 11):
     from asyncio import timeout as asyncio_timeout
@@ -349,6 +350,18 @@ async def test_async_valid_byte_size(serial_pair: SerialPair, byte_size: int) ->
         writer.write(b"test")
 
 
+async def test_async_invalid_byte_size(serial_pair: SerialPair) -> None:
+    """Test that an invalid byte size is rejected."""
+    if SerialBackend.SOCKET in serial_pair.backends:
+        pytest.skip("socket transport does not validate serial settings")
+
+    with pytest.raises(Exception):
+        async with async_create_reader_writer(
+            serial_pair.left, baudrate=115200, byte_size=123
+        ):
+            pass
+
+
 @pytest.mark.parametrize("xonxoff", [True, False])
 async def test_async_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
     """Test that xonxoff setting is accepted."""
@@ -471,20 +484,9 @@ async def test_async_abort(serial_pair: SerialPair) -> None:
 async def test_async_close_before_connect(serial_pair: SerialPair) -> None:
     """Test close during connect does not crash and stays idempotent."""
 
-    class ProbeProtocol(asyncio.Protocol):
-        def __init__(self) -> None:
-            self.connection_made_calls = 0
-            self.connection_lost_calls = 0
-
-        def connection_made(self, transport: asyncio.BaseTransport) -> None:
-            self.connection_made_calls += 1
-
-        def connection_lost(self, exc: Exception | None) -> None:
-            self.connection_lost_calls += 1
-
     loop = asyncio.get_running_loop()
     _serial_cls, transport_cls = get_serial_classes(serial_pair.left)
-    protocol = ProbeProtocol()
+    protocol = Mock(spec=asyncio.Protocol)
     transport = transport_cls(loop=loop, protocol=protocol)
 
     connect_task = asyncio.create_task(
@@ -498,10 +500,37 @@ async def test_async_close_before_connect(serial_pair: SerialPair) -> None:
         await asyncio.wait_for(connect_task, timeout=2.0)
 
     await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
 
     assert transport.is_closing()
-    assert protocol.connection_made_calls <= 1
-    assert protocol.connection_lost_calls <= 1
+    assert len(protocol.connection_made.mock_calls) <= 1
+    assert len(protocol.connection_lost.mock_calls) <= 1
+
+
+async def test_async_abort_before_connect(serial_pair: SerialPair) -> None:
+    """Test abort during connect does not crash and stays idempotent."""
+
+    loop = asyncio.get_running_loop()
+    _serial_cls, transport_cls = get_serial_classes(serial_pair.left)
+    protocol = Mock(spec=asyncio.Protocol)
+    transport = transport_cls(loop=loop, protocol=protocol)
+
+    connect_task = asyncio.create_task(
+        transport.connect(path=serial_pair.left, baudrate=115200)
+    )
+    await asyncio.sleep(0)
+    transport.abort()
+    transport.abort()
+
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(connect_task, timeout=2.0)
+
+    await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=2.0)
+
+    assert transport.is_closing()
+    assert len(protocol.connection_made.mock_calls) <= 1
+    assert len(protocol.connection_lost.mock_calls) <= 1
 
 
 async def test_async_write_bytearray(serial_pair: SerialPair) -> None:
@@ -879,7 +908,33 @@ async def test_async_fast_open_close(serial_pair: SerialPair) -> None:
         baudrate=115200,
     )
 
-    await connection_lost_event.wait()
+    await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
+
+
+async def test_async_fast_open_close_with_close(serial_pair: SerialPair) -> None:
+    """Test quickly opening and closing a port via close() doesn't crash."""
+    connection_lost_event = asyncio.Event()
+
+    class FastCloseProtocol(asyncio.Protocol):
+        def connection_made(self, transport: asyncio.BaseTransport) -> None:
+            assert isinstance(transport, BaseSerialTransport)
+            transport.close()
+
+        def connection_lost(self, exc: Exception | None) -> None:
+            connection_lost_event.set()
+
+    transport, _ = await create_serial_connection(
+        asyncio.get_running_loop(),
+        FastCloseProtocol,
+        serial_pair.left,
+        baudrate=115200,
+    )
+
+    await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
@@ -1033,3 +1088,169 @@ async def test_async_deassert_on_open_with_rtscts(
         ) as (reader_right, writer_right):
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await writer_left.transport.get_modem_pins()).cts is expected_state
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
+async def test_async_exclusive(serial_pair: SerialPair) -> None:
+    """Test that exclusive setting is respected for async connections."""
+    async with async_create_reader_writer(
+        serial_pair.left, baudrate=115200, exclusive=True
+    ):
+        with pytest.raises(OSError):
+            async with async_create_reader_writer(
+                serial_pair.left, baudrate=115200, exclusive=True
+            ):
+                pass
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
+async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
+    """Test that non-exclusive mode allows multiple opens."""
+    if sys.platform == "win32":
+        pytest.skip("Windows does not support shared access")
+
+    if SerialBackend.SER2NET in serial_pair.backends:
+        pytest.skip("ser2net only allows one connection per port")
+
+    async with async_create_reader_writer(
+        serial_pair.left, baudrate=115200, exclusive=False
+    ) as (_, writer1):
+        async with async_create_reader_writer(
+            serial_pair.left, baudrate=115200, exclusive=False
+        ) as (_, writer2):
+            writer2.write(b"test")
+
+
+async def test_async_connect_nonexistent_port() -> None:
+    """Test that a failed connect still leaves a closed transport."""
+    loop = asyncio.get_running_loop()
+    path = "COM25" if sys.platform == "win32" else "/dev/this_port_does_not_exist"
+    _, transport_cls = await loop.run_in_executor(None, get_serial_classes, path)
+    transport = transport_cls(loop=loop, protocol=asyncio.Protocol())
+
+    with pytest.raises(OSError):
+        await asyncio.wait_for(
+            transport.connect(path=path, baudrate=115200),
+            timeout=5.0,
+        )
+
+    # Closing and `wait_closed` are both idempotent
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    transport.close()
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
+
+
+async def test_async_connect_cancel(serial_pair: SerialPair) -> None:
+    """Test that cancelling connect still leaves a closed transport."""
+    loop = asyncio.get_running_loop()
+    _, transport_cls = await loop.run_in_executor(
+        None, get_serial_classes, serial_pair.left
+    )
+
+    protocol = asyncio.Protocol()
+    transport = transport_cls(loop=loop, protocol=protocol)
+
+    connect_task = asyncio.create_task(
+        transport.connect(path=serial_pair.left, baudrate=115200)
+    )
+    await asyncio.sleep(0)
+    connect_task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(connect_task, timeout=5.0)
+
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    transport.close()
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
+
+
+async def test_async_close_before_connect_wait_closed(serial_pair: SerialPair) -> None:
+    """Test close-before-connect still resolves wait_closed."""
+    loop = asyncio.get_running_loop()
+    _serial_cls, transport_cls = get_serial_classes(serial_pair.left)
+
+    transport = transport_cls(loop=loop, protocol=asyncio.Protocol())
+    transport.close()
+
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    transport.close()
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
+
+
+async def test_async_abort_before_connect_wait_closed(serial_pair: SerialPair) -> None:
+    """Test abort-before-connect still resolves wait_closed."""
+    loop = asyncio.get_running_loop()
+    _serial_cls, transport_cls = get_serial_classes(serial_pair.left)
+
+    transport = transport_cls(loop=loop, protocol=asyncio.Protocol())
+    transport.abort()
+
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    transport.abort()
+    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    assert transport.is_closing()
+
+
+async def test_async_wait_closed_multiple_waiters_close(
+    serial_pair: SerialPair,
+) -> None:
+    """Test multiple wait_closed waiters are released together on close."""
+    loop = asyncio.get_running_loop()
+    connection_lost_event = asyncio.Event()
+
+    class WaitersProtocol(asyncio.Protocol):
+        def connection_lost(self, exc: Exception | None) -> None:
+            connection_lost_event.set()
+
+    transport, _ = await create_serial_connection(
+        loop,
+        WaitersProtocol,
+        serial_pair.left,
+        baudrate=115200,
+    )
+
+    wait_closed_1 = asyncio.create_task(transport.wait_closed())
+    wait_closed_2 = asyncio.create_task(transport.wait_closed())
+
+    await asyncio.sleep(0)
+    transport.close()
+
+    await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
+    await asyncio.wait_for(asyncio.gather(wait_closed_1, wait_closed_2), timeout=5.0)
+    assert transport.is_closing()
+
+
+async def test_async_wait_closed_multiple_waiters_abort(
+    serial_pair: SerialPair,
+) -> None:
+    """Test multiple wait_closed waiters are released together on abort."""
+    loop = asyncio.get_running_loop()
+    connection_lost_event = asyncio.Event()
+
+    class WaitersProtocol(asyncio.Protocol):
+        def connection_lost(self, exc: Exception | None) -> None:
+            connection_lost_event.set()
+
+    transport, _ = await create_serial_connection(
+        loop,
+        WaitersProtocol,
+        serial_pair.left,
+        baudrate=115200,
+    )
+
+    wait_closed_1 = asyncio.create_task(transport.wait_closed())
+    wait_closed_2 = asyncio.create_task(transport.wait_closed())
+
+    await asyncio.sleep(0)
+    transport.abort()
+
+    await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
+    await asyncio.wait_for(asyncio.gather(wait_closed_1, wait_closed_2), timeout=5.0)
+    assert transport.is_closing()

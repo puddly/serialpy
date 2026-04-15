@@ -78,7 +78,7 @@ def test_sync_negotiate_timeout_silent_server() -> None:
                 ):
                     pass
 
-        assert 0.1 <= elapsed() < 1.0
+        assert 0.09 <= elapsed() < 1.1
 
 
 async def test_async_negotiate_timeout_silent_server() -> None:

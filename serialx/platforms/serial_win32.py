@@ -116,7 +116,7 @@ def _normalize_windows_port_path(path: os.PathLike[str] | str) -> str:
     return path
 
 
-def _safe_close_handle(handle: Any) -> None:
+def _safe_close_handle(handle: int) -> None:
     """Close a Win32 handle, suppressing and logging errors."""
     try:
         CloseHandle(handle)
@@ -447,6 +447,7 @@ class Win32SerialTransport(BaseSerialTransport):
         super().__init__(loop, protocol)
 
         self._handle: int | None = None
+        self._open_fut: asyncio.Future[int] | None = None
         self._internal_transport: asyncio.Transport | None = None
         self._close_future: asyncio.Future[None] | None = None
         self._closing: bool = False
@@ -468,7 +469,7 @@ class Win32SerialTransport(BaseSerialTransport):
 
         self._close_future = self._loop.run_in_executor(None, _close_then_notify)
 
-    def serial_shutdown(self, how: Any) -> None:
+    def serial_shutdown(self, how: int) -> None:
         """Shutdown the serial connection."""
         # Intentionally ignored
 
@@ -499,22 +500,71 @@ class Win32SerialTransport(BaseSerialTransport):
         """Forward resume_writing to the protocol."""
         self._protocol.resume_writing()
 
-    async def _open(self, path: str | os.PathLike[str]) -> None:
+    def _maybe_resolve_closed_waiter(self) -> None:
+        """Potentially resolve the closed future when the transport is closing."""
+        if not self._closing:
+            return
+        if self._connect_in_progress:
+            return
+        if self._open_fut is not None:
+            return
+        if self._internal_transport is not None:
+            return
+        if self._handle is not None:
+            return
+
+        self._resolve_closed_waiter()
+
+    def _on_cancelled_open_done(self, open_fut: asyncio.Future[int]) -> None:
+        if self._open_fut is not open_fut:
+            return
+
+        self._open_fut = None
+
+        try:
+            handle = open_fut.result()
+        except BaseException:
+            self._maybe_resolve_closed_waiter()
+            return
+
+        _safe_close_handle(handle)
+        self._maybe_resolve_closed_waiter()
+
+    async def _open(
+        self, path: str | os.PathLike[str], *, exclusive: bool = True
+    ) -> None:
         """Open the serial port."""
+        if self._open_fut is not None:
+            raise RuntimeError("Open is already in progress")
+
         normalized_path = _normalize_windows_port_path(path)
-        handle = await self._loop.run_in_executor(
+        share_mode = 0 if exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
+
+        open_fut = self._loop.run_in_executor(
             None,
             lambda: CreateFile(
                 normalized_path,
                 GENERIC_READ | GENERIC_WRITE,
-                0,  # Exclusive access
+                share_mode,
                 None,
                 OPEN_EXISTING,
                 FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
                 None,
             ),
         )
-        self._handle = cast(int, handle)
+        self._open_fut = cast(asyncio.Future[int], open_fut)
+
+        try:
+            handle = await self._open_fut
+        except asyncio.CancelledError:
+            self._open_fut.add_done_callback(self._on_cancelled_open_done)
+            raise
+        except pywintypes.error as e:
+            self._open_fut = None
+            raise OSError(e.winerror, e.strerror, normalized_path) from e
+
+        self._open_fut = None
+        self._handle = handle
 
     async def _connect(self, **kwargs: Any) -> None:
         """Connect to the serial port."""
@@ -523,12 +573,15 @@ class Win32SerialTransport(BaseSerialTransport):
             return
 
         self._connect_in_progress = True
+
         path = kwargs.pop("path", None)
         if path is None:
             raise ValueError("A serial path is required")
-        await self._open(path)
 
         try:
+            exclusive = kwargs.get("exclusive", True)
+            await self._open(path, exclusive=exclusive)
+
             # Ensure inter_byte_timeout is set to a small value to enable
             # "Wait for first byte, then return on gap" behavior for ReadFile.
             # If 0 (default), ReadFile with default timeouts might wait for full buffer.
@@ -580,12 +633,15 @@ class Win32SerialTransport(BaseSerialTransport):
             if self._closing:
                 self._internal_transport.close()  # type: ignore[unreachable]
         except BaseException:
-            await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+            if self._handle is not None:
+                await self._loop.run_in_executor(None, _safe_close_handle, self._handle)
+
             self._serial = None
             self._handle = None
             raise
         finally:
             self._connect_in_progress = False
+            self._maybe_resolve_closed_waiter()
 
     def get_write_buffer_size(self) -> int:
         """Return the current size of the write buffer."""
@@ -623,16 +679,16 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             # Internal transport closes self._serial via sock.close()
             self._internal_transport.close()
-        elif not self._connect_in_progress:
-            self._resolve_closed_waiter()
+        else:
+            self._maybe_resolve_closed_waiter()
 
     def abort(self) -> None:
         """Abort the transport immediately."""
         self._closing = True
         if self._internal_transport is not None:
             self._internal_transport.abort()
-        elif not self._connect_in_progress:
-            self._resolve_closed_waiter()
+        else:
+            self._maybe_resolve_closed_waiter()
 
     def pause_reading(self) -> None:
         """Pause reading from the transport."""

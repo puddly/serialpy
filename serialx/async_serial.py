@@ -38,9 +38,6 @@ async def create_serial_connection(
     **kwargs: Any,
 ) -> tuple[BaseSerialTransport, asyncio.Protocol]:
     """Create a serial port connection with asyncio."""
-    if not exclusive:
-        raise ValueError("Only exclusive=True is supported")
-
     if transport_cls is None:
         if url is None:
             raise ValueError("One of `url` or `transport_cls` must be provided.")
@@ -60,6 +57,7 @@ async def create_serial_connection(
         stopbits=stopbits,
         xonxoff=xonxoff,
         rtscts=rtscts,
+        exclusive=exclusive,
         **kwargs,
     )
 

@@ -63,6 +63,28 @@ def test_sync_binary_payload_sizes(serial_pair: SerialPair, size: int) -> None:
         assert right.readexactly(len(data)) == data
 
 
+def test_sync_write_bytearray(serial_pair: SerialPair) -> None:
+    """Test writing bytearray data."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        data = bytearray(b"hello bytearray")
+        left.write(data)
+        assert right.readexactly(len(data)) == b"hello bytearray"
+
+
+def test_sync_write_empty(serial_pair: SerialPair) -> None:
+    """Test writing empty data is a no-op."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        left.write(b"")
+        left.write(b"after_empty")
+        assert right.readexactly(len(b"after_empty")) == b"after_empty"
+
+
 def test_sync_null_bytes(serial_pair: SerialPair) -> None:
     """Test that null bytes (0x00) can be transmitted."""
     with (
@@ -244,6 +266,23 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
         serial.write(b"test")
 
 
+def test_sync_nonstandard_baudrate(serial_pair: SerialPair) -> None:
+    """Test that a non-standard baudrate (no termios constant) is accepted."""
+    if serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"):
+        pytest.skip("Base POSIX backends only support standard baudrates")
+
+    if sys.platform == "darwin" and SerialBackend.SER2NET in serial_pair.backends:
+        pytest.xfail("macOS termios lacks constants above B230400")
+
+    with (
+        Serial.from_url(serial_pair.left, baudrate=200000) as left,
+        Serial.from_url(serial_pair.right, baudrate=200000) as right,
+    ):
+        assert left.baudrate == 200000
+        left.write(b"test")
+        assert right.readexactly(4) == b"test"
+
+
 @pytest.mark.parametrize(
     "parity", [Parity.NONE, Parity.ODD, Parity.EVEN, Parity.MARK, Parity.SPACE]
 )
@@ -312,6 +351,16 @@ def test_sync_valid_byte_size(serial_pair: SerialPair, byte_size: int) -> None:
         serial.write(b"test")
 
 
+def test_sync_invalid_byte_size(serial_pair: SerialPair) -> None:
+    """Test that an invalid byte size is rejected."""
+    if SerialBackend.SOCKET in serial_pair.backends:
+        pytest.skip("socket transport does not validate serial settings")
+
+    with pytest.raises(Exception):
+        with Serial.from_url(serial_pair.left, baudrate=115200, byte_size=123):
+            pass
+
+
 @pytest.mark.parametrize("xonxoff", [True, False])
 def test_sync_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
     """Test that xonxoff setting is accepted."""
@@ -364,6 +413,16 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
 
 
 # --- Lifecycle ---
+
+
+def test_sync_close_is_idempotent(serial_pair: SerialPair) -> None:
+    """Test closing multiple times is safe."""
+    serial = Serial.from_url(serial_pair.left, baudrate=115200)
+    serial.open()
+    serial.close()
+
+    # Second close should be no-op
+    serial.close()
 
 
 def test_sync_context_manager_multiple_times(serial_pair: SerialPair) -> None:

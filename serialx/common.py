@@ -785,16 +785,24 @@ class BaseSerialTransport(asyncio.Transport):
         **kwargs: Any,
     ) -> None:
         """Connect to serial port."""
-        return await self._connect(
-            path=path,
-            baudrate=baudrate,
-            parity=parity,
-            stopbits=stopbits,
-            xonxoff=xonxoff,
-            rtscts=rtscts,
-            byte_size=byte_size,
-            **kwargs,
-        )
+        try:
+            await self._connect(
+                path=path,
+                baudrate=baudrate,
+                parity=parity,
+                stopbits=stopbits,
+                xonxoff=xonxoff,
+                rtscts=rtscts,
+                byte_size=byte_size,
+                **kwargs,
+            )
+        except BaseException:
+            # Intentionally catch cancellation too: callers should only observe
+            # connect failure/cancel after transport resources are released.
+            self.close()
+            await self.wait_closed()
+
+            raise
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""

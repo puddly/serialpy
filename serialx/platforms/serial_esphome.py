@@ -427,18 +427,25 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._unsub()
             self._unsub = None
 
-        assert self._serial is not None
-        self._serial._unsubscribe_instance()
-
-        if self._serial._disconnect_api:
-            api = self._serial._api
-            self._serial._api = None
-            if api is not None:
-                self._close_task = self._loop.create_task(self._async_close(api))
-            else:
-                self._call_protocol_connection_lost(None)
-        else:
+        serial = self._serial
+        if serial is None:
             self._call_protocol_connection_lost(None)
+            return
+
+        serial._unsubscribe_instance()
+
+        if not serial._disconnect_api:
+            # Transport does not own the external API lifecycle.
+            self._call_protocol_connection_lost(None)
+            return
+
+        api = serial._api
+        serial._api = None
+        if api is None:
+            self._call_protocol_connection_lost(None)
+            return
+
+        self._close_task = self._loop.create_task(self._async_close(api))
 
     def abort(self) -> None:
         """Abort the transport immediately."""

@@ -66,15 +66,49 @@ class DescriptorTransport(BaseSerialTransport):
             self._extra.update(extra)
 
         self._close_task: asyncio.Task[None] | None = None
+        self._open_fut: asyncio.Future[int] | None = None
         self._connection_made: bool = False
 
     async def _open(self, path: str | os.PathLike[str]) -> None:
-        self._fileno = await self._loop.run_in_executor(
+        if self._open_fut is not None:
+            raise RuntimeError("Open is already in progress")
+
+        self._open_fut = self._loop.run_in_executor(
             None, os.open, path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK
         )
 
+        try:
+            self._fileno = await self._open_fut
+        except asyncio.CancelledError:
+            # `os.open` may still finish in the executor after cancellation. If that
+            # happens, close the resulting fd to avoid leaks.
+            self._open_fut.add_done_callback(self._on_cancelled_open_done)
+            raise
+        except BaseException:
+            self._open_fut = None
+            raise
+        else:
+            self._open_fut = None
+
         if self._closing:
             self._maybe_background_close(None)
+
+    def _on_cancelled_open_done(self, open_fut: asyncio.Future[int]) -> None:
+        if self._open_fut is not open_fut:
+            return
+
+        self._open_fut = None
+
+        try:
+            fileno = open_fut.result()
+        except BaseException:
+            if self._closing and self._fileno is None and self._close_task is None:
+                self._resolve_closed_waiter()
+            return
+
+        self._fileno = fileno
+        self._closing = True
+        self._maybe_background_close(None)
 
     async def _connect(self, **_kwargs: Any) -> None:
         assert self._fileno is not None
@@ -309,6 +343,12 @@ class DescriptorTransport(BaseSerialTransport):
         """Close the transport."""
         LOGGER.debug("Closing at the request of the application")
         if self._closing:
+            if (
+                self._fileno is None
+                and self._open_fut is None
+                and self._close_task is None
+            ):
+                self._resolve_closed_waiter()
             return
 
         if self._fileno is not None:
@@ -317,6 +357,8 @@ class DescriptorTransport(BaseSerialTransport):
             # The fd hasn't been opened yet. Just set the flag; _open() will
             # trigger the close sequence once the executor finishes.
             self._closing = True
+            if self._open_fut is None:
+                self._resolve_closed_waiter()
 
     def __del__(self) -> None:
         """Clean up transport on deletion."""
@@ -355,11 +397,13 @@ class DescriptorTransport(BaseSerialTransport):
 
     def _close(self, exc: Exception | None = None) -> None:
         self._closing = True
-        assert self._fileno is not None
-        if self._buffer:
-            self._loop.remove_writer(self._fileno)
-        self._buffer.clear()
-        self._loop.remove_reader(self._fileno)
+
+        if self._fileno is not None:
+            if self._buffer:
+                self._loop.remove_writer(self._fileno)
+            self._buffer.clear()
+            self._loop.remove_reader(self._fileno)
+
         self._maybe_background_close(exc)
 
     def _maybe_background_close(self, exc: Exception | None) -> None:
