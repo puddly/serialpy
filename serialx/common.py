@@ -117,8 +117,11 @@ def register_uri_handler(
 def get_uri_handler(uri: str) -> RegisteredUriHandler:
     """Look up the registered handler for the given URI."""
     parsed_uri = urllib.parse.urlparse(uri)
-    scheme = parsed_uri.scheme or "device"
-    return _REGISTERED_URI_HANDLERS[scheme + "://"][-1][2]
+    scheme = (parsed_uri.scheme or "device") + "://"
+    handlers = _REGISTERED_URI_HANDLERS.get(scheme)
+    if not handlers:
+        raise UnknownUriScheme(f"No handler registered for URI scheme {scheme!r}")
+    return handlers[-1][2]
 
 
 class SerialException(Exception):
@@ -127,6 +130,10 @@ class SerialException(Exception):
 
 class UnsupportedSetting(SerialException):
     """Raised when an unsupported serial port setting is used."""
+
+
+class UnknownUriScheme(SerialException):
+    """Raised when a URI scheme has no registered handler."""
 
 
 class StopBits(Enum):
