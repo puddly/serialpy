@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-if not sys.platform.startswith("freebsd"):
+if not sys.platform.startswith(("freebsd", "darwin", "linux")):
     pytest.skip("FreeBSD-only tests", allow_module_level=True)
 
 
