@@ -7,7 +7,7 @@ from collections.abc import Callable
 import logging
 from typing import Any, Generic, TypeVar, cast
 
-from .common import BaseSerialTransport, Parity, StopBits, get_serial_classes
+from .common import BaseSerialTransport, Parity, StopBits, get_uri_handler
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,9 +42,10 @@ async def create_serial_connection(
         if url is None:
             raise ValueError("One of `url` or `transport_cls` must be provided.")
 
-        _, transport_cls = await asyncio.get_running_loop().run_in_executor(
-            None, get_serial_classes, url
+        handler = await asyncio.get_running_loop().run_in_executor(
+            None, get_uri_handler, url
         )
+        transport_cls = handler.async_transport_cls
 
     assert transport_cls is not None
     protocol = protocol_factory()

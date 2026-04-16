@@ -30,6 +30,7 @@ from serialx.common import (
     Parity,
     PinState,
     StopBits,
+    register_uri_handler,
 )
 
 _T = TypeVar("_T")
@@ -471,3 +472,11 @@ class ESPHomeSerialTransport(BaseSerialTransport):
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
         return 0
+
+
+register_uri_handler(
+    scheme="esphome://",
+    unique_scheme="esphome://",
+    sync_cls=ESPHomeSerial,
+    async_transport_cls=ESPHomeSerialTransport,
+)

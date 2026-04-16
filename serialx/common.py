@@ -5,6 +5,8 @@ from __future__ import annotations
 from abc import abstractmethod
 import asyncio
 from asyncio import IncompleteReadError
+import bisect
+from collections import defaultdict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import dataclasses
@@ -19,6 +21,76 @@ import urllib.parse
 import warnings
 
 from typing_extensions import Buffer, Self
+
+_REGISTERED_URI_HANDLERS: defaultdict[
+    str, list[tuple[int, float, RegisteredUriHandler]]
+] = defaultdict(list)
+
+
+@dataclasses.dataclass(frozen=True)
+class RegisteredUriHandler:
+    """A URI handler registration entry."""
+
+    scheme: str
+    unique_scheme: str
+    weight: int
+    sync_cls: type[BaseSerial]
+    async_transport_cls: type[BaseSerialTransport]
+    list_serial_ports_func: Callable[[], list[SerialPortInfo]] | None
+    strip_uri_scheme: bool
+
+
+def register_uri_handler(
+    *,
+    scheme: str,
+    unique_scheme: str,
+    sync_cls: type[BaseSerial],
+    async_transport_cls: type[BaseSerialTransport],
+    list_serial_ports_func: Callable[[], list[SerialPortInfo]] | None = None,
+    weight: int = 1,
+    strip_uri_scheme: bool = False,
+) -> Callable[[], None]:
+    """Register a URI handler."""
+    if not scheme.endswith("://") or not unique_scheme.endswith("://"):
+        raise ValueError(f"Schemes {scheme!r} and {unique_scheme!r} must end with ://")
+
+    if _REGISTERED_URI_HANDLERS[unique_scheme]:
+        raise ValueError(
+            f"URI scheme {unique_scheme!r} is not unique,"
+            f" already registered to {_REGISTERED_URI_HANDLERS[unique_scheme]}"
+        )
+
+    item = (
+        weight,
+        time.monotonic(),  # To avoid comparing `RegisteredUriHandler` objects
+        RegisteredUriHandler(
+            scheme=scheme,
+            unique_scheme=unique_scheme,
+            weight=weight,
+            sync_cls=sync_cls,
+            async_transport_cls=async_transport_cls,
+            list_serial_ports_func=list_serial_ports_func,
+            strip_uri_scheme=strip_uri_scheme,
+        ),
+    )
+    bisect.insort_right(_REGISTERED_URI_HANDLERS[scheme], item)
+
+    if unique_scheme != scheme:
+        _REGISTERED_URI_HANDLERS[unique_scheme].append(item)
+
+    def remove_callback() -> None:
+        _REGISTERED_URI_HANDLERS[scheme].remove(item)
+        if unique_scheme != scheme:
+            _REGISTERED_URI_HANDLERS[unique_scheme].remove(item)
+
+    return remove_callback
+
+
+def get_uri_handler(uri: str) -> RegisteredUriHandler:
+    """Look up the registered handler for the given URI."""
+    parsed_uri = urllib.parse.urlparse(uri)
+    scheme = parsed_uri.scheme or "device"
+    return _REGISTERED_URI_HANDLERS[scheme + "://"][-1][2]
 
 
 class SerialException(Exception):
@@ -221,8 +293,10 @@ class BaseSerial(io.RawIOBase):
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
         """Create the appropriate serial port subclass for the given URL."""
-        serial_cls, _ = get_serial_classes(url)
-        return serial_cls(url, *args, **kwargs)
+        handler = get_uri_handler(url)
+        if handler.strip_uri_scheme:
+            url = url.removeprefix(handler.scheme).removeprefix(handler.unique_scheme)
+        return handler.sync_cls(url, *args, **kwargs)
 
     @maybe_wrap_exceptions
     def open(self) -> None:
@@ -785,6 +859,13 @@ class BaseSerialTransport(asyncio.Transport):
         **kwargs: Any,
     ) -> None:
         """Connect to serial port."""
+        if path is not None:
+            handler = get_uri_handler(path)
+            if handler.strip_uri_scheme:
+                path = path.removeprefix(handler.scheme).removeprefix(
+                    handler.unique_scheme
+                )
+
         try:
             await self._connect(
                 path=path,
@@ -863,39 +944,8 @@ def get_serial_classes(
     url: str,
 ) -> tuple[type[BaseSerial], type[BaseSerialTransport]]:
     """Get the appropriate serial and transport classes based on the URL scheme."""
-    parsed_path = urllib.parse.urlparse(url)
-
-    if parsed_path.scheme in ("socket", "tcp"):
-        from .platforms.serial_socket import (  # noqa: PLC0415
-            SocketSerial,
-            SocketSerialTransport,
-        )
-
-        return SocketSerial, SocketSerialTransport
-    elif parsed_path.scheme == "rfc2217":
-        from .platforms.serial_rfc2217 import (  # noqa: PLC0415
-            RFC2217Serial,
-            RFC2217SerialTransport,
-        )
-
-        return RFC2217Serial, RFC2217SerialTransport
-    elif parsed_path.scheme == "esphome":
-        try:
-            from .platforms.serial_esphome import (  # noqa: PLC0415
-                ESPHomeSerial,
-                ESPHomeSerialTransport,
-            )
-        except ImportError as exc:
-            raise RuntimeError(
-                "ESPHome serial transport requires extra dependencies."
-                " Install with `pip install serialx[esphome]`"
-            ) from exc
-
-        return ESPHomeSerial, ESPHomeSerialTransport
-    else:
-        from .platforms import Serial, SerialTransport  # noqa: PLC0415
-
-        return Serial, SerialTransport
+    handler = get_uri_handler(url)
+    return handler.sync_cls, handler.async_transport_cls
 
 
 @dataclasses.dataclass

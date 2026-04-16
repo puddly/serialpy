@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+
+if sys.platform != "darwin":
+    raise ImportError("serial_darwin is only supported on macOS")
+
 import array
 import errno
 import fcntl
@@ -9,7 +14,7 @@ import logging
 import termios
 
 from serialx._serialx_rust import list_serial_ports_darwin_impl
-from serialx.common import SerialPortInfo
+from serialx.common import SerialPortInfo, register_uri_handler
 
 from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
@@ -84,3 +89,14 @@ def darwin_list_serial_ports() -> list[SerialPortInfo]:
         )
         for port in list_serial_ports_darwin_impl()
     ]
+
+
+register_uri_handler(
+    scheme="device://",
+    unique_scheme="darwin://",
+    sync_cls=DarwinSerial,
+    async_transport_cls=DarwinSerialTransport,
+    list_serial_ports_func=darwin_list_serial_ports,
+    weight=3,
+    strip_uri_scheme=True,
+)

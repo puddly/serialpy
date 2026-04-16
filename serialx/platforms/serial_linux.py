@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-import array
+import sys
+
+if sys.platform != "linux":
+    raise ImportError("serial_linux is only supported on Linux")
+
+import array  # type: ignore[unreachable]
 from collections.abc import Iterator
 from contextlib import suppress
 import ctypes
@@ -13,7 +18,7 @@ from pathlib import Path
 import termios
 from typing import Any
 
-from ..common import Parity, SerialPortInfo, UnsupportedSetting
+from ..common import Parity, SerialPortInfo, UnsupportedSetting, register_uri_handler
 from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -320,3 +325,14 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
         results.append(info)
 
     return results
+
+
+register_uri_handler(
+    scheme="device://",
+    unique_scheme="linux://",
+    sync_cls=LinuxSerial,
+    async_transport_cls=LinuxSerialTransport,
+    list_serial_ports_func=linux_list_serial_ports,
+    weight=3,
+    strip_uri_scheme=True,
+)

@@ -153,7 +153,7 @@ class UnresolvedSerialPair:
     # Accumulated quirks
     quirks: frozenset[SerialQuirk]
 
-    serial_class: str | None = None
+    uri_scheme: str | None = None
     modem_line_propagation_delay: float = 0.05
 
     def chain(self, *backends: SerialBackend) -> Self:
@@ -182,7 +182,7 @@ class SerialPair(UnresolvedSerialPair):
     original_left: str
     original_right: str
 
-    serial_class: str
+    uri_scheme: str
 
 
 def _get_listening_ports(pid: int) -> list[int]:

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import logging
+import sys
+
+if not sys.platform.startswith("freebsd"):
+    raise ImportError("serial_freebsd is only supported on FreeBSD")
+
+import logging  # type: ignore[unreachable]
 import re
 import subprocess
 
-from ..common import SerialPortInfo
+from ..common import SerialPortInfo, register_uri_handler
 from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -138,3 +143,14 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
         )
 
     return results
+
+
+register_uri_handler(
+    scheme="device://",
+    unique_scheme="freebsd://",
+    sync_cls=FreeBSDSerial,
+    async_transport_cls=FreeBSDSerialTransport,
+    list_serial_ports_func=freebsd_list_serial_ports,
+    weight=3,
+    strip_uri_scheme=True,
+)

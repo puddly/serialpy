@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
-try:
-    import termios  # noqa: F401
-except ImportError:
+if not sys.platform.startswith("freebsd"):
     pytest.skip("FreeBSD-only tests", allow_module_level=True)
 
 

@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import termios
 
-from .serial_posix import PosixSerial, PosixSerialTransport
+from ..common import register_uri_handler
+from .serial_posix import PosixSerial, PosixSerialTransport, posix_list_serial_ports
 
 CRTSCTS = getattr(termios, "CRTSCTS", getattr(termios, "CNEW_RTSCTS", None))
 
@@ -38,3 +39,14 @@ class ExtendedPosixSerialTransport(PosixSerialTransport):
     """Extended POSIX serial port transport with CRTSCTS support."""
 
     _serial_cls = ExtendedPosixSerial
+
+
+register_uri_handler(
+    scheme="device://",
+    unique_scheme="extended-posix://",
+    sync_cls=ExtendedPosixSerial,
+    async_transport_cls=ExtendedPosixSerialTransport,
+    list_serial_ports_func=posix_list_serial_ports,
+    weight=2,
+    strip_uri_scheme=True,
+)

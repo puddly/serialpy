@@ -71,6 +71,7 @@ from ..common import (
     Parity,
     PinState,
     StopBits,
+    register_uri_handler,
 )
 
 if TYPE_CHECKING:
@@ -737,3 +738,13 @@ def win32_list_serial_ports() -> list[SerialPortInfo]:
         )
         for port in list_serial_ports_windows_impl()
     ]
+
+
+register_uri_handler(
+    scheme="device://",
+    unique_scheme="windows://",
+    sync_cls=Win32Serial,
+    async_transport_cls=Win32SerialTransport,
+    list_serial_ports_func=win32_list_serial_ports,
+    strip_uri_scheme=True,
+)

@@ -12,7 +12,14 @@ import urllib.parse
 
 from typing_extensions import Buffer
 
-from serialx.common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
+from serialx.common import (
+    BaseSerial,
+    BaseSerialTransport,
+    ModemPins,
+    Parity,
+    StopBits,
+    register_uri_handler,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -344,3 +351,17 @@ class SocketSerialTransport(BaseSerialTransport):
             if self._tcp_transport is not None
             else False
         )
+
+
+register_uri_handler(
+    scheme="socket://",
+    unique_scheme="socket://",
+    sync_cls=SocketSerial,
+    async_transport_cls=SocketSerialTransport,
+)
+register_uri_handler(
+    scheme="tcp://",
+    unique_scheme="tcp://",
+    sync_cls=SocketSerial,
+    async_transport_cls=SocketSerialTransport,
+)
