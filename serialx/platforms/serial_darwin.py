@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
-if sys.platform != "darwin":
+if sys.platform != "darwin" and not os.environ.get("SPHINX_BUILD"):
     raise ImportError("serial_darwin is only supported on macOS")
 
 import array

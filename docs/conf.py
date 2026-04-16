@@ -7,6 +7,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
+os.environ["SPHINX_BUILD"] = "1"
+
 project = "serialx"
 author = "puddly"
 copyright = "2026, serialx contributors"

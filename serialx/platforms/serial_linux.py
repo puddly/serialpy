@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
-if sys.platform != "linux":
+if sys.platform != "linux" and not os.environ.get("SPHINX_BUILD"):
     raise ImportError("serial_linux is only supported on Linux")
 
-import array  # type: ignore[unreachable]
+import array
 from collections.abc import Iterator
 from contextlib import suppress
 import ctypes

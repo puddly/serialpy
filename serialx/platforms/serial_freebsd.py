@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
-if not sys.platform.startswith("freebsd"):
+if not sys.platform.startswith("freebsd") and not os.environ.get("SPHINX_BUILD"):
     raise ImportError("serial_freebsd is only supported on FreeBSD")
 
-import logging  # type: ignore[unreachable]
+import logging
 import re
 import subprocess
 
