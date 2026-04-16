@@ -41,12 +41,13 @@ class ExtendedPosixSerialTransport(PosixSerialTransport):
     _serial_cls = ExtendedPosixSerial
 
 
-register_uri_handler(
-    scheme="device://",
-    unique_scheme="extended-posix://",
-    sync_cls=ExtendedPosixSerial,
-    async_transport_cls=ExtendedPosixSerialTransport,
-    list_serial_ports_func=posix_list_serial_ports,
-    weight=2,
-    strip_uri_scheme=True,
-)
+if is_extended_posix():
+    register_uri_handler(
+        scheme="device://",
+        unique_scheme="extended-posix://",
+        sync_cls=ExtendedPosixSerial,
+        async_transport_cls=ExtendedPosixSerialTransport,
+        list_serial_ports_func=posix_list_serial_ports,
+        weight=2,
+        strip_uri_scheme=True,
+    )

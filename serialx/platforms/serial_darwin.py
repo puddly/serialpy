@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-import os
-import sys
-
-if sys.platform != "darwin" and not os.environ.get("SPHINX_BUILD"):
-    raise ImportError("serial_darwin is only supported on macOS")
-
 import array
 import errno
 import fcntl
 import logging
+import sys
 import termios
 
 from serialx._serialx_rust import list_serial_ports_darwin_impl
@@ -92,12 +87,13 @@ def darwin_list_serial_ports() -> list[SerialPortInfo]:
     ]
 
 
-register_uri_handler(
-    scheme="device://",
-    unique_scheme="darwin://",
-    sync_cls=DarwinSerial,
-    async_transport_cls=DarwinSerialTransport,
-    list_serial_ports_func=darwin_list_serial_ports,
-    weight=3,
-    strip_uri_scheme=True,
-)
+if sys.platform == "darwin":
+    register_uri_handler(
+        scheme="device://",
+        unique_scheme="darwin://",
+        sync_cls=DarwinSerial,
+        async_transport_cls=DarwinSerialTransport,
+        list_serial_ports_func=darwin_list_serial_ports,
+        weight=3,
+        strip_uri_scheme=True,
+    )

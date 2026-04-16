@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import sys
-
-if sys.platform != "linux" and not os.environ.get("SPHINX_BUILD"):
-    raise ImportError("serial_linux is only supported on Linux")
-
 import array
 from collections.abc import Iterator
 from contextlib import suppress
@@ -16,6 +10,7 @@ import errno
 import fcntl
 import logging
 from pathlib import Path
+import sys
 import termios
 from typing import Any
 
@@ -328,12 +323,13 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
     return results
 
 
-register_uri_handler(
-    scheme="device://",
-    unique_scheme="linux://",
-    sync_cls=LinuxSerial,
-    async_transport_cls=LinuxSerialTransport,
-    list_serial_ports_func=linux_list_serial_ports,
-    weight=3,
-    strip_uri_scheme=True,
-)
+if sys.platform == "linux":
+    register_uri_handler(
+        scheme="device://",
+        unique_scheme="linux://",
+        sync_cls=LinuxSerial,
+        async_transport_cls=LinuxSerialTransport,
+        list_serial_ports_func=linux_list_serial_ports,
+        weight=3,
+        strip_uri_scheme=True,
+    )
