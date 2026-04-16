@@ -36,7 +36,7 @@ class RegisteredUriHandler:
     weight: int
     sync_cls: type[BaseSerial]
     async_transport_cls: type[BaseSerialTransport]
-    list_serial_ports_func: Callable[[], list[SerialPortInfo]] | None
+    list_serial_ports_func: Callable[[], list[SerialPortInfo]]
     strip_uri_scheme: bool
 
 
@@ -46,11 +46,39 @@ def register_uri_handler(
     unique_scheme: str,
     sync_cls: type[BaseSerial],
     async_transport_cls: type[BaseSerialTransport],
-    list_serial_ports_func: Callable[[], list[SerialPortInfo]] | None = None,
+    list_serial_ports_func: Callable[[], list[SerialPortInfo]],
     weight: int = 1,
     strip_uri_scheme: bool = False,
 ) -> Callable[[], None]:
-    """Register a URI handler."""
+    """Register a URI handler.
+
+    Call this at module import time to expose a new backend to
+    ``serial_for_url`` / ``create_serial_connection`` / ``open_serial_connection``.
+
+    Args:
+        scheme: Shared dispatch scheme. URLs with this scheme resolve to the
+            highest-weight handler registered under it.
+        unique_scheme: A scheme that uniquely identifies this handler. Must end
+            with ``://`` and must not collide with an existing registration.
+            Use this to address the handler directly.
+        sync_cls: Synchronous serial class, typically a subclass of
+            :class:`BaseSerial`.
+        async_transport_cls: Async transport class, typically a subclass of
+            :class:`BaseSerialTransport`.
+        list_serial_ports_func: Callable returning a list of :class:`SerialPortInfo`.
+        weight: Dispatch priority under ``scheme``. Higher wins.
+        strip_uri_scheme: If ``True``, the leading ``scheme`` / ``unique_scheme``
+            is removed before the URL is passed to the sync class. Set this when
+            the underlying class expects a bare device path rather than a URL.
+
+    Returns:
+        A callable that unregisters the handler.
+
+    Raises:
+        ValueError: if either scheme doesn't end with ``://`` or ``unique_scheme``
+            is already registered.
+
+    """
     if not scheme.endswith("://") or not unique_scheme.endswith("://"):
         raise ValueError(f"Schemes {scheme!r} and {unique_scheme!r} must end with ://")
 

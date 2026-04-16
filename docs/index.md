@@ -16,6 +16,7 @@ Each backend has protocol-specific options that can be passed as keyword argumen
 quickstart
 installation
 usage
+custom_uri_handlers
 api
 ```
 

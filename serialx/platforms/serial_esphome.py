@@ -29,6 +29,7 @@ from serialx.common import (
     ModemPins,
     Parity,
     PinState,
+    SerialPortInfo,
     StopBits,
     register_uri_handler,
 )
@@ -474,9 +475,15 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         return 0
 
 
+def esphome_list_serial_ports() -> list[SerialPortInfo]:
+    """List serial ports for sockets."""
+    return []
+
+
 register_uri_handler(
     scheme="esphome://",
     unique_scheme="esphome://",
     sync_cls=ESPHomeSerial,
     async_transport_cls=ESPHomeSerialTransport,
+    list_serial_ports_func=esphome_list_serial_ports,
 )
