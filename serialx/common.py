@@ -16,15 +16,11 @@ import io
 from pathlib import Path
 import time
 from types import TracebackType
-from typing import Any, Concatenate, ParamSpec, TypeVar, cast
+from typing import Any, Concatenate, NamedTuple, ParamSpec, TypeVar, cast
 import urllib.parse
 import warnings
 
 from typing_extensions import Buffer, Self
-
-_REGISTERED_URI_HANDLERS: defaultdict[
-    str, list[tuple[int, float, RegisteredUriHandler]]
-] = defaultdict(list)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -38,6 +34,17 @@ class RegisteredUriHandler:
     async_transport_cls: type[BaseSerialTransport]
     list_serial_ports_func: Callable[[], list[SerialPortInfo]]
     strip_uri_scheme: bool
+
+
+class _RegistryEntry(NamedTuple):
+    """Entry in `_REGISTERED_URI_HANDLERS`, ordered by (weight, insertion_time)."""
+
+    weight: int
+    insertion_time: float  # To avoid comparing `RegisteredUriHandler` objects
+    handler: RegisteredUriHandler
+
+
+_REGISTERED_URI_HANDLERS: defaultdict[str, list[_RegistryEntry]] = defaultdict(list)
 
 
 def register_uri_handler(
@@ -88,10 +95,10 @@ def register_uri_handler(
             f" already registered to {_REGISTERED_URI_HANDLERS[unique_scheme]}"
         )
 
-    item = (
-        weight,
-        time.monotonic(),  # To avoid comparing `RegisteredUriHandler` objects
-        RegisteredUriHandler(
+    item = _RegistryEntry(
+        weight=weight,
+        insertion_time=time.monotonic(),
+        handler=RegisteredUriHandler(
             scheme=scheme,
             unique_scheme=unique_scheme,
             weight=weight,
@@ -121,7 +128,7 @@ def get_uri_handler(uri: str) -> RegisteredUriHandler:
     handlers = _REGISTERED_URI_HANDLERS.get(scheme)
     if not handlers:
         raise UnknownUriScheme(f"No handler registered for URI scheme {scheme!r}")
-    return handlers[-1][2]
+    return handlers[-1].handler
 
 
 class SerialException(Exception):
