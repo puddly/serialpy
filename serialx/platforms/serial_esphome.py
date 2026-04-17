@@ -94,11 +94,16 @@ class ESPHomeSerial(BaseSerial):
         api: APIClient | None = None,
         port_name: str | None = None,
         port_instance: int | None = None,
+        key: str | None = None,
         password: str | None = None,
         noise_psk: str | None = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize ESPHome serial port."""
+        """Initialize ESPHome serial port.
+
+        ``key`` is an alias for ``noise_psk`` and maps to the same pre-shared key
+        used for Noise-encrypted connections. Passing both raises ``ValueError``.
+        """
         super().__init__(*args, **kwargs)
 
         if self._parity not in PARITY_MAP:
@@ -106,6 +111,9 @@ class ESPHomeSerial(BaseSerial):
 
         if self._stopbits not in STOP_BITS_MAP:
             raise UnsupportedSetting(f"Unsupported stop bits: {self._stopbits}")
+
+        if key and noise_psk:
+            raise ValueError("Both `key` and `noise_psk` cannot be provided")
 
         # This API is used by both the sync API and the async API. The sync API manages
         # a temporary event loop while the async one passes through its own.
@@ -117,7 +125,7 @@ class ESPHomeSerial(BaseSerial):
         self._port_name: str | None = port_name
         self._instance_id: int | None = port_instance
         self._password: str | None = password
-        self._noise_psk: str | None = noise_psk
+        self._noise_psk: str | None = key or noise_psk
         self._disconnect_api: bool = False
 
         self._read_buffer = bytearray()
@@ -169,14 +177,18 @@ class ESPHomeSerial(BaseSerial):
 
             if port_value.isdigit():
                 self._instance_id = int(port_value)
-            else:
+            elif not self._port_name:
                 self._port_name = port_value
 
             if "password" in params:
                 self._password = params["password"][0]
 
-            if "noise_psk" in params:
+            if "noise_psk" in params and "key" in params:
+                raise ValueError("Both `key` and `noise_psk` cannot be provided")
+            elif "noise_psk" in params:
                 self._noise_psk = params["noise_psk"][0]
+            elif "key" in params:
+                self._noise_psk = params["key"][0]
 
             self._api = aioesphomeapi.APIClient(
                 address=parsed.hostname,

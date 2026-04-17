@@ -21,6 +21,13 @@ api
 ```
 
 ```{toctree}
+:caption: How-to
+:hidden:
+
+how-to/esphome
+```
+
+```{toctree}
 :caption: Development
 :hidden:
 
