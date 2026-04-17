@@ -164,7 +164,7 @@ async def test_connect_encrypted_plaintext_to_server() -> None:
             url = (
                 f"esphome://{parsed.hostname}:{parsed.port}"
                 f"?port_name=Serial+Proxy+Left"
-                f"&noise_psk={noise_psk}"
+                f"&key={noise_psk}"
             )
 
             with pytest.raises(
@@ -182,3 +182,45 @@ async def test_connect_timeout_raises_timeout_error() -> None:
             await open_serial_connection(
                 url="esphome://192.0.2.1:6053?port_name=test", baudrate=115200
             )
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_noise_psk_key_alias() -> None:
+    """Test that connecting without encryption to an encrypted server raises."""
+    key = base64(b"A noise PSK 32 bytes in length..")
+
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(
+            socat_left,
+            socat_right,
+            noise_psk=key,
+        ) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            with pytest.raises(
+                ValueError, match="Both `key` and `noise_psk` cannot be provided"
+            ):
+                await open_serial_connection(
+                    url=f"esphome://{parsed.hostname}:{parsed.port}",
+                    noise_psk=key,
+                    key=key,
+                    baudrate=115200,
+                )
+
+            with pytest.raises(
+                ValueError, match="Both `key` and `noise_psk` cannot be provided"
+            ):
+                await open_serial_connection(
+                    url=f"esphome://{parsed.hostname}:{parsed.port}?key={key}&noise_psk={key}",
+                    noise_psk=key,
+                    key=key,
+                    baudrate=115200,
+                )
+
+            reader, writer = await open_serial_connection(
+                url=f"esphome://{parsed.hostname}:{parsed.port}",
+                noise_psk=key,  # alias
+                baudrate=115200,
+            )
+
+            writer.close()
+            await writer.wait_closed()

@@ -77,7 +77,7 @@ It can either create the API instance directly, for simplicity:
 from serialx import open_serial_connection
 
 reader, writer = await open_serial_connection(
-    url="esphome://192.168.1.42:6053/?port_name=Zigbee&noise_psk=...",
+    url="esphome://192.168.1.42:6053/?port_name=Zigbee&key=...",
     baudrate=115200,
 )
 ```
@@ -89,7 +89,7 @@ from serialx import open_serial_connection
 from serialx.platforms.serial_esphome import ESPHomeSerialTransport
 
 # An external API instance
-api = APIClient(address="192.168.1.42", port=6053, noise_psk="...", password=None)
+api = APIClient(address="192.168.1.42", port=6053, key="...", password=None)
 await api.connect(login=True)
 
 reader, writer = await open_serial_connection(
