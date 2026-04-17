@@ -59,8 +59,8 @@ def register_uri_handler(
 ) -> Callable[[], None]:
     """Register a URI handler.
 
-    Call this at module import time to expose a new backend to
-    ``serial_for_url`` / ``create_serial_connection`` / ``open_serial_connection``.
+    Expose a new backend to ``serial_for_url`` / ``create_serial_connection`` /
+    ``open_serial_connection``.
 
     Args:
         scheme: Shared dispatch scheme. URLs with this scheme resolve to the
