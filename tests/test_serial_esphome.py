@@ -213,8 +213,6 @@ async def test_noise_psk_key_alias() -> None:
                 await open_serial_connection(
                     url=f"esphome://{parsed.hostname}:{parsed.port}?key={key}&noise_psk={key}",
                     port_name="Serial Proxy Left",
-                    noise_psk=key,
-                    key=key,
                     baudrate=115200,
                 )
 
