@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import subprocess
@@ -141,6 +142,11 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
     return results
 
 
+async def async_freebsd_list_serial_ports() -> list[SerialPortInfo]:
+    """List serial ports on FreeBSD, async."""
+    return await asyncio.to_thread(freebsd_list_serial_ports)
+
+
 if sys.platform.startswith("freebsd"):
     register_uri_handler(
         scheme="device://",
@@ -148,6 +154,7 @@ if sys.platform.startswith("freebsd"):
         sync_cls=FreeBSDSerial,
         async_transport_cls=FreeBSDSerialTransport,
         list_serial_ports_func=freebsd_list_serial_ports,
+        async_list_serial_ports_func=async_freebsd_list_serial_ports,
         weight=3,
         strip_uri_scheme=True,
     )

@@ -7,7 +7,7 @@ import asyncio
 from asyncio import IncompleteReadError
 import bisect
 from collections import defaultdict
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 import dataclasses
 from enum import Enum
@@ -33,6 +33,7 @@ class RegisteredUriHandler:
     sync_cls: type[BaseSerial]
     async_transport_cls: type[BaseSerialTransport]
     list_serial_ports_func: Callable[[], list[SerialPortInfo]]
+    async_list_serial_ports_func: Callable[[], Awaitable[list[SerialPortInfo]]]
     strip_uri_scheme: bool
 
 
@@ -54,6 +55,7 @@ def register_uri_handler(
     sync_cls: type[BaseSerial],
     async_transport_cls: type[BaseSerialTransport],
     list_serial_ports_func: Callable[[], list[SerialPortInfo]],
+    async_list_serial_ports_func: Callable[[], Awaitable[list[SerialPortInfo]]],
     weight: int = 1,
     strip_uri_scheme: bool = False,
 ) -> Callable[[], None]:
@@ -73,6 +75,8 @@ def register_uri_handler(
         async_transport_cls: Async transport class, typically a subclass of
             :class:`BaseSerialTransport`.
         list_serial_ports_func: Callable returning a list of :class:`SerialPortInfo`.
+        async_list_serial_ports_func: Async callable returning a list of
+            :class:`SerialPortInfo`.
         weight: Dispatch priority under ``scheme``. Higher wins.
         strip_uri_scheme: If ``True``, the leading ``scheme`` / ``unique_scheme``
             is removed before the URL is passed to the sync class. Set this when
@@ -105,6 +109,7 @@ def register_uri_handler(
             sync_cls=sync_cls,
             async_transport_cls=async_transport_cls,
             list_serial_ports_func=list_serial_ports_func,
+            async_list_serial_ports_func=async_list_serial_ports_func,
             strip_uri_scheme=strip_uri_scheme,
         ),
     )

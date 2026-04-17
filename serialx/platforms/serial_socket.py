@@ -359,12 +359,18 @@ def socket_list_serial_ports() -> list[SerialPortInfo]:
     return []
 
 
+async def async_socket_list_serial_ports() -> list[SerialPortInfo]:
+    """List serial ports for sockets, async."""
+    return []
+
+
 register_uri_handler(
     scheme="socket://",
     unique_scheme="socket://",
     sync_cls=SocketSerial,
     async_transport_cls=SocketSerialTransport,
     list_serial_ports_func=socket_list_serial_ports,
+    async_list_serial_ports_func=async_socket_list_serial_ports,
 )
 register_uri_handler(
     scheme="tcp://",
@@ -372,4 +378,5 @@ register_uri_handler(
     sync_cls=SocketSerial,
     async_transport_cls=SocketSerialTransport,
     list_serial_ports_func=socket_list_serial_ports,
+    async_list_serial_ports_func=async_socket_list_serial_ports,
 )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import array
+import asyncio
 import errno
 import fcntl
 import logging
@@ -69,7 +70,7 @@ class DarwinSerialTransport(ExtendedPosixSerialTransport):
 
 
 def darwin_list_serial_ports() -> list[SerialPortInfo]:
-    """List available serial ports on macOS using native IOKit via Rust."""
+    """List available serial ports on macOS."""
     return [
         SerialPortInfo(
             device=port.device,
@@ -87,6 +88,11 @@ def darwin_list_serial_ports() -> list[SerialPortInfo]:
     ]
 
 
+async def async_darwin_list_serial_ports() -> list[SerialPortInfo]:
+    """List available serial ports on macOS, async."""
+    return await asyncio.to_thread(darwin_list_serial_ports)
+
+
 if sys.platform == "darwin":
     register_uri_handler(
         scheme="device://",
@@ -94,6 +100,7 @@ if sys.platform == "darwin":
         sync_cls=DarwinSerial,
         async_transport_cls=DarwinSerialTransport,
         list_serial_ports_func=darwin_list_serial_ports,
+        async_list_serial_ports_func=async_darwin_list_serial_ports,
         weight=3,
         strip_uri_scheme=True,
     )

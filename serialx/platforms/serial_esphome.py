@@ -488,8 +488,48 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
 
 def esphome_list_serial_ports() -> list[SerialPortInfo]:
-    """List serial ports for sockets."""
+    """List serial ports for ESPhome."""
     return []
+
+
+async def async_esphome_list_serial_ports(
+    *, api: APIClient | None = None
+) -> list[SerialPortInfo]:
+    """List serial ports for ESPhome."""
+    if api is None:
+        return []
+
+    device_info = await api.device_info()
+    ports = []
+
+    for proxy in device_info.serial_proxies:
+        url = urllib.parse.urlunparse(
+            urllib.parse.ParseResult(
+                scheme="esphome",
+                netloc=f"{api.address}:{api.port}",
+                path="/",
+                params="",
+                query=urllib.parse.urlencode({"port_name": proxy.name}),
+                fragment="",
+            )
+        )
+
+        ports.append(
+            SerialPortInfo(
+                device=url,
+                resolved_device=url,
+                vid=None,
+                pid=None,
+                serial_number=device_info.mac_address,
+                manufacturer=device_info.manufacturer,
+                product=device_info.model,
+                bcd_device=None,
+                interface_description=proxy.name,
+                interface_num=None,
+            )
+        )
+
+    return ports
 
 
 register_uri_handler(
@@ -498,4 +538,5 @@ register_uri_handler(
     sync_cls=ESPHomeSerial,
     async_transport_cls=ESPHomeSerialTransport,
     list_serial_ports_func=esphome_list_serial_ports,
+    async_list_serial_ports_func=async_esphome_list_serial_ports,
 )

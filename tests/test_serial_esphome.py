@@ -14,10 +14,12 @@ from base64 import b64encode
 from unittest.mock import patch
 import urllib.parse
 
-from serialx import SerialException, open_serial_connection
+from serialx import SerialException, SerialPortInfo, open_serial_connection
 from serialx.platforms.serial_esphome import (
     ESPHOME_DEFAULT_PORT,
     ESPHomeSerialTransport,
+    async_esphome_list_serial_ports,
+    esphome_list_serial_ports,
 )
 
 from .common import ESPHOME_HOST_BINARY, create_esphome_pair, create_socat_pair
@@ -225,3 +227,48 @@ async def test_noise_psk_key_alias() -> None:
 
             writer.close()
             await writer.wait_closed()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_esphome_list_serial_ports() -> None:
+    """Test listing ESPHome serial ports."""
+    assert esphome_list_serial_ports() == []
+    assert await async_esphome_list_serial_ports() == []
+
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            api = APIClient(
+                address=parsed.hostname,
+                port=parsed.port or ESPHOME_DEFAULT_PORT,
+                password=None,
+            )
+            await api.connect(login=True)
+
+            serial_ports = await async_esphome_list_serial_ports(api=api)
+            assert serial_ports == [
+                SerialPortInfo(
+                    device=f"esphome://{parsed.netloc}/?port_name=Serial+Proxy+Left",
+                    resolved_device=f"esphome://{parsed.netloc}/?port_name=Serial+Proxy+Left",
+                    vid=None,
+                    pid=None,
+                    serial_number="98:35:69:AB:F6:79",
+                    manufacturer="Host",
+                    product="host",
+                    bcd_device=None,
+                    interface_description="Serial Proxy Left",
+                    interface_num=None,
+                ),
+                SerialPortInfo(
+                    device=f"esphome://{parsed.netloc}/?port_name=Serial+Proxy+Right",
+                    resolved_device=f"esphome://{parsed.netloc}/?port_name=Serial+Proxy+Right",
+                    vid=None,
+                    pid=None,
+                    serial_number="98:35:69:AB:F6:79",
+                    manufacturer="Host",
+                    product="host",
+                    bcd_device=None,
+                    interface_description="Serial Proxy Right",
+                    interface_num=None,
+                ),
+            ]

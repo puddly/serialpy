@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import array
+import asyncio
 from collections.abc import Iterator
 from contextlib import suppress
 import ctypes
@@ -323,6 +324,11 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
     return results
 
 
+async def async_linux_list_serial_ports() -> list[SerialPortInfo]:
+    """List serial ports on Linux, async."""
+    return await asyncio.to_thread(linux_list_serial_ports)
+
+
 if sys.platform == "linux":
     register_uri_handler(
         scheme="device://",
@@ -330,6 +336,7 @@ if sys.platform == "linux":
         sync_cls=LinuxSerial,
         async_transport_cls=LinuxSerialTransport,
         list_serial_ports_func=linux_list_serial_ports,
+        async_list_serial_ports_func=async_linux_list_serial_ports,
         weight=3,
         strip_uri_scheme=True,
     )

@@ -12,9 +12,14 @@ from serialx.common import (
     _REGISTERED_URI_HANDLERS,
     BaseSerial,
     BaseSerialTransport,
+    SerialPortInfo,
     UnknownUriScheme,
     get_uri_handler,
 )
+
+
+async def _async_list_serial_ports() -> list[SerialPortInfo]:
+    return []
 
 
 @pytest.fixture(autouse=True)
@@ -49,6 +54,7 @@ def test_register_uri_handler_validation() -> None:
             sync_cls=BaseSerial,  # type:ignore[type-abstract]
             async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
             list_serial_ports_func=list,
+            async_list_serial_ports_func=_async_list_serial_ports,
         )
 
     with pytest.raises(ValueError, match="must end with"):
@@ -58,6 +64,7 @@ def test_register_uri_handler_validation() -> None:
             sync_cls=BaseSerial,  # type:ignore[type-abstract]
             async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
             list_serial_ports_func=list,
+            async_list_serial_ports_func=_async_list_serial_ports,
         )
 
     unregister = register_uri_handler(
@@ -66,6 +73,7 @@ def test_register_uri_handler_validation() -> None:
         sync_cls=BaseSerial,  # type:ignore[type-abstract]
         async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
         list_serial_ports_func=list,
+        async_list_serial_ports_func=_async_list_serial_ports,
     )
 
     try:
@@ -76,6 +84,7 @@ def test_register_uri_handler_validation() -> None:
                 sync_cls=BaseSerial,  # type:ignore[type-abstract]
                 async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
                 list_serial_ports_func=list,
+                async_list_serial_ports_func=_async_list_serial_ports,
             )
     finally:
         unregister()
@@ -92,6 +101,7 @@ def test_register_uri_handler_dispatch_and_unregister() -> None:
         sync_cls=mock_sync_cls,
         async_transport_cls=mock_async_transport_cls,
         list_serial_ports_func=list,
+        async_list_serial_ports_func=_async_list_serial_ports,
     )
 
     for url in ("test-unique-2://", "test-shared-2://host/path"):
