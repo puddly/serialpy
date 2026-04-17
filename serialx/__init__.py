@@ -16,6 +16,7 @@ from .common import (
     StopBits,
     UnsupportedSetting,
     get_serial_classes,
+    register_uri_handler,
 )
 from .compat import (
     CR,
@@ -39,6 +40,7 @@ __all__ = [
     "get_serial_classes",
     "list_serial_ports",
     "open_serial_connection",
+    "register_uri_handler",
     "serial_for_url",
     "ModemPins",
     "Parity",

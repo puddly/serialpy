@@ -10,10 +10,11 @@ import errno
 import fcntl
 import logging
 from pathlib import Path
+import sys
 import termios
 from typing import Any
 
-from ..common import Parity, SerialPortInfo, UnsupportedSetting
+from ..common import Parity, SerialPortInfo, UnsupportedSetting, register_uri_handler
 from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -320,3 +321,15 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
         results.append(info)
 
     return results
+
+
+if sys.platform == "linux":
+    register_uri_handler(
+        scheme="device://",
+        unique_scheme="linux://",
+        sync_cls=LinuxSerial,
+        async_transport_cls=LinuxSerialTransport,
+        list_serial_ports_func=linux_list_serial_ports,
+        weight=3,
+        strip_uri_scheme=True,
+    )

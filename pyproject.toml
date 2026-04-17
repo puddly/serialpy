@@ -157,6 +157,7 @@ enable_error_code = [
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disable_error_code = [
+    "abstract",
     "no-untyped-call",
     "no-untyped-def",
     "redundant-expr",

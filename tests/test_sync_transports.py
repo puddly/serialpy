@@ -138,7 +138,7 @@ def test_sync_random_large(
         baudrate > 230400
         and sys.platform == "darwin"
         and (
-            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            serial_pair.uri_scheme in ("posix://", "extended-posix://")
             or SerialBackend.SER2NET in serial_pair.backends
         )
     ):
@@ -188,7 +188,7 @@ def test_sync_buffered_writes_then_read(serial_pair: SerialPair) -> None:
 def test_sync_large_payload(serial_pair: SerialPair, payload_size: int) -> None:
     """Test large payload transmission."""
     if sys.platform == "darwin" and (
-        serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+        serial_pair.uri_scheme in ("posix://", "extended-posix://")
         or SerialBackend.SER2NET in serial_pair.backends
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
@@ -227,7 +227,7 @@ def test_sync_sustained_throughput(
         baudrate > 230400
         and sys.platform == "darwin"
         and (
-            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            serial_pair.uri_scheme in ("posix://", "extended-posix://")
             or SerialBackend.SER2NET in serial_pair.backends
         )
     ):
@@ -255,7 +255,7 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
         baudrate > 230400
         and sys.platform == "darwin"
         and (
-            serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial")
+            serial_pair.uri_scheme in ("posix://", "extended-posix://")
             or SerialBackend.SER2NET in serial_pair.backends
         )
     ):
@@ -268,7 +268,7 @@ def test_sync_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> None:
 
 def test_sync_nonstandard_baudrate(serial_pair: SerialPair) -> None:
     """Test that a non-standard baudrate (no termios constant) is accepted."""
-    if serial_pair.serial_class in ("PosixSerial", "ExtendedPosixSerial"):
+    if serial_pair.uri_scheme in ("posix://", "extended-posix://"):
         pytest.skip("Base POSIX backends only support standard baudrates")
 
     if sys.platform == "darwin" and SerialBackend.SER2NET in serial_pair.backends:
@@ -296,7 +296,7 @@ def test_sync_valid_parity(serial_pair: SerialPair, parity: Parity) -> None:
         Parity.SPACE,
     ):
         pytest.xfail("ESPHome backend does not support MARK/SPACE parity")
-    if serial_pair.serial_class not in ("LinuxSerial", "Win32Serial") and parity in (
+    if serial_pair.uri_scheme not in ("linux://", "windows://") and parity in (
         Parity.MARK,
         Parity.SPACE,
     ):
@@ -330,7 +330,7 @@ def test_sync_valid_stopbits(
     ) and expected is StopBits.ONE_POINT_FIVE:
         pytest.xfail("ESPHome backend does not support 1.5 stop bits")
     if (
-        serial_pair.serial_class not in ("Win32Serial",)
+        serial_pair.uri_scheme not in ("windows://",)
         and expected is StopBits.ONE_POINT_FIVE
     ):
         pytest.skip("1.5 stop bits only supported on Win32")
@@ -371,7 +371,7 @@ def test_sync_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
 @pytest.mark.parametrize("rtscts", [True, False])
 def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
     """Test that rtscts setting is accepted."""
-    if rtscts and serial_pair.serial_class == "PosixSerial":
+    if rtscts and serial_pair.uri_scheme == "posix://":
         pytest.xfail("Strict POSIX backend does not support RTS/CTS flow control")
 
     # Open both sides: on com0com, opening right asserts DTR which raises CTS on left
@@ -871,11 +871,11 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
 @pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_deassert_on_open(serial_pair: SerialPair) -> None:
     """Test RTS/CTS deassertion on open."""
-    if serial_pair.serial_class in (
-        "LinuxSerial",
-        "DarwinSerial",
-        "PosixSerial",
-        "ExtendedPosixSerial",
+    if serial_pair.uri_scheme in (
+        "linux://",
+        "darwin://",
+        "posix://",
+        "extended-posix://",
     ):
         pytest.skip("POSIX backends do not support deasserting pins on open")
 
@@ -914,11 +914,11 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
 @pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS)
 def test_hang_up_on_close(serial_pair: SerialPair) -> None:
     """Test RTS/CTS hang up on close."""
-    if serial_pair.serial_class in (
-        "LinuxSerial",
-        "DarwinSerial",
-        "PosixSerial",
-        "ExtendedPosixSerial",
+    if serial_pair.uri_scheme in (
+        "linux://",
+        "darwin://",
+        "posix://",
+        "extended-posix://",
     ):
         pytest.skip("POSIX backends do not support deasserting pins on open")
 
@@ -979,11 +979,11 @@ def test_deassert_on_open_with_rtscts(
     expected_state: PinState,
 ) -> None:
     """Test interaction of rtsdtr_on_open with rtscts."""
-    if serial_pair.serial_class in (
-        "LinuxSerial",
-        "DarwinSerial",
-        "PosixSerial",
-        "ExtendedPosixSerial",
+    if serial_pair.uri_scheme in (
+        "linux://",
+        "darwin://",
+        "posix://",
+        "extended-posix://",
     ):
         pytest.skip("POSIX backends do not support deasserting pins on open")
 

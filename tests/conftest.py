@@ -5,15 +5,13 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, Generator
 import contextlib
 import dataclasses
-import importlib
 import os
 import sys
-from unittest.mock import patch
+import urllib.parse
 
 import pytest
 
-import serialx
-import serialx.platforms
+from serialx.common import get_uri_handler
 from tests.common import (
     ESPHOME_HOST_BINARY,
     HUB4COM_BINARY,
@@ -33,12 +31,13 @@ from tests.common import (
 from tests.socket_relay import create_socket_pair
 
 
-def _get_posix_serial_classes() -> list[str]:
-    """Get extra POSIX serial class names to test on this platform.
+def _get_forced_posix_uri_schemes() -> list[str]:
+    """Get extra POSIX URI schemes to test on this platform.
 
-    On Linux (or any platform with a deeper class hierarchy), we also test
-    with the generic POSIX and extended POSIX backends by patching sys.platform
-    and is_extended_posix to force the fallback paths in serialx.platforms.
+    On Linux (or any platform with a deeper class hierarchy), we also test the
+    generic POSIX and extended POSIX backends by addressing the underlying
+    adapter with an explicit URI scheme so the registry dispatches to those
+    classes instead of the platform-native handler.
     """
     try:
         import termios  # noqa: F401, PLC0415
@@ -49,10 +48,10 @@ def _get_posix_serial_classes() -> list[str]:
         is_extended_posix,
     )
 
-    result = ["PosixSerial"]
+    result = ["posix://"]
 
     if is_extended_posix():
-        result.append("ExtendedPosixSerial")
+        result.append("extended-posix://")
 
     return result
 
@@ -190,9 +189,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 specs.append(adapter_spec.chain(SerialBackend.ESPHOME_HOST))
 
         # For POSIX, we should test base classes on platforms that extend them
-        for cls_name in _get_posix_serial_classes():
+        for uri_scheme in _get_forced_posix_uri_schemes():
             for adapter in adapters:
-                specs.append(dataclasses.replace(adapter, serial_class=cls_name))
+                specs.append(dataclasses.replace(adapter, uri_scheme=uri_scheme))
 
         # Build the pytest parameter groups to limit concurrency to underlying resources
         params = []
@@ -213,8 +212,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
 
             param_id = "+".join(backends)
 
-            if spec.serial_class:
-                param_id += f"({spec.serial_class})"
+            if spec.uri_scheme:
+                param_id += f"({spec.uri_scheme})"
 
             params.append(pytest.param(spec, marks=marks, id=param_id))
 
@@ -280,18 +279,17 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     assert spec.original_left is not None
     assert spec.original_right is not None
 
-    # Check if a serial class override is requested (e.g. "PosixSerial")
-    if spec.serial_class:
-        with (
-            patch("sys.platform", "unknown"),
-            patch(
-                "serialx.platforms.serial_extended_posix.is_extended_posix",
-                return_value=(spec.serial_class == "ExtendedPosixSerial"),
-            ),
-        ):
-            importlib.reload(serialx.platforms)
-
-        assert serialx.platforms.Serial.__name__ == spec.serial_class
+    # If a URI scheme override is requested (e.g. "posix://"), rewrite the raw
+    # device paths to route through that handler. Paths that are already URIs
+    # (e.g. rfc2217://) are left alone.
+    if spec.uri_scheme:
+        if not urllib.parse.urlparse(left).scheme:
+            left = spec.uri_scheme + left
+        if not urllib.parse.urlparse(right).scheme:
+            right = spec.uri_scheme + right
+        effective_scheme = spec.uri_scheme
+    else:
+        effective_scheme = get_uri_handler("device://").unique_scheme
 
     # Finally, emit the spec
     try:
@@ -302,13 +300,10 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             original_right=spec.original_right,
             backends=spec.backends,
             quirks=spec.quirks,
-            serial_class=serialx.platforms.Serial.__name__,
+            uri_scheme=effective_scheme,
         )
     finally:
         stack.close()
-
-        if spec.serial_class:
-            importlib.reload(serialx.platforms)
 
 
 def _snapshot_fds() -> dict[int, str]:

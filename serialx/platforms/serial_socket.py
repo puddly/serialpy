@@ -12,7 +12,15 @@ import urllib.parse
 
 from typing_extensions import Buffer
 
-from serialx.common import BaseSerial, BaseSerialTransport, ModemPins, Parity, StopBits
+from serialx.common import (
+    BaseSerial,
+    BaseSerialTransport,
+    ModemPins,
+    Parity,
+    SerialPortInfo,
+    StopBits,
+    register_uri_handler,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -344,3 +352,24 @@ class SocketSerialTransport(BaseSerialTransport):
             if self._tcp_transport is not None
             else False
         )
+
+
+def socket_list_serial_ports() -> list[SerialPortInfo]:
+    """List serial ports for sockets."""
+    return []
+
+
+register_uri_handler(
+    scheme="socket://",
+    unique_scheme="socket://",
+    sync_cls=SocketSerial,
+    async_transport_cls=SocketSerialTransport,
+    list_serial_ports_func=socket_list_serial_ports,
+)
+register_uri_handler(
+    scheme="tcp://",
+    unique_scheme="tcp://",
+    sync_cls=SocketSerial,
+    async_transport_cls=SocketSerialTransport,
+    list_serial_ports_func=socket_list_serial_ports,
+)

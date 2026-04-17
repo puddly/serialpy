@@ -28,6 +28,7 @@ from ..common import (
     SerialPortInfo,
     StopBits,
     UnsupportedSetting,
+    register_uri_handler,
 )
 from ..descriptor_transport import DescriptorTransport
 
@@ -527,3 +528,13 @@ class PosixSerialTransport(DescriptorTransport):
 def posix_list_serial_ports() -> list[SerialPortInfo]:
     """List available serial ports on POSIX."""
     return []
+
+
+register_uri_handler(
+    scheme="device://",
+    unique_scheme="posix://",
+    sync_cls=PosixSerial,
+    async_transport_cls=PosixSerialTransport,
+    list_serial_ports_func=posix_list_serial_ports,
+    strip_uri_scheme=True,
+)

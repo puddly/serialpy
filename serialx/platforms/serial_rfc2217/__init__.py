@@ -24,9 +24,11 @@ from ...common import (
     Parity,
     PinState,
     SerialException,
+    SerialPortInfo,
     StopBits,
     UnsupportedSetting,
     measure_time,
+    register_uri_handler,
 )
 from ..serial_socket import SocketSerial
 from .types import (
@@ -1037,3 +1039,17 @@ class RFC2217SerialTransport(BaseSerialTransport):
             return False
 
         return self._tcp_transport.can_write_eof()
+
+
+def rfc2217_list_serial_ports() -> list[SerialPortInfo]:
+    """List serial ports for sockets."""
+    return []
+
+
+register_uri_handler(
+    scheme="rfc2217://",
+    unique_scheme="rfc2217://",
+    sync_cls=RFC2217Serial,
+    async_transport_cls=RFC2217SerialTransport,
+    list_serial_ports_func=rfc2217_list_serial_ports,
+)
