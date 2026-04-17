@@ -177,7 +177,7 @@ class ESPHomeSerial(BaseSerial):
 
             if port_value.isdigit():
                 self._instance_id = int(port_value)
-            else:
+            elif not self._port_name:
                 self._port_name = port_value
 
             if "password" in params:
