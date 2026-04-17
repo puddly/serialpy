@@ -53,6 +53,10 @@ STOP_BITS_MAP = {
 }
 
 
+class InvalidSettingsError(SerialException):
+    """Raised when the provided settings are invalid."""
+
+
 def translate_esphome_errors(
     func: Callable[_P, Coroutine[Any, Any, _T]],
 ) -> Callable[_P, Coroutine[Any, Any, _T]]:
@@ -140,6 +144,14 @@ class ESPHomeSerial(BaseSerial):
         assert self._loop is not None
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 
+    def _maybe_start_new_event_loop(self) -> None:
+        """Start a new event loop in a background thread if one isn't set."""
+        if self._loop is not None:
+            return
+        self._loop = asyncio.new_event_loop()
+        self._loop_thread = threading.Thread(target=self._loop.run_forever)
+        self._loop_thread.start()
+
     def _on_data(self, msg: SerialProxyDataReceived) -> None:
         if msg.instance == self._instance_id:
             self._read_buffer.extend(msg.data)
@@ -147,10 +159,7 @@ class ESPHomeSerial(BaseSerial):
 
     def _open(self) -> None:
         """Open the serial port."""
-        if self._loop is None:
-            self._loop = asyncio.new_event_loop()
-            self._loop_thread = threading.Thread(target=self._loop.run_forever)
-            self._loop_thread.start()
+        self._maybe_start_new_event_loop()
 
         self._read_event = asyncio.Event()
         self._call_on_loop(self._async_open())
@@ -165,7 +174,11 @@ class ESPHomeSerial(BaseSerial):
     async def _async_open(self) -> None:
         # Only connect if the API was not passed in externally
         if self._api is None:
-            assert self._path is not None
+            if self._path is None:
+                raise InvalidSettingsError(
+                    "Cannot open a connection without a URI or a API instance"
+                )
+
             parsed = urllib.parse.urlparse(str(self._path))
             params = urllib.parse.parse_qs(parsed.query)
 
@@ -202,6 +215,45 @@ class ESPHomeSerial(BaseSerial):
         else:
             # Don't disconnect an externally-passed API
             self._disconnect_api = False
+
+    @translate_esphome_errors
+    async def _async_list_serial_ports(self) -> list[SerialPortInfo]:
+        assert self._api is not None
+
+        device_info = await self._api.device_info()
+        ports = []
+
+        for proxy in device_info.serial_proxies:
+            url = urllib.parse.urlunparse(
+                urllib.parse.ParseResult(
+                    scheme="esphome",
+                    netloc=f"{self._api.address}:{self._api.port}",
+                    path="/",
+                    params="",
+                    query=urllib.parse.urlencode({"port_name": proxy.name}),
+                    fragment="",
+                )
+            )
+
+            ports.append(
+                SerialPortInfo(
+                    device=url,
+                    resolved_device=url,
+                    vid=None,
+                    pid=None,
+                    serial_number=device_info.mac_address,
+                    manufacturer=device_info.manufacturer,
+                    product=device_info.model,
+                    bcd_device=None,
+                    interface_description=proxy.name,
+                    interface_num=None,
+                )
+            )
+
+        return ports
+
+    def _list_serial_ports(self) -> list[SerialPortInfo]:
+        return self._call_on_loop(self._async_list_serial_ports())
 
     @translate_esphome_errors
     async def _async_subscribe(self) -> None:
@@ -487,49 +539,38 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         return 0
 
 
-def esphome_list_serial_ports() -> list[SerialPortInfo]:
+def esphome_list_serial_ports(*args: Any, **kwargs: Any) -> list[SerialPortInfo]:
     """List serial ports for ESPhome."""
-    return []
+    serial = ESPHomeSerial(*args, **kwargs)
+    serial._maybe_start_new_event_loop()
+
+    try:
+        try:
+            serial._call_on_loop(serial._async_open())
+        except InvalidSettingsError:
+            return []
+        return serial._list_serial_ports()
+    finally:
+        serial._close()
 
 
 async def async_esphome_list_serial_ports(
-    *, api: APIClient | None = None
+    *args: Any, **kwargs: Any
 ) -> list[SerialPortInfo]:
     """List serial ports for ESPhome."""
-    if api is None:
+    serial = ESPHomeSerial(*args, **kwargs)
+
+    try:
+        await serial._async_open()
+    except InvalidSettingsError:
         return []
 
-    device_info = await api.device_info()
-    ports = []
-
-    for proxy in device_info.serial_proxies:
-        url = urllib.parse.urlunparse(
-            urllib.parse.ParseResult(
-                scheme="esphome",
-                netloc=f"{api.address}:{api.port}",
-                path="/",
-                params="",
-                query=urllib.parse.urlencode({"port_name": proxy.name}),
-                fragment="",
-            )
-        )
-
-        ports.append(
-            SerialPortInfo(
-                device=url,
-                resolved_device=url,
-                vid=None,
-                pid=None,
-                serial_number=device_info.mac_address,
-                manufacturer=device_info.manufacturer,
-                product=device_info.model,
-                bcd_device=None,
-                interface_description=proxy.name,
-                interface_num=None,
-            )
-        )
-
-    return ports
+    try:
+        return await serial._async_list_serial_ports()
+    finally:
+        if serial._disconnect_api and serial._api is not None:
+            await serial._api.disconnect()
+            serial._api = None
 
 
 register_uri_handler(
