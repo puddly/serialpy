@@ -23,6 +23,22 @@ import warnings
 from typing_extensions import Buffer, Self
 
 
+class Platform(str, Enum):
+    """Built-in platform name."""
+
+    DEVICE = "device"
+
+    POSIX = "posix"
+    EXTENDED_POSIX = "extended_posix"
+    FREEBSD = "freebsd"
+    LINUX = "linux"
+    DARWIN = "darwin"
+    WIN32 = "win32"
+    SOCKET = "socket"
+    RFC2217 = "rfc2217"
+    ESPHOME = "esphome"
+
+
 @dataclasses.dataclass(frozen=True)
 class RegisteredUriHandler:
     """A URI handler registration entry."""
@@ -32,8 +48,8 @@ class RegisteredUriHandler:
     weight: int
     sync_cls: type[BaseSerial]
     async_transport_cls: type[BaseSerialTransport]
-    list_serial_ports_func: Callable[[], list[SerialPortInfo]]
-    async_list_serial_ports_func: Callable[[], Awaitable[list[SerialPortInfo]]]
+    list_serial_ports_func: Callable[..., list[SerialPortInfo]]
+    async_list_serial_ports_func: Callable[..., Awaitable[list[SerialPortInfo]]]
     strip_uri_scheme: bool
 
 
@@ -54,8 +70,8 @@ def register_uri_handler(
     unique_scheme: str,
     sync_cls: type[BaseSerial],
     async_transport_cls: type[BaseSerialTransport],
-    list_serial_ports_func: Callable[[], list[SerialPortInfo]],
-    async_list_serial_ports_func: Callable[[], Awaitable[list[SerialPortInfo]]],
+    list_serial_ports_func: Callable[..., list[SerialPortInfo]],
+    async_list_serial_ports_func: Callable[..., Awaitable[list[SerialPortInfo]]],
     weight: int = 1,
     strip_uri_scheme: bool = False,
 ) -> Callable[[], None]:
@@ -1033,3 +1049,24 @@ class SerialPortInfo:
             stacklevel=2,
         )
         return self.product
+
+
+def list_serial_ports(
+    platform: Platform | str = Platform.DEVICE, **kwargs: Any
+) -> list[SerialPortInfo]:
+    """List serial ports, defaulting to the system platform."""
+    handler = get_uri_handler(platform + "://")
+    return handler.list_serial_ports_func(**kwargs)
+
+
+async def async_list_serial_ports(
+    platform: Platform | str = Platform.DEVICE, **kwargs: Any
+) -> list[SerialPortInfo]:
+    """List serial ports (async), defaulting to the system platform."""
+    handler = get_uri_handler(platform + "://")
+    return await handler.async_list_serial_ports_func(**kwargs)
+
+
+def serial_for_url(url: str, *args: Any, **kwargs: Any) -> BaseSerial:
+    """Create the appropriate serial port subclass for the given URL."""
+    return BaseSerial.from_url(url, *args, **kwargs)

@@ -11,12 +11,16 @@ from .common import (
     ModemPins,
     Parity,
     PinState,
+    Platform,
     SerialException,
     SerialPortInfo,
     StopBits,
     UnsupportedSetting,
+    async_list_serial_ports,
     get_serial_classes,
+    list_serial_ports,
     register_uri_handler,
+    serial_for_url,
 )
 from .compat import (
     CR,
@@ -30,21 +34,20 @@ from .compat import (
     STOPBITS_TWO,
     SerialTimeoutException,
 )
-from .platforms import Serial, SerialTransport, list_serial_ports
-
-# Backwards compatibility export
-serial_for_url = Serial.from_url
+from .platforms import Serial, SerialTransport
 
 __all__ = [
     "create_serial_connection",
     "get_serial_classes",
     "list_serial_ports",
+    "async_list_serial_ports",
     "open_serial_connection",
     "register_uri_handler",
     "serial_for_url",
     "ModemPins",
     "Parity",
     "PinState",
+    "Platform",
     "BaseSerial",
     "BaseSerialTransport",
     "Serial",

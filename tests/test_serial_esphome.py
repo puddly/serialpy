@@ -14,12 +14,17 @@ from base64 import b64encode
 from unittest.mock import patch
 import urllib.parse
 
-from serialx import SerialException, SerialPortInfo, open_serial_connection
+from serialx import (
+    Platform,
+    SerialException,
+    SerialPortInfo,
+    async_list_serial_ports,
+    list_serial_ports,
+    open_serial_connection,
+)
 from serialx.platforms.serial_esphome import (
     ESPHOME_DEFAULT_PORT,
     ESPHomeSerialTransport,
-    async_esphome_list_serial_ports,
-    esphome_list_serial_ports,
 )
 
 from .common import ESPHOME_HOST_BINARY, create_esphome_pair, create_socat_pair
@@ -232,8 +237,8 @@ async def test_noise_psk_key_alias() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_esphome_list_serial_ports() -> None:
     """Test listing ESPHome serial ports."""
-    assert esphome_list_serial_ports() == []
-    assert await async_esphome_list_serial_ports() == []
+    assert list_serial_ports(Platform.ESPHOME) == []
+    assert await async_list_serial_ports(Platform.ESPHOME) == []
 
     with create_socat_pair() as (socat_left, socat_right):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
@@ -245,7 +250,7 @@ async def test_esphome_list_serial_ports() -> None:
             )
             await api.connect(login=True)
 
-            serial_ports = await async_esphome_list_serial_ports(api=api)
+            serial_ports = await async_list_serial_ports(Platform.ESPHOME, api=api)
             assert serial_ports == [
                 SerialPortInfo(
                     device=f"esphome://{parsed.netloc}/?port_name=Serial+Proxy+Left",
