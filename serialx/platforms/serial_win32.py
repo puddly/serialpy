@@ -740,11 +740,17 @@ def win32_list_serial_ports() -> list[SerialPortInfo]:
     ]
 
 
+async def async_win32_list_serial_ports() -> list[SerialPortInfo]:
+    """List available serial ports on Windows, async."""
+    return await asyncio.to_thread(win32_list_serial_ports)
+
+
 register_uri_handler(
     scheme="device://",
     unique_scheme="windows://",
     sync_cls=Win32Serial,
     async_transport_cls=Win32SerialTransport,
     list_serial_ports_func=win32_list_serial_ports,
+    async_list_serial_ports_func=async_win32_list_serial_ports,
     strip_uri_scheme=True,
 )

@@ -10,11 +10,19 @@ except ImportError:
         allow_module_level=True,
     )
 
+import asyncio
 from base64 import b64encode
 from unittest.mock import patch
 import urllib.parse
 
-from serialx import SerialException, open_serial_connection
+from serialx import (
+    Platform,
+    SerialException,
+    SerialPortInfo,
+    async_list_serial_ports,
+    list_serial_ports,
+    open_serial_connection,
+)
 from serialx.platforms.serial_esphome import (
     ESPHOME_DEFAULT_PORT,
     ESPHomeSerialTransport,
@@ -225,3 +233,101 @@ async def test_noise_psk_key_alias() -> None:
 
             writer.close()
             await writer.wait_closed()
+
+
+def _expected_esphome_ports(netloc: str) -> list[SerialPortInfo]:
+    return [
+        SerialPortInfo(
+            device=f"esphome://{netloc}/?port_name=Serial+Proxy+Left",
+            resolved_device=f"esphome://{netloc}/?port_name=Serial+Proxy+Left",
+            vid=None,
+            pid=None,
+            serial_number="98:35:69:AB:F6:79",
+            manufacturer="Host",
+            product="host",
+            bcd_device=None,
+            interface_description="Serial Proxy Left",
+            interface_num=None,
+        ),
+        SerialPortInfo(
+            device=f"esphome://{netloc}/?port_name=Serial+Proxy+Right",
+            resolved_device=f"esphome://{netloc}/?port_name=Serial+Proxy+Right",
+            vid=None,
+            pid=None,
+            serial_number="98:35:69:AB:F6:79",
+            manufacturer="Host",
+            product="host",
+            bcd_device=None,
+            interface_description="Serial Proxy Right",
+            interface_num=None,
+        ),
+    ]
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_esphome_list_serial_ports() -> None:
+    """Test listing ESPHome serial ports asynchronously via an externally-passed API."""
+    assert list_serial_ports(Platform.ESPHOME) == []
+    assert await async_list_serial_ports(Platform.ESPHOME) == []
+
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            api = APIClient(
+                address=parsed.hostname,
+                port=parsed.port or ESPHOME_DEFAULT_PORT,
+                password=None,
+            )
+            await api.connect(login=True)
+
+            serial_ports = await async_list_serial_ports(Platform.ESPHOME, api=api)
+            assert serial_ports == _expected_esphome_ports(parsed.netloc)
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_async_esphome_list_serial_ports_via_uri() -> None:
+    """Test listing ESPHome serial ports asynchronously via a URI."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+
+            serial_ports = await async_list_serial_ports(Platform.ESPHOME, path=left)
+            assert serial_ports == _expected_esphome_ports(parsed.netloc)
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+def test_sync_esphome_list_serial_ports_via_uri() -> None:
+    """Test listing ESPHome serial ports synchronously via a URI."""
+    assert list_serial_ports(Platform.ESPHOME) == []
+
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+
+            serial_ports = list_serial_ports(Platform.ESPHOME, path=left)
+            assert serial_ports == _expected_esphome_ports(parsed.netloc)
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_sync_esphome_list_serial_ports_external_api() -> None:
+    """Test sync listing of ESPHome serial ports with an externally-passed API."""
+    test_loop = asyncio.get_running_loop()
+
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            api = APIClient(
+                address=parsed.hostname,
+                port=parsed.port or ESPHOME_DEFAULT_PORT,
+                password=None,
+            )
+            await api.connect(login=True)
+
+            serial_ports = await asyncio.to_thread(
+                list_serial_ports, Platform.ESPHOME, api=api, loop=test_loop
+            )
+            assert serial_ports == _expected_esphome_ports(parsed.netloc)
+
+            # The externally-passed API must remain connected.
+            await api.device_info()
+            await api.disconnect()

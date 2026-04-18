@@ -7,14 +7,25 @@ from unittest.mock import Mock
 
 import pytest
 
-from serialx import get_serial_classes, register_uri_handler
+from serialx import (
+    Platform,
+    async_list_serial_ports,
+    get_serial_classes,
+    list_serial_ports,
+    register_uri_handler,
+)
 from serialx.common import (
     _REGISTERED_URI_HANDLERS,
     BaseSerial,
     BaseSerialTransport,
+    SerialPortInfo,
     UnknownUriScheme,
     get_uri_handler,
 )
+
+
+async def _async_list_serial_ports() -> list[SerialPortInfo]:
+    return []
 
 
 @pytest.fixture(autouse=True)
@@ -49,6 +60,7 @@ def test_register_uri_handler_validation() -> None:
             sync_cls=BaseSerial,  # type:ignore[type-abstract]
             async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
             list_serial_ports_func=list,
+            async_list_serial_ports_func=_async_list_serial_ports,
         )
 
     with pytest.raises(ValueError, match="must end with"):
@@ -58,6 +70,7 @@ def test_register_uri_handler_validation() -> None:
             sync_cls=BaseSerial,  # type:ignore[type-abstract]
             async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
             list_serial_ports_func=list,
+            async_list_serial_ports_func=_async_list_serial_ports,
         )
 
     unregister = register_uri_handler(
@@ -66,6 +79,7 @@ def test_register_uri_handler_validation() -> None:
         sync_cls=BaseSerial,  # type:ignore[type-abstract]
         async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
         list_serial_ports_func=list,
+        async_list_serial_ports_func=_async_list_serial_ports,
     )
 
     try:
@@ -76,6 +90,7 @@ def test_register_uri_handler_validation() -> None:
                 sync_cls=BaseSerial,  # type:ignore[type-abstract]
                 async_transport_cls=BaseSerialTransport,  # type:ignore[type-abstract]
                 list_serial_ports_func=list,
+                async_list_serial_ports_func=_async_list_serial_ports,
             )
     finally:
         unregister()
@@ -92,6 +107,7 @@ def test_register_uri_handler_dispatch_and_unregister() -> None:
         sync_cls=mock_sync_cls,
         async_transport_cls=mock_async_transport_cls,
         list_serial_ports_func=list,
+        async_list_serial_ports_func=_async_list_serial_ports,
     )
 
     for url in ("test-unique-2://", "test-shared-2://host/path"):
@@ -110,3 +126,31 @@ def test_register_uri_handler_dispatch_and_unregister() -> None:
 
     with pytest.raises(UnknownUriScheme):
         get_uri_handler("test-shared-2://")
+
+
+@pytest.mark.parametrize("platform", list(Platform))
+def test_list_serial_ports_all_platforms(platform: Platform) -> None:
+    """Sync listing returns a list of `SerialPortInfo` for every platform."""
+    try:
+        ports = list_serial_ports(platform)
+    except UnknownUriScheme:
+        pytest.skip(f"{platform} is not registered in this environment")
+        return
+
+    assert isinstance(ports, list)
+    for port in ports:
+        assert isinstance(port, SerialPortInfo)
+
+
+@pytest.mark.parametrize("platform", list(Platform))
+async def test_async_list_serial_ports_all_platforms(platform: Platform) -> None:
+    """Async listing returns a list of `SerialPortInfo` for every platform."""
+    try:
+        ports = await async_list_serial_ports(platform)
+    except UnknownUriScheme:
+        pytest.skip(f"{platform} is not registered in this environment")
+        return
+
+    assert isinstance(ports, list)
+    for port in ports:
+        assert isinstance(port, SerialPortInfo)
