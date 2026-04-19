@@ -12,23 +12,88 @@ except ImportError:
 
 import asyncio
 from base64 import b64encode
+from collections.abc import AsyncIterator
+import contextlib
+import threading
+from typing import cast
 from unittest.mock import patch
 import urllib.parse
+import warnings
 
 from serialx import (
     Platform,
     SerialException,
     SerialPortInfo,
+    SerialStreamWriter,
     async_list_serial_ports,
     list_serial_ports,
     open_serial_connection,
 )
 from serialx.platforms.serial_esphome import (
     ESPHOME_DEFAULT_PORT,
+    ESPHomeSerial,
     ESPHomeSerialTransport,
 )
 
 from .common import ESPHOME_HOST_BINARY, create_esphome_pair, create_socat_pair
+
+
+@contextlib.asynccontextmanager
+async def create_cross_loop_reader_writer(
+    url: str,
+) -> AsyncIterator[
+    tuple[asyncio.StreamReader, SerialStreamWriter[ESPHomeSerialTransport]]
+]:
+    """Create a reader/writer whose `APIClient` lives on its own thread loop."""
+    parsed = urllib.parse.urlparse(url)
+
+    # We need to extract the port name from the URI, since we create the client manually
+    params = urllib.parse.parse_qs(parsed.query)
+    port_name = params["port_name"][0]
+
+    thread_loop = asyncio.new_event_loop()
+    loop_ready = threading.Event()
+
+    def _run_loop() -> None:
+        asyncio.set_event_loop(thread_loop)
+        loop_ready.set()
+        thread_loop.run_forever()
+
+    thread = threading.Thread(target=_run_loop, daemon=True)
+    thread.start()
+    loop_ready.wait()
+
+    async def _connect_api() -> APIClient:
+        api = APIClient(
+            address=parsed.hostname,
+            port=parsed.port or ESPHOME_DEFAULT_PORT,
+            password=None,
+        )
+        await api.connect(login=True)
+        return api
+
+    api = asyncio.run_coroutine_threadsafe(_connect_api(), thread_loop).result()
+
+    try:
+        reader, writer = await open_serial_connection(
+            url=None,
+            transport_cls=ESPHomeSerialTransport,
+            api=api,
+            port_name=port_name,
+            baudrate=115200,
+        )
+
+        try:
+            yield reader, cast(SerialStreamWriter[ESPHomeSerialTransport], writer)
+        finally:
+            writer.close()
+            await writer.wait_closed()
+    finally:
+        asyncio.run_coroutine_threadsafe(api.disconnect(), thread_loop).result()
+
+        thread_loop.call_soon_threadsafe(thread_loop.stop)
+        thread.join(timeout=5)
+        thread_loop.close()
 
 
 def base64(key: bytes) -> str:
@@ -331,3 +396,65 @@ async def test_sync_esphome_list_serial_ports_external_api() -> None:
             # The externally-passed API must remain connected.
             await api.device_info()
             await api.disconnect()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_cross_loop_async_api() -> None:
+    """Async API works with the `APIClient` on a separate loop."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, right):
+            # Peer side uses the plain URL-based handler
+            peer_reader, peer_writer = await open_serial_connection(
+                url=right, baudrate=115200
+            )
+
+            try:
+                async with create_cross_loop_reader_writer(left) as (reader, writer):
+                    serial = writer.transport.get_extra_info("serial")
+                    assert isinstance(serial, ESPHomeSerial)
+                    assert serial._client_loop is not asyncio.get_running_loop()
+                    assert serial._loop is asyncio.get_running_loop()
+
+                    # Cross-loop side -> peer (write path)
+                    writer.write(b"left-to-right")
+                    await writer.drain()
+                    data = await peer_reader.readexactly(len(b"left-to-right"))
+                    assert data == b"left-to-right"
+
+                    # Peer -> cross-loop side (read path via _on_data marshalling)
+                    peer_writer.write(b"right-to-left")
+                    await peer_writer.drain()
+                    data = await reader.readexactly(len(b"right-to-left"))
+                    assert data == b"right-to-left"
+
+                    # Async modem pins + flush round-trip across loops. The
+                    # host binary does not propagate flow control between
+                    # sides, so we just assert the calls complete.
+                    await writer.transport.set_modem_pins(dtr=True, rts=False)
+                    await writer.transport.get_modem_pins()
+                    await writer.transport.flush()
+            finally:
+                peer_writer.close()
+                await peer_writer.wait_closed()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_cross_loop_sync_modem_pins_on_loop_thread() -> None:
+    """Sync modem-pin access from `self._loop`'s thread must not deadlock."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            async with create_cross_loop_reader_writer(left) as (
+                _reader,
+                writer,
+            ):
+                serial = writer.transport.serial
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("always", DeprecationWarning)
+                    with pytest.warns(
+                        DeprecationWarning, match="transport.set_modem_pins"
+                    ):
+                        serial.dtr = False
+
+                with pytest.raises(RuntimeError, match="sync ESPHomeSerial method"):
+                    _ = serial.dtr
