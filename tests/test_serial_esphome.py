@@ -12,23 +12,98 @@ except ImportError:
 
 import asyncio
 from base64 import b64encode
+from collections.abc import AsyncIterator, Iterator
+import contextlib
+import threading
+from typing import cast
 from unittest.mock import patch
 import urllib.parse
+import warnings
 
 from serialx import (
     Platform,
     SerialException,
     SerialPortInfo,
+    SerialStreamWriter,
     async_list_serial_ports,
     list_serial_ports,
     open_serial_connection,
 )
 from serialx.platforms.serial_esphome import (
     ESPHOME_DEFAULT_PORT,
+    ESPHomeSerial,
     ESPHomeSerialTransport,
 )
 
-from .common import ESPHOME_HOST_BINARY, create_esphome_pair, create_socat_pair
+from .common import (
+    ESPHOME_HOST_BINARY,
+    async_create_reader_writer,
+    create_esphome_pair,
+    create_socat_pair,
+)
+
+
+@contextlib.contextmanager
+def api_client_on_thread_loop(
+    url: str,
+) -> Iterator[tuple[APIClient, asyncio.AbstractEventLoop]]:
+    """Yield an APIClient connected on a dedicated background thread's loop."""
+    parsed = urllib.parse.urlparse(url)
+
+    thread_loop = asyncio.new_event_loop()
+    ready = threading.Event()
+
+    def _run_loop() -> None:
+        asyncio.set_event_loop(thread_loop)
+        ready.set()
+        thread_loop.run_forever()
+
+    thread = threading.Thread(target=_run_loop, daemon=True)
+    thread.start()
+    ready.wait()
+
+    async def _connect() -> APIClient:
+        api = APIClient(
+            address=parsed.hostname,
+            port=parsed.port or ESPHOME_DEFAULT_PORT,
+            password=None,
+        )
+        await api.connect(login=True)
+        return api
+
+    api = asyncio.run_coroutine_threadsafe(_connect(), thread_loop).result()
+
+    try:
+        yield api, thread_loop
+    finally:
+        asyncio.run_coroutine_threadsafe(api.disconnect(), thread_loop).result()
+        thread_loop.call_soon_threadsafe(thread_loop.stop)
+        thread.join(timeout=5)
+        thread_loop.close()
+
+
+@contextlib.asynccontextmanager
+async def create_cross_loop_reader_writer(
+    url: str,
+) -> AsyncIterator[
+    tuple[asyncio.StreamReader, SerialStreamWriter[ESPHomeSerialTransport]]
+]:
+    """Create a reader/writer whose `APIClient` lives on its own thread loop."""
+    port_name = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["port_name"][0]
+
+    with api_client_on_thread_loop(url) as (api, _thread_loop):
+        reader, writer = await open_serial_connection(
+            url=None,
+            transport_cls=ESPHomeSerialTransport,
+            api=api,
+            port_name=port_name,
+            baudrate=115200,
+        )
+        try:
+            yield reader, cast(SerialStreamWriter[ESPHomeSerialTransport], writer)
+        finally:
+            writer.close()
+            await writer.wait_closed()
 
 
 def base64(key: bytes) -> str:
@@ -331,3 +406,173 @@ async def test_sync_esphome_list_serial_ports_external_api() -> None:
             # The externally-passed API must remain connected.
             await api.device_info()
             await api.disconnect()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_cross_loop_async_api() -> None:
+    """Async API works with the `APIClient` on a separate loop."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, right):
+            reader_right, writer_right = await open_serial_connection(
+                url=right, baudrate=115200
+            )
+
+            try:
+                async with create_cross_loop_reader_writer(left) as (
+                    reader_left,
+                    writer_left,
+                ):
+                    serial = writer_left.transport.get_extra_info("serial")
+                    assert isinstance(serial, ESPHomeSerial)
+                    assert serial._client_loop is not asyncio.get_running_loop()
+                    assert serial._loop is asyncio.get_running_loop()
+
+                    writer_left.write(b"left to right")
+                    data = await reader_right.readexactly(len(b"left to right"))
+                    assert data == b"left to right"
+
+                    writer_right.write(b"right to left")
+                    data = await reader_left.readexactly(len(b"right to left"))
+                    assert data == b"right to left"
+
+                    await writer_left.transport.set_modem_pins(dtr=True, rts=False)
+                    await writer_left.transport.get_modem_pins()
+                    await writer_left.transport.flush()
+            finally:
+                writer_right.close()
+                await writer_right.wait_closed()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_cross_loop_sync_modem_pins_on_loop_thread() -> None:
+    """Sync modem-pin access from `self._loop`'s thread must not deadlock."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            async with create_cross_loop_reader_writer(left) as (
+                _reader,
+                writer,
+            ):
+                serial = writer.transport.serial
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("always", DeprecationWarning)
+                    with pytest.warns(
+                        DeprecationWarning, match="transport.set_modem_pins"
+                    ):
+                        serial.dtr = False
+
+                with pytest.raises(RuntimeError, match="sync ESPHomeSerial method"):
+                    _ = serial.dtr
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_sync_api_with_external_api_on_different_loop() -> None:
+    """Sync API works when the `APIClient` lives on a different loop."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, right):
+            async with async_create_reader_writer(right, baudrate=115200) as (
+                _peer_reader,
+                peer_writer,
+            ):
+                with api_client_on_thread_loop(left) as (api, api_loop):
+
+                    def _sync_open() -> ESPHomeSerial:
+                        serial = ESPHomeSerial(
+                            api=api,
+                            port_name="Serial Proxy Left",
+                            baudrate=115200,
+                        )
+                        serial.open()
+                        return serial
+
+                    serial = await asyncio.to_thread(_sync_open)
+
+                    try:
+                        # API on thread 1, sync-dispatch loop on thread 2
+                        assert serial._client_loop is api_loop
+                        assert serial._loop is not None
+                        assert serial._loop is not api_loop
+
+                        peer_writer.write(b"peer-data")
+                        await peer_writer.drain()
+
+                        data = await asyncio.to_thread(serial.read, len(b"peer-data"))
+                        assert data == b"peer-data"
+                    finally:
+                        await asyncio.to_thread(serial.close)
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_single_api_multiple_async_ports() -> None:
+    """Two async transports sharing one APIClient operate independently."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            parsed = urllib.parse.urlparse(left)
+            api = APIClient(
+                address=parsed.hostname,
+                port=parsed.port or ESPHOME_DEFAULT_PORT,
+                password=None,
+            )
+            await api.connect(login=True)
+
+            try:
+                reader_left, writer_left = await open_serial_connection(
+                    url=None,
+                    transport_cls=ESPHomeSerialTransport,
+                    api=api,
+                    port_name="Serial Proxy Left",
+                    baudrate=115200,
+                )
+                reader_right, writer_right = await open_serial_connection(
+                    url=None,
+                    transport_cls=ESPHomeSerialTransport,
+                    api=api,
+                    port_name="Serial Proxy Right",
+                    baudrate=115200,
+                )
+
+                try:
+                    writer_left.write(b"left to right")
+                    await writer_left.drain()
+                    data = await asyncio.wait_for(
+                        reader_right.readexactly(len(b"left to right")), timeout=5
+                    )
+                    assert data == b"left to right"
+
+                    writer_right.write(b"right to left")
+                    await writer_right.drain()
+                    data = await asyncio.wait_for(
+                        reader_left.readexactly(len(b"right to left")), timeout=5
+                    )
+                    assert data == b"right to left"
+                finally:
+                    writer_left.close()
+                    writer_right.close()
+                    await writer_left.wait_closed()
+                    await writer_right.wait_closed()
+
+                # The shared externally-owned API is still connected
+                await api.device_info()
+            finally:
+                await api.disconnect()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_single_api_multiple_sync_ports() -> None:
+    """Two sync ESPHomeSerials sharing one APIClient operate independently."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, _right):
+            with api_client_on_thread_loop(left) as (api, _api_loop):
+                with (
+                    ESPHomeSerial(
+                        api=api, port_name="Serial Proxy Left", baudrate=115200
+                    ) as serial_left,
+                    ESPHomeSerial(
+                        api=api, port_name="Serial Proxy Right", baudrate=115200
+                    ) as serial_right,
+                ):
+                    serial_left.write(b"left to right")
+                    assert serial_right.read(len(b"left to right")) == b"left to right"
+
+                    serial_right.write(b"right to left")
+                    assert serial_left.read(len(b"right to left")) == b"right to left"
