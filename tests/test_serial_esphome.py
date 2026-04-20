@@ -413,39 +413,34 @@ async def test_cross_loop_async_api() -> None:
     """Async API works with the `APIClient` on a separate loop."""
     with create_socat_pair() as (socat_left, socat_right):
         with create_esphome_pair(socat_left, socat_right) as (left, right):
-            # Peer side uses the plain URL-based handler
-            peer_reader, peer_writer = await open_serial_connection(
+            reader_right, writer_right = await open_serial_connection(
                 url=right, baudrate=115200
             )
 
             try:
-                async with create_cross_loop_reader_writer(left) as (reader, writer):
-                    serial = writer.transport.get_extra_info("serial")
+                async with create_cross_loop_reader_writer(left) as (
+                    reader_left,
+                    writer_left,
+                ):
+                    serial = writer_left.transport.get_extra_info("serial")
                     assert isinstance(serial, ESPHomeSerial)
                     assert serial._client_loop is not asyncio.get_running_loop()
                     assert serial._loop is asyncio.get_running_loop()
 
-                    # Cross-loop side -> peer (write path)
-                    writer.write(b"left-to-right")
-                    await writer.drain()
-                    data = await peer_reader.readexactly(len(b"left-to-right"))
-                    assert data == b"left-to-right"
+                    writer_left.write(b"left to right")
+                    data = await reader_right.readexactly(len(b"left to right"))
+                    assert data == b"left to right"
 
-                    # Peer -> cross-loop side (read path via _on_data marshalling)
-                    peer_writer.write(b"right-to-left")
-                    await peer_writer.drain()
-                    data = await reader.readexactly(len(b"right-to-left"))
-                    assert data == b"right-to-left"
+                    writer_right.write(b"right to left")
+                    data = await reader_left.readexactly(len(b"right to left"))
+                    assert data == b"right to left"
 
-                    # Async modem pins + flush round-trip across loops. The
-                    # host binary does not propagate flow control between
-                    # sides, so we just assert the calls complete.
-                    await writer.transport.set_modem_pins(dtr=True, rts=False)
-                    await writer.transport.get_modem_pins()
-                    await writer.transport.flush()
+                    await writer_left.transport.set_modem_pins(dtr=True, rts=False)
+                    await writer_left.transport.get_modem_pins()
+                    await writer_left.transport.flush()
             finally:
-                peer_writer.close()
-                await peer_writer.wait_closed()
+                writer_right.close()
+                await writer_right.wait_closed()
 
 
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
@@ -535,20 +530,21 @@ async def test_single_api_multiple_async_ports() -> None:
                     port_name="Serial Proxy Right",
                     baudrate=115200,
                 )
+
                 try:
-                    writer_left.write(b"left-to-right")
+                    writer_left.write(b"left to right")
                     await writer_left.drain()
                     data = await asyncio.wait_for(
-                        reader_right.readexactly(len(b"left-to-right")), timeout=5
+                        reader_right.readexactly(len(b"left to right")), timeout=5
                     )
-                    assert data == b"left-to-right"
+                    assert data == b"left to right"
 
-                    writer_right.write(b"right-to-left")
+                    writer_right.write(b"right to left")
                     await writer_right.drain()
                     data = await asyncio.wait_for(
-                        reader_left.readexactly(len(b"right-to-left")), timeout=5
+                        reader_left.readexactly(len(b"right to left")), timeout=5
                     )
-                    assert data == b"right-to-left"
+                    assert data == b"right to left"
                 finally:
                     writer_left.close()
                     writer_right.close()
@@ -575,8 +571,8 @@ async def test_single_api_multiple_sync_ports() -> None:
                         api=api, port_name="Serial Proxy Right", baudrate=115200
                     ) as serial_right,
                 ):
-                    serial_left.write(b"left-to-right")
-                    assert serial_right.read(len(b"left-to-right")) == b"left-to-right"
+                    serial_left.write(b"left to right")
+                    assert serial_right.read(len(b"left to right")) == b"left to right"
 
-                    serial_right.write(b"right-to-left")
-                    assert serial_left.read(len(b"right-to-left")) == b"right-to-left"
+                    serial_right.write(b"right to left")
+                    assert serial_left.read(len(b"right to left")) == b"right to left"
