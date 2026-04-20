@@ -45,7 +45,7 @@ docs = [
 ]
 
 [tool.setuptools.packages.find]
-exclude = ["tests", "tests.*"]
+include = ["serialx", "serialx.*"]
 
 [tool.setuptools_scm]
 
