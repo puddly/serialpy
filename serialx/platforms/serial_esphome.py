@@ -186,8 +186,7 @@ class ESPHomeSerial(BaseSerial):
 
     def _in_event_loop(self) -> bool:
         """Check if we are currently running in the event loop."""
-        if self._loop is None:
-            return False
+        assert self._loop is not None
 
         try:
             return asyncio.get_running_loop() is self._loop
@@ -235,6 +234,7 @@ class ESPHomeSerial(BaseSerial):
         """Start a new event loop in a background thread if one isn't set."""
         if self._loop is not None:
             return
+
         self._loop = asyncio.new_event_loop()
         self._loop_thread = threading.Thread(target=self._loop.run_forever)
         self._loop_thread.start()
@@ -467,6 +467,7 @@ class ESPHomeSerial(BaseSerial):
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits."""
+        assert self._loop is not None
 
         # XXX: This is the one sync API we allow to be used from an async context, by
         # enqueuing the operation instead of blocking.

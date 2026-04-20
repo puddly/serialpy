@@ -12,7 +12,7 @@ except ImportError:
 
 import asyncio
 from base64 import b64encode
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 import contextlib
 import threading
 from typing import cast
@@ -35,7 +35,51 @@ from serialx.platforms.serial_esphome import (
     ESPHomeSerialTransport,
 )
 
-from .common import ESPHOME_HOST_BINARY, create_esphome_pair, create_socat_pair
+from .common import (
+    ESPHOME_HOST_BINARY,
+    async_create_reader_writer,
+    create_esphome_pair,
+    create_socat_pair,
+)
+
+
+@contextlib.contextmanager
+def api_client_on_thread_loop(
+    url: str,
+) -> Iterator[tuple[APIClient, asyncio.AbstractEventLoop]]:
+    """Yield an APIClient connected on a dedicated background thread's loop."""
+    parsed = urllib.parse.urlparse(url)
+
+    thread_loop = asyncio.new_event_loop()
+    ready = threading.Event()
+
+    def _run_loop() -> None:
+        asyncio.set_event_loop(thread_loop)
+        ready.set()
+        thread_loop.run_forever()
+
+    thread = threading.Thread(target=_run_loop, daemon=True)
+    thread.start()
+    ready.wait()
+
+    async def _connect() -> APIClient:
+        api = APIClient(
+            address=parsed.hostname,
+            port=parsed.port or ESPHOME_DEFAULT_PORT,
+            password=None,
+        )
+        await api.connect(login=True)
+        return api
+
+    api = asyncio.run_coroutine_threadsafe(_connect(), thread_loop).result()
+
+    try:
+        yield api, thread_loop
+    finally:
+        asyncio.run_coroutine_threadsafe(api.disconnect(), thread_loop).result()
+        thread_loop.call_soon_threadsafe(thread_loop.stop)
+        thread.join(timeout=5)
+        thread_loop.close()
 
 
 @contextlib.asynccontextmanager
@@ -45,36 +89,9 @@ async def create_cross_loop_reader_writer(
     tuple[asyncio.StreamReader, SerialStreamWriter[ESPHomeSerialTransport]]
 ]:
     """Create a reader/writer whose `APIClient` lives on its own thread loop."""
-    parsed = urllib.parse.urlparse(url)
+    port_name = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["port_name"][0]
 
-    # We need to extract the port name from the URI, since we create the client manually
-    params = urllib.parse.parse_qs(parsed.query)
-    port_name = params["port_name"][0]
-
-    thread_loop = asyncio.new_event_loop()
-    loop_ready = threading.Event()
-
-    def _run_loop() -> None:
-        asyncio.set_event_loop(thread_loop)
-        loop_ready.set()
-        thread_loop.run_forever()
-
-    thread = threading.Thread(target=_run_loop, daemon=True)
-    thread.start()
-    loop_ready.wait()
-
-    async def _connect_api() -> APIClient:
-        api = APIClient(
-            address=parsed.hostname,
-            port=parsed.port or ESPHOME_DEFAULT_PORT,
-            password=None,
-        )
-        await api.connect(login=True)
-        return api
-
-    api = asyncio.run_coroutine_threadsafe(_connect_api(), thread_loop).result()
-
-    try:
+    with api_client_on_thread_loop(url) as (api, _thread_loop):
         reader, writer = await open_serial_connection(
             url=None,
             transport_cls=ESPHomeSerialTransport,
@@ -82,18 +99,11 @@ async def create_cross_loop_reader_writer(
             port_name=port_name,
             baudrate=115200,
         )
-
         try:
             yield reader, cast(SerialStreamWriter[ESPHomeSerialTransport], writer)
         finally:
             writer.close()
             await writer.wait_closed()
-    finally:
-        asyncio.run_coroutine_threadsafe(api.disconnect(), thread_loop).result()
-
-        thread_loop.call_soon_threadsafe(thread_loop.stop)
-        thread.join(timeout=5)
-        thread_loop.close()
 
 
 def base64(key: bytes) -> str:
@@ -458,3 +468,40 @@ async def test_cross_loop_sync_modem_pins_on_loop_thread() -> None:
 
                 with pytest.raises(RuntimeError, match="sync ESPHomeSerial method"):
                     _ = serial.dtr
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_sync_api_with_external_api_on_different_loop() -> None:
+    """Sync API works when the `APIClient` lives on a different loop."""
+    with create_socat_pair() as (socat_left, socat_right):
+        with create_esphome_pair(socat_left, socat_right) as (left, right):
+            async with async_create_reader_writer(right, baudrate=115200) as (
+                _peer_reader,
+                peer_writer,
+            ):
+                with api_client_on_thread_loop(left) as (api, api_loop):
+
+                    def _sync_open() -> ESPHomeSerial:
+                        serial = ESPHomeSerial(
+                            api=api,
+                            port_name="Serial Proxy Left",
+                            baudrate=115200,
+                        )
+                        serial.open()
+                        return serial
+
+                    serial = await asyncio.to_thread(_sync_open)
+
+                    try:
+                        # API on thread 1, sync-dispatch loop on thread 2
+                        assert serial._client_loop is api_loop
+                        assert serial._loop is not None
+                        assert serial._loop is not api_loop
+
+                        peer_writer.write(b"peer-data")
+                        await peer_writer.drain()
+
+                        data = await asyncio.to_thread(serial.read, len(b"peer-data"))
+                        assert data == b"peer-data"
+                    finally:
+                        await asyncio.to_thread(serial.close)
