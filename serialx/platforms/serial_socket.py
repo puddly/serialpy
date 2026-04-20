@@ -7,8 +7,14 @@ from collections.abc import Generator
 from contextlib import contextmanager
 import logging
 import socket
+import sys
 from typing import Any
 import urllib.parse
+
+if sys.version_info >= (3, 11):
+    from asyncio import timeout as asyncio_timeout
+else:
+    from async_timeout import timeout as asyncio_timeout
 
 from typing_extensions import Buffer
 
@@ -22,6 +28,7 @@ from serialx.common import (
 )
 
 LOGGER = logging.getLogger(__name__)
+DEFAULT_CONNECT_TIMEOUT = 10.0
 
 
 class SocketSerial(BaseSerial):
@@ -31,7 +38,7 @@ class SocketSerial(BaseSerial):
         self,
         *args: Any,
         # Socket-specific kwargs
-        connect_timeout: float | None = None,
+        connect_timeout: float | None = DEFAULT_CONNECT_TIMEOUT,
         **kwargs: Any,
     ) -> None:
         """Initialize socket serial port."""
@@ -217,6 +224,7 @@ class SocketSerialTransport(BaseSerialTransport):
         xonxoff: bool = False,
         rtscts: bool = False,
         byte_size: int = 8,
+        connect_timeout: float | None = DEFAULT_CONNECT_TIMEOUT,
         **kwargs: Any,
     ) -> None:
         self._serial = SocketSerial(
@@ -227,16 +235,18 @@ class SocketSerialTransport(BaseSerialTransport):
             xonxoff=xonxoff,
             rtscts=rtscts,
             byte_size=byte_size,
+            connect_timeout=connect_timeout,
         )
         self._extra["serial"] = self._serial
 
         self._tcp_connection_lost_waiter = self._loop.create_future()
 
-        tcp_transport, _ = await self._loop.create_connection(
-            lambda: _SocketProxyProtocol(self),
-            host=self._serial._host,
-            port=self._serial._port,
-        )
+        async with asyncio_timeout(self._serial._connect_timeout):
+            tcp_transport, _ = await self._loop.create_connection(
+                lambda: _SocketProxyProtocol(self),
+                host=self._serial._host,
+                port=self._serial._port,
+            )
         self._tcp_transport = tcp_transport
 
         if self._connection_lost_called:

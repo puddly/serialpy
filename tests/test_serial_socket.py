@@ -1,8 +1,10 @@
 """Socket serial port tests."""
 
+import asyncio
+
 import pytest
 
-from serialx import Serial
+from serialx import Serial, create_serial_connection
 from serialx.platforms.serial_socket import SocketSerial
 from tests.common import measure_time
 from tests.socket_relay import create_socket_pair
@@ -50,3 +52,20 @@ def test_socket_connect_timeout() -> None:
                 pass
 
     assert elapsed() < 1.0
+
+
+async def test_async_socket_connect_timeout() -> None:
+    """Test that connect_timeout is respected by SocketSerialTransport."""
+    url = "socket://192.0.2.1:1234"
+
+    with measure_time() as elapsed:
+        with pytest.raises((OSError, TimeoutError, asyncio.TimeoutError)):
+            await create_serial_connection(
+                asyncio.get_running_loop(),
+                asyncio.Protocol,
+                url=url,
+                baudrate=115200,
+                connect_timeout=0.2,
+            )
+
+    assert 0.2 <= elapsed() < 1.0
