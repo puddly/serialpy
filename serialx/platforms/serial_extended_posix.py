@@ -8,12 +8,7 @@ from __future__ import annotations
 import termios
 
 from ..common import register_uri_handler
-from .serial_posix import (
-    PosixSerial,
-    PosixSerialTransport,
-    async_posix_list_serial_ports,
-    posix_list_serial_ports,
-)
+from .serial_posix import PosixSerial, PosixSerialTransport
 
 CRTSCTS = getattr(termios, "CRTSCTS", getattr(termios, "CNEW_RTSCTS", None))
 
@@ -52,8 +47,6 @@ if is_extended_posix():
         unique_scheme="extended-posix://",
         sync_cls=ExtendedPosixSerial,
         async_transport_cls=ExtendedPosixSerialTransport,
-        list_serial_ports_func=posix_list_serial_ports,
-        async_list_serial_ports_func=async_posix_list_serial_ports,
         weight=2,
         strip_uri_scheme=True,
     )

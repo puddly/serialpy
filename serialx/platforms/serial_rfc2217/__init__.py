@@ -24,7 +24,6 @@ from ...common import (
     Parity,
     PinState,
     SerialException,
-    SerialPortInfo,
     StopBits,
     UnsupportedSetting,
     measure_time,
@@ -1041,21 +1040,9 @@ class RFC2217SerialTransport(BaseSerialTransport):
         return self._tcp_transport.can_write_eof()
 
 
-def rfc2217_list_serial_ports() -> list[SerialPortInfo]:
-    """List serial ports for RFC2217."""
-    return []
-
-
-async def async_rfc2217_list_serial_ports() -> list[SerialPortInfo]:
-    """List serial ports for RFC2217, async."""
-    return []
-
-
 register_uri_handler(
     scheme="rfc2217://",
     unique_scheme="rfc2217://",
     sync_cls=RFC2217Serial,
     async_transport_cls=RFC2217SerialTransport,
-    list_serial_ports_func=rfc2217_list_serial_ports,
-    async_list_serial_ports_func=async_rfc2217_list_serial_ports,
 )

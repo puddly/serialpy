@@ -25,7 +25,6 @@ from ..common import (
     ModemPins,
     Parity,
     PinState,
-    SerialPortInfo,
     StopBits,
     UnsupportedSetting,
     register_uri_handler,
@@ -525,22 +524,10 @@ class PosixSerialTransport(DescriptorTransport):
             self._reset_empty_waiter()
 
 
-def posix_list_serial_ports() -> list[SerialPortInfo]:
-    """List available serial ports on POSIX."""
-    return []
-
-
-async def async_posix_list_serial_ports() -> list[SerialPortInfo]:
-    """List available serial ports on POSIX, async."""
-    return []
-
-
 register_uri_handler(
     scheme="device://",
     unique_scheme="posix://",
     sync_cls=PosixSerial,
     async_transport_cls=PosixSerialTransport,
-    list_serial_ports_func=posix_list_serial_ports,
-    async_list_serial_ports_func=async_posix_list_serial_ports,
     strip_uri_scheme=True,
 )
