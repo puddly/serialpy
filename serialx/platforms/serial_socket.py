@@ -17,7 +17,6 @@ from serialx.common import (
     BaseSerialTransport,
     ModemPins,
     Parity,
-    SerialPortInfo,
     StopBits,
     register_uri_handler,
 )
@@ -354,29 +353,15 @@ class SocketSerialTransport(BaseSerialTransport):
         )
 
 
-def socket_list_serial_ports() -> list[SerialPortInfo]:
-    """List serial ports for sockets."""
-    return []
-
-
-async def async_socket_list_serial_ports() -> list[SerialPortInfo]:
-    """List serial ports for sockets, async."""
-    return []
-
-
 register_uri_handler(
     scheme="socket://",
     unique_scheme="socket://",
     sync_cls=SocketSerial,
     async_transport_cls=SocketSerialTransport,
-    list_serial_ports_func=socket_list_serial_ports,
-    async_list_serial_ports_func=async_socket_list_serial_ports,
 )
 register_uri_handler(
     scheme="tcp://",
     unique_scheme="tcp://",
     sync_cls=SocketSerial,
     async_transport_cls=SocketSerialTransport,
-    list_serial_ports_func=socket_list_serial_ports,
-    async_list_serial_ports_func=async_socket_list_serial_ports,
 )

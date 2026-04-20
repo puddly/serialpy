@@ -64,14 +64,26 @@ class _RegistryEntry(NamedTuple):
 _REGISTERED_URI_HANDLERS: defaultdict[str, list[_RegistryEntry]] = defaultdict(list)
 
 
+def empty_port_list(*args: Any, **kwargs: Any) -> list[SerialPortInfo]:
+    """Return an empty list of serial ports."""
+    return []
+
+
+async def async_empty_port_list(*args: Any, **kwargs: Any) -> list[SerialPortInfo]:
+    """Return an empty list of serial ports, async."""
+    return []
+
+
 def register_uri_handler(
     *,
     scheme: str,
     unique_scheme: str,
     sync_cls: type[BaseSerial],
     async_transport_cls: type[BaseSerialTransport],
-    list_serial_ports_func: Callable[..., list[SerialPortInfo]],
-    async_list_serial_ports_func: Callable[..., Awaitable[list[SerialPortInfo]]],
+    list_serial_ports_func: Callable[..., list[SerialPortInfo]] = empty_port_list,
+    async_list_serial_ports_func: Callable[
+        ..., Awaitable[list[SerialPortInfo]]
+    ] = async_empty_port_list,
     weight: int = 1,
     strip_uri_scheme: bool = False,
 ) -> Callable[[], None]:
