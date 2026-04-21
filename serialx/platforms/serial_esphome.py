@@ -169,7 +169,7 @@ class ESPHomeSerial(BaseSerial):
 
         self._api: APIClient | None = api
         self._client_loop: asyncio.AbstractEventLoop | None = (
-            api._loop if api is not None else None
+            api.loop if api is not None else None
         )
         self._port_name: str | None = port_name
         self._instance_id: int | None = port_instance
@@ -307,7 +307,7 @@ class ESPHomeSerial(BaseSerial):
                 password=self._password,
                 noise_psk=self._noise_psk,
             )
-            self._client_loop = self._api._loop
+            self._client_loop = self._api.loop
 
             self._disconnect_api = True
             await self._call_on_client_loop(self._api.connect(login=True))
