@@ -7,7 +7,6 @@ import contextlib
 import dataclasses
 import os
 import sys
-from typing import TYPE_CHECKING
 import urllib.parse
 
 import pytest
@@ -26,13 +25,11 @@ from tests.common import (
     create_adapter_pair,
     create_esphome_pair,
     create_hub4com_pair,
+    create_pyodide_pair,
     create_ser2net_pair,
     create_socat_pair,
 )
 from tests.socket_relay import create_socket_pair
-
-if TYPE_CHECKING or sys.platform == "emscripten":
-    from tests._pyodide_pair import create_pyodide_pair
 
 
 def _get_forced_posix_uri_schemes() -> list[str]:

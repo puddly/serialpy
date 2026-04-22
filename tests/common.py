@@ -23,6 +23,8 @@ from typing_extensions import Self
 import serialx
 from serialx.common import BaseSerialTransport
 
+_PYODIDE_PAIR_COUNTER = 0
+
 SOCAT_BINARY = shutil.which("socat")
 SER2NET_BINARY = shutil.which("ser2net")
 HUB4COM_BINARY = shutil.which(
@@ -409,6 +411,31 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
                 if proc.returncode is None:
                     proc.terminate()
                     proc.wait()
+
+
+@contextlib.contextmanager
+def create_pyodide_pair() -> Iterator[tuple[str, str]]:
+    """Create a fake Web Serial pair and register each side at a unique URL."""
+    import js  # noqa: PLC0415
+
+    from serialx.platforms.serial_pyodide import (  # noqa: PLC0415
+        register_js_port,
+        unregister_js_port,
+    )
+
+    global _PYODIDE_PAIR_COUNTER  # noqa: PLW0603
+    _PYODIDE_PAIR_COUNTER += 1
+    left_url = f"pyodide://pair{_PYODIDE_PAIR_COUNTER}-left"
+    right_url = f"pyodide://pair{_PYODIDE_PAIR_COUNTER}-right"
+
+    left_port, right_port = js.create_fake_serial_pair()
+    register_js_port(left_url, left_port)
+    register_js_port(right_url, right_port)
+    try:
+        yield (left_url, right_url)
+    finally:
+        unregister_js_port(left_url)
+        unregister_js_port(right_url)
 
 
 @contextlib.asynccontextmanager
