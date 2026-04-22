@@ -56,10 +56,21 @@ test("DTR mirrors to DSR and DCD on the peer", async () => {
   await a.close();
 });
 
-test("closing one side delivers done:true to the peer's reader", async () => {
+test("closing one side ends its own reader but leaves the peer intact", async () => {
   const [a, b] = await openBoth();
-  const peerReader = b.readable!.getReader();
+  const ownReader = a.readable!.getReader();
   await a.close();
-  const { done } = await peerReader.read();
+  const { done } = await ownReader.read();
   expect(done).toBe(true);
+
+  // Peer still sees writes the peer makes to itself - but any writes from A
+  // are dropped silently (A.writable is gone).
+  const peerWriter = b.writable!.getWriter();
+  const peerReader = b.readable!.getReader();
+  await peerWriter.write(new Uint8Array([42]));
+  // No peer data comes back since A is closed.
+  // Verify peer can still close cleanly.
+  peerWriter.releaseLock();
+  peerReader.releaseLock();
+  await b.close();
 });

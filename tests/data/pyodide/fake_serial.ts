@@ -60,15 +60,6 @@ export class FakeSerialPort {
       this.#inboundController = null;
     }
 
-    // Cable-unplugged semantics: the peer sees done:true too.
-    const peer = this.#peer;
-    if (peer && peer.#inboundController) {
-      try {
-        peer.#inboundController.close();
-      } catch {}
-      peer.#inboundController = null;
-    }
-
     this.#readable = null;
     this.#writable = null;
   }

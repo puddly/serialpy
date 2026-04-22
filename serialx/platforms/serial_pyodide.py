@@ -182,6 +182,7 @@ class PyodideSerialTransport(BaseSerialTransport):
             xonxoff=xonxoff,
             rtscts=rtscts,
             byte_size=byte_size,
+            **kwargs,
         )
 
         if self._serial.stopbits not in _STOPBITS_MAP:
@@ -216,13 +217,19 @@ class PyodideSerialTransport(BaseSerialTransport):
 
         self._js_port = js_port
         assert self._js_port is not None
+
+        if self._serial.rtsdtr_on_open is not PinState.UNDEFINED:
+            await self.set_modem_pins(
+                rts=self._serial.rtsdtr_on_open,
+                dtr=self._serial.rtsdtr_on_open,
+            )
+
         self._js_reader = self._js_port.readable.getReader()
         self._js_writer = self._js_port.writable.getWriter()
 
         self._reader_task = self._loop.create_task(self._reader_loop())
         self._writer_task = self._loop.create_task(self._writer_loop())
 
-        self._js_port = js_port
         self._protocol.connection_made(self)
 
     async def _writer_loop(self) -> None:
@@ -324,6 +331,15 @@ class PyodideSerialTransport(BaseSerialTransport):
             self._js_writer = None
 
         if self._js_port is not None:
+            if (
+                self._serial is not None
+                and self._serial.rtsdtr_on_close is not PinState.UNDEFINED
+            ):
+                with contextlib.suppress(Exception):
+                    await self.set_modem_pins(
+                        rts=self._serial.rtsdtr_on_close,
+                        dtr=self._serial.rtsdtr_on_close,
+                    )
             await self._js_port.close()
             self._js_port = None
 
@@ -351,9 +367,9 @@ class PyodideSerialTransport(BaseSerialTransport):
         if self._js_port is not None and self._close_port_task is None:
             self._close_port_task = asyncio.create_task(self._close_port(exception))
             _SERIAL_PORT_CLOSING_TASKS.append(self._close_port_task)
-        elif self._protocol is not None:
+        elif self._protocol is not None and not self._closed_waiter.done():
             # If we have no serial port but have a connected protocol, we still need to
-            # notify the protocol that the connection is lost
+            # notify the protocol that the connection is lost (once).
             self._call_protocol_connection_lost(exception)
 
     def close(self) -> None:
