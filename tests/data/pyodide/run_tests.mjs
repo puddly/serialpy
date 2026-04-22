@@ -30,7 +30,9 @@ await micropip.install("pytest-timeout")
 pyodide.FS.mkdir("/repo");
 pyodide.mountNodeFS("/repo", REPO_ROOT);
 
-const sitePackages = pyodide.runPython("import site; site.getsitepackages()[0]");
+const sitePackages = pyodide.runPython(
+  "import site; site.getsitepackages()[0]",
+);
 pyodide.FS.symlink("/repo/serialx", `${sitePackages}/serialx`);
 
 const pytestArgs = process.argv.slice(2);

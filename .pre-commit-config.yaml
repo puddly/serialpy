@@ -24,6 +24,12 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.8.3
+    hooks:
+      - id: prettier
+        files: ^tests/data/pyodide/.*\.(mjs|json)$
+
   - repo: local
     hooks:
       - id: cargo-fmt
