@@ -1,37 +1,37 @@
-// Run a subset of the serialx pytest suite inside Pyodide under Bun.
-//
-// Usage:
-//   bun run run_tests.mjs                     # runs tests/test_serial_pyodide.py
-//   bun run run_tests.mjs <pytest-args>...    # forwards args to pytest.main
 import { loadPyodide } from "pyodide";
 import path from "node:path";
 import process from "node:process";
 
+import { createFakeSerialPair } from "./fake_serial.mjs";
+
 const HERE = import.meta.dir;
 const REPO_ROOT = path.resolve(HERE, "../../..");
 
-const pyodide = await loadPyodide();
+globalThis.create_fake_serial_pair = createFakeSerialPair;
 
+const pyodide = await loadPyodide();
 await pyodide.loadPackage([
   "pytest",
   "pytest-asyncio",
   "typing-extensions",
   "async-timeout",
+  "micropip",
 ]);
 
-// Mount the repo read-through so source edits are picked up without copying.
+await pyodide.runPythonAsync(`
+import signal
+signal.setitimer = lambda which, seconds, interval=0.0: (0.0, 0.0)
+
+import micropip
+micropip.add_mock_package("psutil", "0.0.0")
+await micropip.install("pytest-timeout")
+`);
+
 pyodide.FS.mkdir("/repo");
 pyodide.mountNodeFS("/repo", REPO_ROOT);
 
-// Symlink the serialx package into site-packages so `import serialx` works
-// naturally, without any sys.path gymnastics inside the tests. Also expose our
-// psutil shim there so tests/common.py's top-level `import psutil` succeeds.
 const sitePackages = pyodide.runPython("import site; site.getsitepackages()[0]");
 pyodide.FS.symlink("/repo/serialx", `${sitePackages}/serialx`);
-pyodide.FS.symlink(
-  "/repo/tests/data/pyodide/stubs/psutil.py",
-  `${sitePackages}/psutil.py`,
-);
 
 const pytestArgs = process.argv.slice(2);
 if (pytestArgs.length === 0) {
@@ -40,12 +40,11 @@ if (pytestArgs.length === 0) {
 
 pyodide.globals.set("pytest_argv", pytestArgs);
 
-const rc = pyodide.runPython(`
+const rc = await pyodide.runPythonAsync(`
 import pytest
-# pyproject.toml's addopts uses pytest-xdist (-n auto), which isn't available
-# under Pyodide; drop all addopts for this run.
 int(pytest.main([
     "--override-ini=addopts=",
+    "-W", "ignore::DeprecationWarning:pytest_asyncio.plugin",
     *pytest_argv,
 ]))
 `);

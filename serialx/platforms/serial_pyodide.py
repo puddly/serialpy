@@ -262,7 +262,6 @@ class PyodideSerialTransport(BaseSerialTransport):
 
     def __del__(self) -> None:
         """Clean up the transport if it was not properly closed."""
-        super().__del__()
         self._cleanup(RuntimeError("Transport was not closed!"))
 
     async def _close_port(self, exception: Exception | None) -> None:
