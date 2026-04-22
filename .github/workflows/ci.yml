@@ -504,7 +504,7 @@ jobs:
       - name: Install Bun dependencies
         run: bun install --cwd tests/data/pyodide --frozen-lockfile
       - name: Run tests under Pyodide
-        run: bun tests/data/pyodide/run_tests.mjs
+        run: bun tests/data/pyodide/run_tests.ts
 
   coverage:
     name: Process test coverage

@@ -2,7 +2,11 @@ import { loadPyodide } from "pyodide";
 import path from "node:path";
 import process from "node:process";
 
-import { createFakeSerialPair } from "./fake_serial.mjs";
+import { createFakeSerialPair } from "./fake_serial";
+
+declare global {
+  var create_fake_serial_pair: typeof createFakeSerialPair;
+}
 
 const HERE = import.meta.dir;
 const REPO_ROOT = path.resolve(HERE, "../../..");
@@ -32,7 +36,7 @@ pyodide.mountNodeFS("/repo", REPO_ROOT);
 
 const sitePackages = pyodide.runPython(
   "import site; site.getsitepackages()[0]",
-);
+) as string;
 pyodide.FS.symlink("/repo/serialx", `${sitePackages}/serialx`);
 
 const pytestArgs = process.argv.slice(2);
@@ -42,13 +46,13 @@ if (pytestArgs.length === 0) {
 
 pyodide.globals.set("pytest_argv", pytestArgs);
 
-const rc = await pyodide.runPythonAsync(`
+const rc = (await pyodide.runPythonAsync(`
 import pytest
 int(pytest.main([
     "--override-ini=addopts=",
     "-W", "ignore::DeprecationWarning:pytest_asyncio.plugin",
     *pytest_argv,
 ]))
-`);
+`)) as number;
 
 process.exit(rc);

@@ -1,23 +1,22 @@
-// Smoke tests for fake_serial.mjs. Run with `bun test tests/data/pyodide`.
 import { test, expect } from "bun:test";
-import { createFakeSerialPair } from "./fake_serial.mjs";
+import { createFakeSerialPair } from "./fake_serial";
 
 async function openBoth() {
   const [a, b] = createFakeSerialPair();
   await a.open({ baudRate: 115200 });
   await b.open({ baudRate: 115200 });
-  return [a, b];
+  return [a, b] as const;
 }
 
 test("bytes flow left -> right", async () => {
   const [a, b] = await openBoth();
-  const writer = a.writable.getWriter();
-  const reader = b.readable.getReader();
+  const writer = a.writable!.getWriter();
+  const reader = b.readable!.getReader();
 
   await writer.write(new Uint8Array([1, 2, 3, 4]));
   const { value, done } = await reader.read();
   expect(done).toBe(false);
-  expect(Array.from(value)).toEqual([1, 2, 3, 4]);
+  expect(Array.from(value!)).toEqual([1, 2, 3, 4]);
 
   writer.releaseLock();
   reader.releaseLock();
@@ -26,12 +25,12 @@ test("bytes flow left -> right", async () => {
 
 test("bytes flow right -> left", async () => {
   const [a, b] = await openBoth();
-  const writer = b.writable.getWriter();
-  const reader = a.readable.getReader();
+  const writer = b.writable!.getWriter();
+  const reader = a.readable!.getReader();
 
   await writer.write(new Uint8Array([9, 8, 7]));
   const { value } = await reader.read();
-  expect(Array.from(value)).toEqual([9, 8, 7]);
+  expect(Array.from(value!)).toEqual([9, 8, 7]);
 
   writer.releaseLock();
   reader.releaseLock();
@@ -59,7 +58,7 @@ test("DTR mirrors to DSR and DCD on the peer", async () => {
 
 test("closing one side delivers done:true to the peer's reader", async () => {
   const [a, b] = await openBoth();
-  const peerReader = b.readable.getReader();
+  const peerReader = b.readable!.getReader();
   await a.close();
   const { done } = await peerReader.read();
   expect(done).toBe(true);

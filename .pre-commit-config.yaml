@@ -28,7 +28,7 @@ repos:
     rev: v3.8.3
     hooks:
       - id: prettier
-        files: ^tests/data/pyodide/.*\.(mjs|json)$
+        files: ^tests/data/pyodide/.*\.(ts|json)$
 
   - repo: local
     hooks:
