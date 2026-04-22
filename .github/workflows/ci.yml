@@ -483,6 +483,29 @@ jobs:
           pip install -e serialx_compat[dev]
           pytest -q serialx_compat/tests
 
+  pytest-pyodide:
+    runs-on: ubuntu-slim
+    name: Run tests under Pyodide (Bun)
+    steps:
+      - name: Check out code from GitHub
+        uses: actions/checkout@v6
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Cache Pyodide package wheels
+        uses: actions/cache@v4
+        with:
+          path: tests/data/pyodide/node_modules/pyodide
+          key: >-
+            1-${{ runner.os }}-pyodide-${{
+            hashFiles('tests/data/pyodide/package.json',
+                      'tests/data/pyodide/bun.lock') }}
+      - name: Install Bun dependencies
+        run: bun install --cwd tests/data/pyodide --frozen-lockfile
+      - name: Run tests under Pyodide
+        run: bun tests/data/pyodide/run_tests.mjs
+
   coverage:
     name: Process test coverage
     runs-on: ubuntu-latest

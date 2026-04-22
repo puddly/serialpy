@@ -1,0 +1,11 @@
+{
+  "name": "serialx-pyodide-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun run run_tests.mjs"
+  },
+  "dependencies": {
+    "pyodide": "^0.29.3"
+  }
+}
