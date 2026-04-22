@@ -311,19 +311,18 @@ class PyodideSerialTransport(BaseSerialTransport):
         self._cleanup(RuntimeError("Transport was not closed!"))
 
     async def _close_port(self, exception: Exception | None) -> None:
-        _LOGGER.debug("Flushing pending writes")
-
-        # First, wait for writes to finish
-        if self._writer_task is not None:
+        # Drain pending writes, unless abort() already cancelled the writer.
+        if self._writer_task is not None and not self._writer_task.done():
             try:
                 async with asyncio_timeout(_WRITE_FLUSH_TIMEOUT):
                     _LOGGER.debug("Waiting for pending writes to finish")
                     self._write_queue.put_nowait(ExitSentinel)
                     await self._writer_task
-            except asyncio.TimeoutError:
-                _LOGGER.debug("Write task did not exit in time, cancelling it")
-                with contextlib.suppress(asyncio.CancelledError):
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                _LOGGER.debug("Write task did not drain cleanly; cancelling")
+                if not self._writer_task.done():
                     self._writer_task.cancel()
+                with contextlib.suppress(BaseException):
                     await self._writer_task
 
         if self._js_writer is not None:
