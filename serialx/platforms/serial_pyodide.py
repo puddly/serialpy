@@ -33,10 +33,23 @@ JsSerialPort = Any
 
 _LOGGER = logging.getLogger(__name__)
 
-# Global serial port, so out-of-band JS code can set it before the transport is created
-_GLOBAL_SERIAL_PORT = None
-_GLOBAL_SERIAL_PORT_NAME = "pyodide://serial"
+# Registry of paths → JS `SerialPort` instances. Lets out-of-band JS code
+# associate a URL with a SerialPort before `create_serial_connection` runs;
+# callers that don't name a path share the default slot at _DEFAULT_PATH.
+_REGISTERED_JS_PORTS: dict[str, JsSerialPort] = {}
+_DEFAULT_PATH = "pyodide://serial"
 _SERIAL_PORT_CLOSING_TASKS: list[asyncio.Task[Any]] = []
+
+
+def register_js_port(path: str, js_port: JsSerialPort) -> None:
+    """Associate a URL with a JS `SerialPort` for later connection."""
+    _REGISTERED_JS_PORTS[path] = js_port
+
+
+def unregister_js_port(path: str) -> None:
+    """Remove the entry for `path` from the JS port registry, if any."""
+    _REGISTERED_JS_PORTS.pop(path, None)
+
 
 _WRITE_FLUSH_TIMEOUT = 5.0
 
@@ -81,7 +94,7 @@ class PyodideSerial(BaseSerial):
     def _write(self, data: Buffer, *, timeout: float | None) -> int:
         raise NotImplementedError()
 
-    def flush(self) -> None:
+    def _flush(self) -> None:
         """Flush write buffers."""
         raise NotImplementedError()
 
@@ -93,11 +106,11 @@ class PyodideSerial(BaseSerial):
         """Return the number of bytes in the write buffer."""
         raise NotImplementedError()
 
-    def reset_read_buffer(self) -> None:
+    def _reset_read_buffer(self) -> None:
         """Clear the read buffer."""
         raise NotImplementedError()
 
-    def reset_write_buffer(self) -> None:
+    def _reset_write_buffer(self) -> None:
         """Clear the write buffer."""
         raise NotImplementedError()
 
@@ -120,6 +133,7 @@ class PyodideSerialTransport(BaseSerialTransport):
         super().__init__(loop, protocol)
 
         self._write_queue: asyncio.Queue[bytes | type[ExitSentinel]] = asyncio.Queue()
+        self._write_buffer_size = 0
         self._closing = False
         self._close_port_task: asyncio.Task[None] | None = None
 
@@ -132,9 +146,8 @@ class PyodideSerialTransport(BaseSerialTransport):
 
     @classmethod
     def set_global_js_serial_port(cls, js_port: JsSerialPort) -> None:
-        """Set the global JS serial port instance."""
-        global _GLOBAL_SERIAL_PORT  # noqa: PLW0603
-        _GLOBAL_SERIAL_PORT = js_port
+        """Set the default JS serial port instance (at `pyodide://serial`)."""
+        register_js_port(_DEFAULT_PATH, js_port)
 
     async def _connect(
         self,
@@ -161,31 +174,44 @@ class PyodideSerialTransport(BaseSerialTransport):
         else:
             flow_control = "none"
 
-        if stopbits not in _STOPBITS_MAP:
-            raise UnsupportedSetting(f"Unsupported stopbits setting: {stopbits!r}")
+        self._serial = PyodideSerial(
+            path=path,
+            baudrate=baudrate,
+            parity=parity,
+            stopbits=stopbits,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            byte_size=byte_size,
+        )
 
-        if parity not in _PARITY_MAP:
-            raise UnsupportedSetting(f"Unsupported parity setting: {parity!r}")
+        if self._serial.stopbits not in _STOPBITS_MAP:
+            raise UnsupportedSetting(
+                f"Unsupported stopbits setting: {self._serial.stopbits!r}"
+            )
+
+        if self._serial.parity not in _PARITY_MAP:
+            raise UnsupportedSetting(
+                f"Unsupported parity setting: {self._serial.parity!r}"
+            )
+
+        if byte_size not in (7, 8):
+            raise UnsupportedSetting(f"Unsupported byte_size: {byte_size!r}")
 
         if js_port is None:
-            if path != _GLOBAL_SERIAL_PORT_NAME:
-                raise UnsupportedSetting(
-                    f"Path must be {_GLOBAL_SERIAL_PORT_NAME!r} when using the global serial port instance. Got {path!r} instead."
-                )
-
-            js_port = _GLOBAL_SERIAL_PORT
+            js_port = _REGISTERED_JS_PORTS.get(path)
 
         if js_port is None:
             raise SerialException(
-                "No JS serial port object has been provided. Set one globally or pass an instance into `connect`"
+                f"No JS serial port registered for {path!r}; call "
+                f"`register_js_port(path, js_port)` or pass `js_port=` to `connect`"
             )
 
         await js_port.open(
-            baudRate=baudrate,
-            dataBits=byte_size,
+            baudRate=self._serial.baudrate,
+            dataBits=self._serial.byte_size,
             flowControl=flow_control,
-            parity=_PARITY_MAP[parity],
-            stopBits=_STOPBITS_MAP[stopbits],
+            parity=_PARITY_MAP[self._serial.parity],
+            stopBits=_STOPBITS_MAP[self._serial.stopbits],
         )
 
         self._js_port = js_port
@@ -215,6 +241,8 @@ class PyodideSerialTransport(BaseSerialTransport):
                 self._cleanup(e)
                 break
             finally:
+                assert not isinstance(chunk, type)
+                self._write_buffer_size -= len(chunk)
                 self._write_queue.task_done()
 
     async def _reader_loop(self) -> None:
@@ -227,16 +255,16 @@ class PyodideSerialTransport(BaseSerialTransport):
             assert self._protocol is not None
             self._protocol.data_received(bytes(result.value))
 
-    async def _get_modem_pins(self) -> ModemPins:
-        """Get modem control bits, internal."""
+    async def get_modem_pins(self) -> ModemPins:
+        """Get modem control bits."""
         assert self._js_port is not None
         result = await self._js_port.getSignals()
 
         return ModemPins(
-            cts=result.clearToSend,
-            car=result.dataCarrierDetect,
-            rng=result.ringIndicator,
-            dsr=result.dataSetReady,
+            cts=PinState.convert(result.clearToSend),
+            car=PinState.convert(result.dataCarrierDetect),
+            rng=PinState.convert(result.ringIndicator),
+            dsr=PinState.convert(result.dataSetReady),
         )
 
     async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
@@ -254,11 +282,22 @@ class PyodideSerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes) -> None:
         """Write data to the transport."""
+        self._write_buffer_size += len(data)
         self._write_queue.put_nowait(data)
+
+    def get_write_buffer_size(self) -> int:
+        """Return the number of bytes currently queued for writing."""
+        return self._write_buffer_size
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
         await self._write_queue.join()
+
+    def abort(self) -> None:
+        """Close the transport immediately, discarding pending writes."""
+        if self._writer_task is not None and not self._writer_task.done():
+            self._writer_task.cancel()
+        self._cleanup(None)
 
     def __del__(self) -> None:
         """Clean up the transport if it was not properly closed."""

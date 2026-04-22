@@ -54,6 +54,7 @@ class SerialBackend(str, enum.Enum):
     RFC2217 = "rfc2217"
     SER2NET = "ser2net"
     HUB4COM = "hub4com"
+    PYODIDE = "pyodide"
 
 
 class SerialQuirk(str, enum.Enum):
@@ -131,6 +132,22 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
     SerialBackend.ADAPTER: frozenset(
         {
             SerialQuirk.NO_UNPLUG,
+        }
+    ),
+    SerialBackend.PYODIDE: frozenset(
+        {
+            # Web Serial reports *input* signals only; output signals (RTS/DTR/BRK)
+            # don't read back on the same port.
+            SerialQuirk.NO_RTS_DTR_READBACK,
+            SerialQuirk.NO_WRITE_TIMEOUT,
+            SerialQuirk.NO_NUM_UNREAD_BYTES,
+            SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
+            SerialQuirk.NO_RESET_READ_BUFFER,
+            SerialQuirk.NO_RESET_WRITE_BUFFER,
+            SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
+            SerialQuirk.NO_BUFFER_CONTROL,
+            SerialQuirk.NO_WRITE_LIMITS,
+            SerialQuirk.NO_EXCLUSIVITY,
         }
     ),
 }

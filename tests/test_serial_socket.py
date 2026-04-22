@@ -1,8 +1,15 @@
 """Socket serial port tests."""
 
 import asyncio
+import sys
 
 import pytest
+
+if sys.platform == "emscripten":
+    pytest.skip(
+        "Socket transport isn't available under Pyodide",
+        allow_module_level=True,
+    )
 
 from serialx import Serial, create_serial_connection
 from serialx.platforms.serial_socket import SocketSerial

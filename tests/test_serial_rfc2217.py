@@ -1,8 +1,15 @@
 """RFC2217 serial port tests."""
 
 import asyncio
+import sys
 
 import pytest
+
+if sys.platform == "emscripten":
+    pytest.skip(
+        "RFC2217 transport isn't available under Pyodide",
+        allow_module_level=True,
+    )
 
 from serialx import Serial, SerialException, create_serial_connection
 from serialx.common import measure_time
