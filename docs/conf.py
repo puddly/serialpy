@@ -35,6 +35,7 @@ autodoc_default_options = {
 }
 autodoc_mock_imports = [
     "aioesphomeapi",
+    "js",
     "pywintypes",
     "win32con",
     "win32event",

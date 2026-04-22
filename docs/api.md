@@ -15,6 +15,7 @@ api/platforms/win32
 api/platforms/socket
 api/platforms/rfc2217
 api/platforms/esphome
+api/platforms/pyodide
 ```
 
 ## Top-level package
