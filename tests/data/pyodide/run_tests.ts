@@ -20,6 +20,7 @@ await pyodide.loadPackage([
   "typing-extensions",
   "async-timeout",
   "micropip",
+  "sqlite3",
 ]);
 
 await pyodide.runPythonAsync(`
@@ -28,7 +29,7 @@ signal.setitimer = lambda which, seconds, interval=0.0: (0.0, 0.0)
 
 import micropip
 micropip.add_mock_package("psutil", "0.0.0")
-await micropip.install("pytest-timeout")
+await micropip.install(["pytest-timeout", "pytest-cov"])
 `);
 
 pyodide.FS.mkdir("/repo");
@@ -47,6 +48,9 @@ if (pytestArgs.length === 0) {
 pyodide.globals.set("pytest_argv", pytestArgs);
 
 const rc = (await pyodide.runPythonAsync(`
+import os
+os.chdir("/repo")  # so pytest-cov's .coverage lands on the host FS
+
 import pytest
 int(pytest.main([
     "--override-ini=addopts=",

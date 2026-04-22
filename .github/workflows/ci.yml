@@ -504,12 +504,21 @@ jobs:
       - name: Install Bun dependencies
         run: bun install --cwd tests/data/pyodide --frozen-lockfile
       - name: Run tests under Pyodide
-        run: bun tests/data/pyodide/run_tests.ts
+        run: >
+          bun tests/data/pyodide/run_tests.ts
+          --cov=serialx --cov-report=
+          tests/test_serial_pyodide.py
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-pyodide
+          include-hidden-files: true
+          path: .coverage
 
   coverage:
     name: Process test coverage
     runs-on: ubuntu-latest
-    needs: [pytest, pytest-macos, pytest-windows]
+    needs: [pytest, pytest-macos, pytest-windows, pytest-pyodide]
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v6
