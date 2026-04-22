@@ -504,10 +504,7 @@ jobs:
       - name: Install Bun dependencies
         run: bun install --cwd tests/data/pyodide --frozen-lockfile
       - name: Run tests under Pyodide
-        run: >
-          bun tests/data/pyodide/run_tests.ts
-          --cov=serialx --cov-report=
-          tests/test_serial_pyodide.py
+        run: bun tests/data/pyodide/run_tests.ts --cov=serialx --cov-report=
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:

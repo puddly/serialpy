@@ -1,15 +1,11 @@
 import { loadPyodide } from "pyodide";
 import path from "node:path";
-import process from "node:process";
 
 import { createFakeSerialPair } from "./fake_serial";
 
 declare global {
   var create_fake_serial_pair: typeof createFakeSerialPair;
 }
-
-const HERE = import.meta.dir;
-const REPO_ROOT = path.resolve(HERE, "../../..");
 
 globalThis.create_fake_serial_pair = createFakeSerialPair;
 
@@ -23,35 +19,29 @@ await pyodide.loadPackage([
   "sqlite3",
 ]);
 
-await pyodide.runPythonAsync(`
-import signal
-signal.setitimer = lambda which, seconds, interval=0.0: (0.0, 0.0)
-
-import micropip
-micropip.add_mock_package("psutil", "0.0.0")
-await micropip.install(["pytest-timeout", "pytest-cov"])
-`);
-
 pyodide.FS.mkdir("/repo");
-pyodide.mountNodeFS("/repo", REPO_ROOT);
+pyodide.mountNodeFS("/repo", path.resolve(import.meta.dir, "../../.."));
 
-const sitePackages = pyodide.runPython(
-  "import site; site.getsitepackages()[0]",
-) as string;
-pyodide.FS.symlink("/repo/serialx", `${sitePackages}/serialx`);
-
-const pytestArgs = process.argv.slice(2);
-if (pytestArgs.length === 0) {
-  pytestArgs.push("/repo/tests/test_serial_pyodide.py");
-}
-
-pyodide.globals.set("pytest_argv", pytestArgs);
+const args = process.argv.slice(2);
+pyodide.globals.set("pytest_argv", args.length ? args : ["/repo/tests"]);
 
 const rc = (await pyodide.runPythonAsync(`
 import os
-os.chdir("/repo")  # so pytest-cov's .coverage lands on the host FS
-
+import site
 import pytest
+import signal
+import micropip
+
+# Push .coverage to the host FS
+os.chdir("/repo")
+os.symlink("/repo/serialx", f"{site.getsitepackages()[0]}/serialx")
+
+# Stub implementation of signal.setitimer
+signal.setitimer = lambda which, seconds, interval=0.0: (0.0, 0.0)
+
+micropip.add_mock_package("psutil", "0.0.0")
+await micropip.install(["pytest-timeout", "pytest-cov"])
+
 int(pytest.main([
     "--override-ini=addopts=",
     "-W", "ignore::DeprecationWarning:pytest_asyncio.plugin",
