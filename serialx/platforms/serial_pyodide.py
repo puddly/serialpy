@@ -275,7 +275,7 @@ class PyodideSerialTransport(BaseSerialTransport):
 
     async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits, internal."""
-        signals: SerialOutputSignals = {}
+        signals = SerialOutputSignals()
         if modem_pins.rts is not PinState.UNDEFINED:
             signals["requestToSend"] = modem_pins.rts is PinState.HIGH
         if modem_pins.dtr is not PinState.UNDEFINED:

@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from typing import Any, NotRequired, Protocol, TypedDict, Unpack
+from typing import Any, Protocol, TypedDict
+
+from typing_extensions import NotRequired, Unpack
 
 
 class SerialOptions(TypedDict):
