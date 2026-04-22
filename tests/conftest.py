@@ -7,6 +7,7 @@ import contextlib
 import dataclasses
 import os
 import sys
+from typing import TYPE_CHECKING
 import urllib.parse
 
 import pytest
@@ -30,7 +31,7 @@ from tests.common import (
 )
 from tests.socket_relay import create_socket_pair
 
-if sys.platform == "emscripten":
+if TYPE_CHECKING or sys.platform == "emscripten":
     from tests._pyodide_pair import create_pyodide_pair
 
 

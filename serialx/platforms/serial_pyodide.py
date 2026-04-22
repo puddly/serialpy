@@ -28,8 +28,7 @@ from ..common import (
     UnsupportedSetting,
     register_uri_handler,
 )
-
-JsSerialPort = Any
+from .pyodide_types import JsSerialPort, SerialOutputSignals
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -137,19 +136,19 @@ class PyodideSerialTransport(BaseSerialTransport):
         self._closing = False
         self._close_port_task: asyncio.Task[None] | None = None
 
-        self._js_port = None
-        self._js_reader = None
-        self._js_writer = None
+        self._js_port: JsSerialPort | None = None
+        self._js_reader: Any | None = None
+        self._js_writer: Any | None = None
 
-        self._reader_task = None
-        self._writer_task = None
+        self._reader_task: asyncio.Task[None] | None = None
+        self._writer_task: asyncio.Task[None] | None = None
 
     @classmethod
     def set_global_js_serial_port(cls, js_port: JsSerialPort) -> None:
         """Set the default JS serial port instance (at `pyodide://serial`)."""
         register_js_port(_DEFAULT_PATH, js_port)
 
-    async def _connect(
+    async def _connect(  # type: ignore[override]
         self,
         *,
         path: str,
@@ -161,7 +160,7 @@ class PyodideSerialTransport(BaseSerialTransport):
         byte_size: int = 8,
         # A `SerialPort` object must be passed in externally, or pulled from the global
         js_port: JsSerialPort | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> None:
         if rtscts and xonxoff:
             raise UnsupportedSetting(
@@ -276,21 +275,20 @@ class PyodideSerialTransport(BaseSerialTransport):
 
     async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits, internal."""
-        kwargs = {}
-
+        signals: SerialOutputSignals = {}
         if modem_pins.rts is not PinState.UNDEFINED:
-            kwargs["requestToSend"] = modem_pins.rts.to_bool()
+            signals["requestToSend"] = modem_pins.rts is PinState.HIGH
         if modem_pins.dtr is not PinState.UNDEFINED:
-            kwargs["dataTerminalReady"] = modem_pins.dtr.to_bool()
+            signals["dataTerminalReady"] = modem_pins.dtr is PinState.HIGH
 
-        if kwargs:
+        if signals:
             assert self._js_port is not None
-            await self._js_port.setSignals(**kwargs)
+            await self._js_port.setSignals(**signals)
 
-    def write(self, data: bytes) -> None:
+    def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the transport."""
         self._write_buffer_size += len(data)
-        self._write_queue.put_nowait(data)
+        self._write_queue.put_nowait(bytes(data))
 
     def get_write_buffer_size(self) -> int:
         """Return the number of bytes currently queued for writing."""
@@ -330,10 +328,7 @@ class PyodideSerialTransport(BaseSerialTransport):
             self._js_writer = None
 
         if self._js_port is not None:
-            if (
-                self._serial is not None
-                and self._serial.rtsdtr_on_close is not PinState.UNDEFINED
-            ):
+            if self._serial.rtsdtr_on_close is not PinState.UNDEFINED:
                 with contextlib.suppress(Exception):
                     await self.set_modem_pins(
                         rts=self._serial.rtsdtr_on_close,
@@ -366,9 +361,7 @@ class PyodideSerialTransport(BaseSerialTransport):
         if self._js_port is not None and self._close_port_task is None:
             self._close_port_task = asyncio.create_task(self._close_port(exception))
             _SERIAL_PORT_CLOSING_TASKS.append(self._close_port_task)
-        elif self._protocol is not None and not self._closed_waiter.done():
-            # If we have no serial port but have a connected protocol, we still need to
-            # notify the protocol that the connection is lost (once).
+        elif not self._closed_waiter.done():
             self._call_protocol_connection_lost(exception)
 
     def close(self) -> None:
