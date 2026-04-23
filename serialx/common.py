@@ -658,8 +658,9 @@ class BaseSerial(io.RawIOBase):
     def port(self) -> str | None:
         """Deprecated alias for `path`.
 
-        Warning: Deprecated
-            Use `path` instead.
+        Warning:
+            Deprecated, use `path` instead.
+
         """
         return str(self.path) if self.path is not None else None
 
@@ -667,8 +668,9 @@ class BaseSerial(io.RawIOBase):
     def portstr(self) -> str | None:
         """Deprecated alias for `path`.
 
-        Warning: Deprecated
-            Use `path` instead.
+        Warning:
+            Deprecated, use `path` instead.
+
         """
         return str(self.path) if self.path is not None else None
 
@@ -676,8 +678,9 @@ class BaseSerial(io.RawIOBase):
     def timeout(self) -> float | None:
         """Deprecated alias for `read_timeout`.
 
-        Warning: Deprecated
-            Use `read_timeout` instead.
+        Warning:
+            Deprecated, use `read_timeout` instead.
+
         """
         return self.read_timeout
 
@@ -689,8 +692,9 @@ class BaseSerial(io.RawIOBase):
     def bytesize(self) -> int:
         """Deprecated alias for `byte_size`.
 
-        Warning: Deprecated
-            Use `byte_size` instead.
+        Warning:
+            Deprecated, use `byte_size` instead.
+
         """
         return self.byte_size
 
@@ -698,8 +702,9 @@ class BaseSerial(io.RawIOBase):
     def data_bits(self) -> int:
         """Deprecated alias for `byte_size`.
 
-        Warning: Deprecated
-            Use `byte_size` instead.
+        Warning:
+            Deprecated, use `byte_size` instead.
+
         """
         return self.byte_size
 
@@ -712,8 +717,9 @@ class BaseSerial(io.RawIOBase):
     def stop_bits(self) -> int | float:
         """Deprecated alias for `stopbits`.
 
-        Warning: Deprecated
-            Use `stopbits` instead.
+        Warning:
+            Deprecated, use `stopbits` instead.
+
         """
         return cast(int | float, self._stopbits.value)
 
@@ -726,40 +732,45 @@ class BaseSerial(io.RawIOBase):
     def writeTimeout(self) -> float | None:
         """Deprecated alias for `write_timeout`.
 
-        Warning: Deprecated
-            Use `write_timeout` instead.
+        Warning:
+            Deprecated, use `write_timeout` instead.
+
         """
         return self.write_timeout
 
     def reset_input_buffer(self) -> None:
         """Reset the read buffer.
 
-        Warning: Deprecated
-            Use `reset_read_buffer` instead.
+        Warning:
+            Deprecated, use `reset_read_buffer` instead.
+
         """
         self.reset_read_buffer()
 
     def reset_output_buffer(self) -> None:
         """Reset the write buffer.
 
-        Warning: Deprecated
-            Use `reset_write_buffer` instead.
+        Warning:
+            Deprecated, use `reset_write_buffer` instead.
+
         """
         self.reset_write_buffer()
 
     def flushInput(self) -> None:
         """Reset the read buffer.
 
-        Warning: Deprecated
-            Use `reset_read_buffer` instead.
+        Warning:
+            Deprecated, use `reset_read_buffer` instead.
+
         """
         self.reset_read_buffer()
 
     def flushOutput(self) -> None:
         """Reset the write buffer.
 
-        Warning: Deprecated
-            Use `reset_write_buffer` instead.
+        Warning:
+            Deprecated, use `reset_write_buffer` instead.
+
         """
         self.reset_write_buffer()
 
@@ -767,8 +778,9 @@ class BaseSerial(io.RawIOBase):
     def in_waiting(self) -> int:
         """Deprecated alias for `num_unread_bytes`.
 
-        Warning: Deprecated
-            Use `num_unread_bytes` instead.
+        Warning:
+            Deprecated, use `num_unread_bytes` instead.
+
         """
         return self.num_unread_bytes()
 
@@ -776,8 +788,9 @@ class BaseSerial(io.RawIOBase):
     def out_waiting(self) -> int:
         """Deprecated alias for `num_unwritten_bytes`.
 
-        Warning: Deprecated
-            Use `num_unwritten_bytes` instead.
+        Warning:
+            Deprecated, use `num_unwritten_bytes` instead.
+
         """
         return self.num_unwritten_bytes()
 
@@ -785,16 +798,18 @@ class BaseSerial(io.RawIOBase):
     def inWaiting(self) -> int:
         """Deprecated alias for `num_unread_bytes`.
 
-        Warning: Deprecated
-            Use `num_unread_bytes` instead.
+        Warning:
+            Deprecated, use `num_unread_bytes` instead.
+
         """
         return self.in_waiting
 
     def isOpen(self) -> bool:
         """Return whether the serial port is open.
 
-        Warning: Deprecated
-            Use `is_open` instead.
+        Warning:
+            Deprecated, use `is_open` instead.
+
         """
         return self.is_open
 
@@ -1052,8 +1067,9 @@ class SerialPortInfo:
     def description(self) -> str | None:
         """Deprecated alias for `product`.
 
-        Warning: Deprecated
-            Use `product` instead.
+        Warning:
+            Deprecated, use `product` instead.
+
         """
         warnings.warn(
             "`description` is deprecated, use `product` instead",
