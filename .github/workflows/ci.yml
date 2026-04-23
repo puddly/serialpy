@@ -485,7 +485,7 @@ jobs:
 
   pytest-pyodide:
     runs-on: ubuntu-slim
-    name: Run tests under Pyodide (Bun)
+    name: Run tests Pyodide (Bun)
     steps:
       - name: Check out code from GitHub
         uses: actions/checkout@v6
