@@ -27,6 +27,7 @@ api
 
 how-to/esphome
 how-to/pyodide
+how-to/pyserial-migration
 ```
 
 ```{toctree}
