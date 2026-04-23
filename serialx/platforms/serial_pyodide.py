@@ -21,12 +21,17 @@ from ..common import (
     UnsupportedSetting,
     register_uri_handler,
 )
-from .pyodide_types import JsSerialPort, SerialOutputSignals
+from .pyodide_types import (
+    JsSerialPort,
+    JsStreamReader,
+    JsStreamWriter,
+    SerialOutputSignals,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 _REGISTERED_JS_PORTS: dict[str, JsSerialPort] = {}
-_SERIAL_PORT_CLOSING_TASKS: set[asyncio.Task[Any]] = set()
+_SERIAL_PORT_CLOSING_TASKS: set[asyncio.Task[None]] = set()
 
 
 def register_js_port(path: str, js_port: JsSerialPort) -> None:
@@ -126,8 +131,8 @@ class PyodideSerialTransport(BaseSerialTransport):
         self._close_port_task: asyncio.Task[None] | None = None
 
         self._js_port: JsSerialPort | None = None
-        self._js_reader: Any | None = None
-        self._js_writer: Any | None = None
+        self._js_reader: JsStreamReader | None = None
+        self._js_writer: JsStreamWriter | None = None
 
         self._reader_task: asyncio.Task[None] | None = None
         self._writer_task: asyncio.Task[None] | None = None

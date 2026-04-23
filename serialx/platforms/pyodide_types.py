@@ -32,10 +32,17 @@ SerialOutputSignals = TypedDict(
 )
 
 
+class JsStreamReadResult(Protocol):
+    """Result of `ReadableStreamDefaultReader.read()`."""
+
+    done: bool
+    value: Any
+
+
 class JsStreamReader(Protocol):
     """`ReadableStreamDefaultReader`."""
 
-    def read(self) -> Awaitable[Any]: ...
+    def read(self) -> Awaitable[JsStreamReadResult]: ...
     def releaseLock(self) -> None: ...
 
 
