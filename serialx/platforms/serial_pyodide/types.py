@@ -5,20 +5,25 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable
-from typing import Any, Protocol, TypedDict
+from typing import Any, Literal, Protocol, TypedDict
 
 from typing_extensions import NotRequired, Unpack
+
+ParityType = Literal["none", "even", "odd"]
+FlowControlType = Literal["none", "hardware"]
+DataBits = Literal[7, 8]
+StopBits = Literal[1, 2]
 
 
 class SerialOptions(TypedDict):
     """`SerialOptions` dictionary passed to `SerialPort.open`."""
 
     baudRate: int
-    dataBits: NotRequired[int]
-    stopBits: NotRequired[int]
-    parity: NotRequired[str]
+    dataBits: NotRequired[DataBits]
+    stopBits: NotRequired[StopBits]
+    parity: NotRequired[ParityType]
     bufferSize: NotRequired[int]
-    flowControl: NotRequired[str]
+    flowControl: NotRequired[FlowControlType]
 
 
 # `break` is a Python keyword; we must use TypedDict's functional form.
@@ -77,8 +82,10 @@ class JsSerialInputSignals(Protocol):
 class JsSerialPort(Protocol):
     """`SerialPort`."""
 
-    readable: JsReadableStream
-    writable: JsWritableStream
+    # Per spec, both streams are nullable: they are `null` outside the window
+    # where the port is open and healthy.
+    readable: JsReadableStream | None
+    writable: JsWritableStream | None
 
     def open(self, **kwargs: Unpack[SerialOptions]) -> Awaitable[None]: ...
     def close(self) -> Awaitable[None]: ...

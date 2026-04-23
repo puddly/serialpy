@@ -21,7 +21,16 @@ from ...common import (
     UnsupportedSetting,
     register_uri_handler,
 )
-from .types import JsSerialPort, JsStreamReader, JsStreamWriter, SerialOutputSignals
+from .types import (
+    DataBits,
+    FlowControlType,
+    JsSerialPort,
+    JsStreamReader,
+    JsStreamWriter,
+    ParityType,
+    SerialOutputSignals,
+    StopBits as JsStopBits,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,13 +50,13 @@ def unregister_js_port(path: str) -> None:
 
 _WRITE_FLUSH_TIMEOUT = 5.0
 
-_PARITY_MAP = {
+_PARITY_MAP: dict[Parity, ParityType] = {
     Parity.NONE: "none",
     Parity.ODD: "odd",
     Parity.EVEN: "even",
 }
 
-_STOPBITS_MAP = {
+_STOPBITS_MAP: dict[StopBits, JsStopBits] = {
     StopBits.ONE: 1,
     StopBits.TWO: 2,
 }
@@ -146,16 +155,12 @@ class PyodideSerialTransport(BaseSerialTransport):
         js_port: JsSerialPort | None = None,
         **kwargs: Any,
     ) -> None:
-        if rtscts and xonxoff:
-            raise UnsupportedSetting(
-                "Hardware and software flow control cannot both be enabled on this platform"
-            )
-        elif rtscts:
-            flow_control = "hardware"
-        elif xonxoff:
-            flow_control = "software"
-        else:
-            flow_control = "none"
+        # It would be more correct to raise an exception here but software flow control
+        # is used by too many applications
+        if xonxoff:
+            _LOGGER.warning("WebSerial does not support software flow control")
+
+        flow_control: FlowControlType = "hardware" if rtscts else "none"
 
         self._serial = PyodideSerial(
             path=path,
@@ -178,7 +183,12 @@ class PyodideSerialTransport(BaseSerialTransport):
                 f"Unsupported parity setting: {self._serial.parity!r}"
             )
 
-        if byte_size not in (7, 8):
+        data_bits: DataBits
+        if byte_size == 7:
+            data_bits = 7
+        elif byte_size == 8:
+            data_bits = 8
+        else:
             raise UnsupportedSetting(f"Unsupported byte_size: {byte_size!r}")
 
         if js_port is None:
@@ -192,7 +202,7 @@ class PyodideSerialTransport(BaseSerialTransport):
 
         await js_port.open(
             baudRate=self._serial.baudrate,
-            dataBits=self._serial.byte_size,
+            dataBits=data_bits,
             flowControl=flow_control,
             parity=_PARITY_MAP[self._serial.parity],
             stopBits=_STOPBITS_MAP[self._serial.stopbits],
@@ -207,8 +217,13 @@ class PyodideSerialTransport(BaseSerialTransport):
                 dtr=self._serial.rtsdtr_on_open,
             )
 
-        self._js_reader = self._js_port.readable.getReader()
-        self._js_writer = self._js_port.writable.getWriter()
+        readable = self._js_port.readable
+        assert readable is not None
+        self._js_reader = readable.getReader()
+
+        writable = self._js_port.writable
+        assert writable is not None
+        self._js_writer = writable.getWriter()
 
         self._reader_task = self._loop.create_task(self._reader_loop())
         self._writer_task = self._loop.create_task(self._writer_loop())
