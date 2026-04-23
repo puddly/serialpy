@@ -1,4 +1,22 @@
-"""Pyodide serial port implementation using the Web Serial API."""
+"""Pyodide serial port implementation using the Web Serial API.
+
+Under `Pyodide <https://pyodide.org/>`_ this module registers a transport for the
+``pyodide://`` URI scheme (and for scheme-less ``device://`` fallbacks), backed by
+the browser's `Web Serial API
+<https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API>`_. Only the async
+transport :class:`PyodideSerialTransport` is implemented; there is no synchronous
+:class:`~serialx.common.BaseSerial` equivalent because Web Serial is promise-based.
+
+Because ``navigator.serial.requestPort()`` must be called in response to a user
+gesture from JavaScript, the JS ``SerialPort`` object cannot be obtained from Python.
+Instead, the host page obtains a ``SerialPort`` and hands it to Python via
+:func:`register_js_port`, associating it with a URI path. Subsequent calls to
+:func:`serialx.open_serial_connection` (or the lower-level transport) look the path
+up in the registry. A ``SerialPort`` may also be passed directly via the ``js_port``
+keyword argument, bypassing the registry.
+
+See :doc:`/how-to/pyodide` for a more complete example.
+"""
 
 from __future__ import annotations
 
@@ -126,7 +144,14 @@ class PyodideSerialTransport(BaseSerialTransport):
     def __init__(
         self, loop: asyncio.AbstractEventLoop, protocol: asyncio.Protocol
     ) -> None:
-        """Initialize the Pyodide serial transport."""
+        """Initialize the Pyodide serial transport.
+
+        .. warning::
+            The Web Serial API does not support software flow control (XON/XOFF).
+            Passing ``xonxoff=True`` to :meth:`connect` is accepted for compatibility
+            but is silently ignored; a warning is logged. Only hardware flow control
+            (RTS/CTS) is honored.
+        """
         super().__init__(loop, protocol)
 
         self._write_queue: asyncio.Queue[bytes | type[ExitSentinel]] = asyncio.Queue()
