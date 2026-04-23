@@ -24,7 +24,7 @@ documentation = "https://puddly.github.io/serialx/"
 
 [project.optional-dependencies]
 esphome = [
-    "aioesphomeapi>=44.5.1; python_version >= '3.11'",
+    "aioesphomeapi>=44.17.0; python_version >= '3.11'",
 ]
 dev = [
     "ruff",
@@ -34,7 +34,7 @@ dev = [
     "pytest-timeout",
     "pytest-xdist",
     "psutil",
-    "aioesphomeapi>=44.6.0 ; python_version >= '3.11'",
+    "aioesphomeapi>=44.17.0 ; python_version >= '3.11'",
 ]
 docs = [
     "sphinx>=7,<8.2.3; python_version < '3.11'",
