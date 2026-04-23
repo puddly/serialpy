@@ -168,8 +168,6 @@ disable_error_code = [
 [tool.coverage.run]
 source = ["serialx"]
 relative_files = true
-# TODO: Pyodide stack-switching drops the coverage tracer past cross-language awaits.
-omit = ["serialx/platforms/serial_pyodide.py"]
 
 [tool.coverage.paths]
 source = [

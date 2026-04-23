@@ -28,9 +28,11 @@ pyodide.globals.set("pytest_argv", args.length ? args : ["/repo/tests"]);
 const rc = (await pyodide.runPythonAsync(`
 import os
 import site
+import sys
 import pytest
 import signal
 import micropip
+
 
 # Push .coverage to the host FS
 os.chdir("/repo")
@@ -41,6 +43,18 @@ signal.setitimer = lambda which, seconds, interval=0.0: (0.0, 0.0)
 
 micropip.add_mock_package("psutil", "0.0.0")
 await micropip.install(["pytest-timeout", "pytest-cov"])
+
+# XXX: coverage breaks unless restart_events() is called after SysMonitor.start()
+from coverage.sysmon import SysMonitor
+_orig_sysmonitor_start = SysMonitor.start
+
+def _sysmonitor_start_with_restart(self):
+    _orig_sysmonitor_start(self)
+    sys.monitoring.restart_events()
+
+SysMonitor.start = _sysmonitor_start_with_restart
+
+os.environ["COVERAGE_CORE"] = "sysmon"
 
 int(pytest.main([
     "--override-ini=addopts=",
