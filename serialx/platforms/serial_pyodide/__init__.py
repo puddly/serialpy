@@ -10,7 +10,7 @@ from typing import Any, final
 import js
 from typing_extensions import Buffer
 
-from ..common import (
+from ...common import (
     BaseSerial,
     BaseSerialTransport,
     ModemPins,
@@ -21,12 +21,7 @@ from ..common import (
     UnsupportedSetting,
     register_uri_handler,
 )
-from .pyodide_types import (
-    JsSerialPort,
-    JsStreamReader,
-    JsStreamWriter,
-    SerialOutputSignals,
-)
+from .types import JsSerialPort, JsStreamReader, JsStreamWriter, SerialOutputSignals
 
 _LOGGER = logging.getLogger(__name__)
 
