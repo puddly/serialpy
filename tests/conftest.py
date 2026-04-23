@@ -25,6 +25,7 @@ from tests.common import (
     create_adapter_pair,
     create_esphome_pair,
     create_hub4com_pair,
+    create_pyodide_pair,
     create_ser2net_pair,
     create_socat_pair,
 )
@@ -97,6 +98,25 @@ def _get_endpoint_backend(path: str) -> SerialBackend:
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     """Parametrize tests based on available backends."""
+
+    if sys.platform == "emscripten":
+        # Under Pyodide the only available backend is PYODIDE; skip the rest
+        # so tests don't try to spawn socat/ser2net/tcp servers that can't run.
+        if "serial_pair" in metafunc.fixturenames:
+            spec = UnresolvedSerialPair(
+                backends=(SerialBackend.PYODIDE,),
+                left=None,
+                right=None,
+                original_left="gen",
+                original_right="gen",
+                quirks=SERIAL_PAIR_DEFAULT_QUIRKS[SerialBackend.PYODIDE],
+            )
+            metafunc.parametrize(
+                "serial_pair",
+                [pytest.param(spec, id="PYODIDE")],
+                indirect=True,
+            )
+        return
 
     adapters = []
 
@@ -245,6 +265,10 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             case SerialBackend.SOCKET:
                 assert left is None and right is None
                 left, right = stack.enter_context(create_socket_pair())
+
+            case SerialBackend.PYODIDE:
+                assert left is None and right is None
+                left, right = stack.enter_context(create_pyodide_pair())
 
             # Wrapped backends require one
             case SerialBackend.ESPHOME_HOST:

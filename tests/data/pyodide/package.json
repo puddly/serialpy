@@ -1,0 +1,15 @@
+{
+  "name": "serialx-pyodide-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun run run_tests.ts"
+  },
+  "dependencies": {
+    "pyodide": "^0.29.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "@types/w3c-web-serial": "^1.0.8"
+  }
+}

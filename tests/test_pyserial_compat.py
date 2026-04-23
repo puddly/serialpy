@@ -1,6 +1,15 @@
 """Tests for pyserial API compatibility shims."""
 
+import sys
+
 import pytest
+
+if sys.platform == "emscripten":
+    pytest.skip(
+        "pyserial compatibility uses the sync Serial class, which is stubs "
+        "under Pyodide",
+        allow_module_level=True,
+    )
 
 from serialx import Serial, SerialPortInfo
 from serialx.tools.list_ports import comports, grep

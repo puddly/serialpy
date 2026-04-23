@@ -8,6 +8,12 @@ import time
 
 import pytest
 
+if sys.platform == "emscripten":
+    pytest.skip(
+        "Pyodide has no sync serial backend (PyodideSerial is stubs)",
+        allow_module_level=True,
+    )
+
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
 from tests.common import SerialBackend, SerialPair, SerialQuirk, measure_time
 

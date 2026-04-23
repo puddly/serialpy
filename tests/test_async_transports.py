@@ -344,6 +344,9 @@ async def test_async_valid_stopbits(
 @pytest.mark.parametrize("byte_size", [5, 6, 7, 8])
 async def test_async_valid_byte_size(serial_pair: SerialPair, byte_size: int) -> None:
     """Test that valid byte sizes are accepted."""
+    if sys.platform == "emscripten" and byte_size in (5, 6):
+        pytest.skip("Web Serial spec only defines dataBits 7 or 8")
+
     async with async_create_reader_writer(
         serial_pair.left, baudrate=115200, byte_size=byte_size
     ) as (_, writer):
@@ -1123,6 +1126,9 @@ async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
 
 async def test_async_connect_nonexistent_port() -> None:
     """Test that a failed connect still leaves a closed transport."""
+    if sys.platform == "emscripten":
+        pytest.skip("No POSIX/Windows-style device paths under Pyodide")
+
     loop = asyncio.get_running_loop()
     path = "COM25" if sys.platform == "win32" else "/dev/this_port_does_not_exist"
     _, transport_cls = await loop.run_in_executor(None, get_serial_classes, path)
