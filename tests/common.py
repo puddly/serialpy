@@ -141,7 +141,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             # Web Serial reports *input* signals only; output signals (RTS/DTR/BRK)
             # don't read back on the same port.
             SerialQuirk.NO_RTS_DTR_READBACK,
-            SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_NUM_UNWRITTEN_BYTES,
             SerialQuirk.NO_RESET_READ_BUFFER,

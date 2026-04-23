@@ -66,8 +66,6 @@ def unregister_js_port(path: str) -> None:
     _REGISTERED_JS_PORTS.pop(path, None)
 
 
-_WRITE_FLUSH_TIMEOUT = 5.0
-
 _PARITY_MAP: dict[Parity, ParityType] = {
     Parity.NONE: "none",
     Parity.ODD: "odd",
@@ -336,7 +334,7 @@ class PyodideSerialTransport(BaseSerialTransport):
         # Drain pending writes, unless abort() already cancelled the writer.
         if self._writer_task is not None and not self._writer_task.done():
             try:
-                async with asyncio.timeout(_WRITE_FLUSH_TIMEOUT):  # type: ignore[attr-defined,unused-ignore]
+                async with asyncio.timeout(self._serial.write_timeout):  # type: ignore[attr-defined,unused-ignore]
                     _LOGGER.debug("Waiting for pending writes to finish")
                     self._write_queue.put_nowait(ExitSentinel)
                     await self._writer_task
