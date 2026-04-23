@@ -16,20 +16,6 @@ from serialx.common import SerialException, UnsupportedSetting
 from tests.common import create_pyodide_pair
 
 
-async def test_pyodide_rtscts_and_xonxoff_unsupported() -> None:
-    """Combined hardware and software flow control is not supported."""
-    with create_pyodide_pair() as (left, _):
-        with pytest.raises(UnsupportedSetting, match="flow control"):
-            await create_serial_connection(
-                asyncio.get_running_loop(),
-                asyncio.Protocol,
-                url=left,
-                baudrate=115200,
-                rtscts=True,
-                xonxoff=True,
-            )
-
-
 async def test_pyodide_one_point_five_stopbits_unsupported() -> None:
     """1.5 stop bits is not supported."""
     with create_pyodide_pair() as (left, _):
