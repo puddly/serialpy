@@ -44,7 +44,7 @@ You may be using a fork of pyserial-asyncio like pyserial-asyncio-fast. serialx 
 ## Sync migration
 serialx provides compatibility properties, methods, and kwargs for almost all pyserial APIs.
 Many are legacy methods and should be migrated to use modern names. All deprecated methods and properties
-are listed in the [main API documentation](../api.md). The most common ones ones are listed below:
+are listed in the [main API documentation](../api.md). The most common ones are listed below:
 
 | Old Name                    | New Name                   | Notes                                        |
 | ---                         | ---                        | ---                                          |
