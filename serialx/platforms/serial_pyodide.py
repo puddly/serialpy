@@ -5,13 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import sys
-
-if sys.version_info >= (3, 11):
-    from asyncio import timeout as asyncio_timeout
-else:
-    from async_timeout import timeout as asyncio_timeout
-
 from typing import Any, final
 
 import js
@@ -32,12 +25,8 @@ from .pyodide_types import JsSerialPort, SerialOutputSignals
 
 _LOGGER = logging.getLogger(__name__)
 
-# Registry of paths → JS `SerialPort` instances. Lets out-of-band JS code
-# associate a URL with a SerialPort before `create_serial_connection` runs;
-# callers that don't name a path share the default slot at _DEFAULT_PATH.
 _REGISTERED_JS_PORTS: dict[str, JsSerialPort] = {}
-_DEFAULT_PATH = "pyodide://serial"
-_SERIAL_PORT_CLOSING_TASKS: list[asyncio.Task[Any]] = []
+_SERIAL_PORT_CLOSING_TASKS: set[asyncio.Task[Any]] = set()
 
 
 def register_js_port(path: str, js_port: JsSerialPort) -> None:
@@ -142,11 +131,6 @@ class PyodideSerialTransport(BaseSerialTransport):
 
         self._reader_task: asyncio.Task[None] | None = None
         self._writer_task: asyncio.Task[None] | None = None
-
-    @classmethod
-    def set_global_js_serial_port(cls, js_port: JsSerialPort) -> None:
-        """Set the default JS serial port instance (at `pyodide://serial`)."""
-        register_js_port(_DEFAULT_PATH, js_port)
 
     async def _connect(  # type: ignore[override]
         self,
@@ -312,7 +296,7 @@ class PyodideSerialTransport(BaseSerialTransport):
         # Drain pending writes, unless abort() already cancelled the writer.
         if self._writer_task is not None and not self._writer_task.done():
             try:
-                async with asyncio_timeout(_WRITE_FLUSH_TIMEOUT):
+                async with asyncio.timeout(_WRITE_FLUSH_TIMEOUT):
                     _LOGGER.debug("Waiting for pending writes to finish")
                     self._write_queue.put_nowait(ExitSentinel)
                     await self._writer_task
@@ -341,7 +325,7 @@ class PyodideSerialTransport(BaseSerialTransport):
 
         # If the task cannot be removed, we should still call `connection_lost`
         with contextlib.suppress(ValueError):
-            _SERIAL_PORT_CLOSING_TASKS.remove(self._close_port_task)
+            _SERIAL_PORT_CLOSING_TASKS.add(self._close_port_task)
 
         # Only now do we call `connection_lost`
         self._call_protocol_connection_lost(exception)
@@ -360,7 +344,7 @@ class PyodideSerialTransport(BaseSerialTransport):
 
         if self._js_port is not None and self._close_port_task is None:
             self._close_port_task = asyncio.create_task(self._close_port(exception))
-            _SERIAL_PORT_CLOSING_TASKS.append(self._close_port_task)
+            _SERIAL_PORT_CLOSING_TASKS.discard(self._close_port_task)
         elif not self._closed_waiter.done():
             self._call_protocol_connection_lost(exception)
 
