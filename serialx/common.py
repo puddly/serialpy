@@ -10,7 +10,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
 import dataclasses
-from enum import Enum, StrEnum
+from enum import Enum
 import functools
 import io
 from pathlib import Path
@@ -184,7 +184,7 @@ class StopBits(Enum):
     TWO = 2
 
 
-class Parity(StrEnum):
+class Parity(str, Enum):
     """Parity configuration."""
 
     NONE = "N"
