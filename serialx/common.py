@@ -184,14 +184,14 @@ class StopBits(Enum):
     TWO = 2
 
 
-class Parity(Enum):
+class Parity(str, Enum):
     """Parity configuration."""
 
-    NONE = None
-    ODD = 1
-    EVEN = 2
-    MARK = 3
-    SPACE = 4
+    NONE = "N"
+    ODD = "O"
+    EVEN = "E"
+    MARK = "M"
+    SPACE = "S"
 
 
 class PinState(Enum):
@@ -300,7 +300,7 @@ class BaseSerial(io.RawIOBase):
         path: str | Path | None = None,
         baudrate: int = 9600,
         *,
-        parity: Parity | None = Parity.NONE,
+        parity: Parity | str | None = Parity.NONE,
         stopbits: StopBits | int | float = StopBits.ONE,
         xonxoff: bool = False,
         rtscts: bool = False,
@@ -327,7 +327,9 @@ class BaseSerial(io.RawIOBase):
         if not isinstance(stopbits, StopBits):
             stopbits = StopBits(stopbits)
 
-        if not isinstance(parity, Parity):
+        if parity is None:
+            parity = Parity.NONE
+        elif not isinstance(parity, Parity):
             parity = Parity(parity)
 
         self._path = path
