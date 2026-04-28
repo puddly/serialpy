@@ -11,7 +11,7 @@ if sys.platform == "emscripten":
         allow_module_level=True,
     )
 
-from serialx import Serial, SerialPortInfo
+from serialx import Parity, Serial, SerialPortInfo
 from serialx.tools.list_ports import comports, grep
 from serialx.tools.list_ports_common import ListPortInfo
 from tests.common import SerialPair
@@ -80,6 +80,12 @@ def test_compat_timeout_setter(serial_pair: SerialPair) -> None:
 
         s.timeout = 0.5
         assert s.read_timeout == 0.5
+
+
+def test_compat_parity_none(serial_pair: SerialPair) -> None:
+    """Test that `parity=None` is accepted and maps to `Parity.NONE`."""
+    with Serial.from_url(serial_pair.left, baudrate=115200, parity=None) as s:
+        assert s.parity is Parity.NONE
 
 
 def test_compat_baudrate_setter(serial_pair: SerialPair) -> None:
