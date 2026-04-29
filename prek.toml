@@ -72,3 +72,14 @@ hooks = [
     pass_filenames = false
   }
 ]
+
+
+[[repos]]
+repo = "https://github.com/zizmorcore/zizmor-pre-commit"
+rev = "v1.24.1"
+hooks = [
+  {
+    id = "zizmor",
+    args = ["--pedantic"]
+  }
+]
