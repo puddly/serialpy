@@ -1,0 +1,74 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo = "https://github.com/codespell-project/codespell"
+rev = "v2.4.1"
+hooks = [
+  {
+    id = "codespell",
+    additional_dependencies = ["tomli"],
+    args = [
+      "--toml",
+      "pyproject.toml"
+    ]
+  }
+]
+
+[[repos]]
+repo = "https://github.com/pre-commit/mirrors-mypy"
+rev = "v1.19.0"
+hooks = [
+  {
+    id = "mypy",
+    additional_dependencies = ["types-pywin32"]
+  }
+]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.14.7"
+hooks = [
+  {
+    id = "ruff-check",
+    args = ["--fix"]
+  },
+  { id = "ruff-format" }
+]
+
+[[repos]]
+repo = "https://github.com/rbubley/mirrors-prettier"
+rev = "v3.8.3"
+hooks = [
+  {
+    id = "prettier",
+    files = '^tests/data/pyodide/.*\.(ts|json)$'
+  }
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  {
+    id = "cargo-fmt",
+    name = "Cargo fmt",
+    entry = "cargo fmt --all",
+    language = "system",
+    pass_filenames = false
+  },
+  {
+    id = "cargo-check",
+    name = "Cargo check",
+    entry = "cargo check --workspace",
+    language = "system",
+    pass_filenames = false
+  },
+  {
+    id = "rust-clippy",
+    name = "Cargo clippy",
+    entry = "cargo clippy --all-targets --all-features -- -Dclippy::all -Dclippy::nursery",
+    language = "system",
+    pass_filenames = false
+  }
+]
