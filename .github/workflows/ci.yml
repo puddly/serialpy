@@ -36,9 +36,7 @@ jobs:
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install system dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
@@ -82,9 +80,7 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Restore prek environment from cache
@@ -190,8 +186,7 @@ jobs:
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            2-esphome-daemon-${{
-            hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+            2-esphome-daemon-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Set up Python 3.13
         if: steps.cache-esphome.outputs.cache-hit != 'true'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
@@ -242,16 +237,13 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Restore cached ESPHome binary
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            2-esphome-daemon-${{
-            hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+            2-esphome-daemon-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Restore cached ser2net binary
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -338,18 +330,14 @@ jobs:
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
       - name: Restore cached Rust extension
         id: cache-ext
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: serialx/_serialx_rust*
           key: >-
-            1-${{ runner.os }}-rust-ext-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
+            1-${{ runner.os }}-rust-ext-${{ steps.python.outputs.python-version }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
         if: steps.cache-ext.outputs.cache-hit != 'true'
         run: rustup default stable && rustup update stable
@@ -422,18 +410,14 @@ jobs:
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
       - name: Restore cached Rust extension
         id: cache-ext
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: serialx/_serialx_rust*
           key: >-
-            1-${{ runner.os }}-rust-ext-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
+            1-${{ runner.os }}-rust-ext-${{ steps.python.outputs.python-version }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
         if: steps.cache-ext.outputs.cache-hit != 'true'
         run: rustup default stable && rustup update stable
@@ -495,9 +479,7 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install serialx-compat and run tests
         run: |
           . venv/bin/activate
@@ -521,8 +503,7 @@ jobs:
         with:
           path: tests/data/pyodide/node_modules/pyodide
           key: >-
-            1-${{ runner.os }}-pyodide-${{
-            hashFiles('tests/data/pyodide/package.json',
+            1-${{ runner.os }}-pyodide-${{ hashFiles('tests/data/pyodide/package.json',
                       'tests/data/pyodide/bun.lock') }}
       - name: Install Bun dependencies
         run: bun install --cwd tests/data/pyodide --frozen-lockfile
@@ -557,9 +538,7 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Download all coverage artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
       - name: Combine coverage results

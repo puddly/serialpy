@@ -59,7 +59,7 @@ jobs:
           # Validate abi3 compliance and repair wheels
           CIBW_BEFORE_BUILD: "pip install abi3audit"
           # Ensure wheels include a loadable Rust extension on supported test platforms
-          CIBW_TEST_COMMAND: 'python -m serialx.tools.list_ports'
+          CIBW_TEST_COMMAND: "python -m serialx.tools.list_ports"
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: "abi3audit {wheel} && delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "abi3audit {wheel} && cp {wheel} {dest_dir}"
 

@@ -4,22 +4,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "serialx-compat"
-version = "0.0.0"  # Rewritten by CI to match the serialx version
+version = "0.0.0" # Rewritten by CI to match the serialx version
 description = "Compatibility package exposing pyserial-style imports backed by serialx"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [{ name = "puddly", email = "puddly3@gmail.com" }]
-dependencies = ["serialx"]  # Rewritten to serialx==<release version> by release CI
+dependencies = [
+  "serialx",
+] # Rewritten to serialx==<release version> by release CI
 
 [project.optional-dependencies]
-esphome = [
-    "serialx[esphome]",
-]
+esphome = ["serialx[esphome]"]
 
-dev = [
-    "serialx[dev]",
-]
+dev = ["serialx[dev]"]
 
 [project.urls]
 Repository = "https://github.com/puddly/serialx"
