@@ -1,0 +1,93 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo = "builtin"
+
+[[repos.hooks]]
+id = "no-commit-to-branch"
+args = ["--branch", "dev"]
+
+[[repos]]
+repo = "https://github.com/codespell-project/codespell"
+rev = "v2.4.2"
+
+[[repos.hooks]]
+id = "codespell"
+additional_dependencies = ["tomli"]
+args = ["--toml", "pyproject.toml"]
+
+[[repos]]
+repo = "https://github.com/pre-commit/mirrors-mypy"
+rev = "v1.20.2"
+
+[[repos.hooks]]
+id = "mypy"
+additional_dependencies = ["types-pywin32"]
+
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.15.12"
+
+[[repos.hooks]]
+id = "ruff-check"
+args = ["--fix"]
+
+[[repos.hooks]]
+id = "ruff-format"
+
+[[repos]]
+repo = "https://github.com/rbubley/mirrors-prettier"
+rev = "v3.8.3"
+
+[[repos.hooks]]
+id = "prettier"
+files = '^tests/data/pyodide/.*\.(ts|json)$'
+
+[[repos]]
+repo = "https://github.com/google/yamlfmt"
+rev = "v0.21.0"
+
+[[repos.hooks]]
+id = "yamlfmt"
+args = ["-formatter", "retain_line_breaks=true"]
+
+[[repos]]
+repo = "https://github.com/ComPWA/taplo-pre-commit"
+rev = "v0.9.3"
+
+[[repos.hooks]]
+id = "taplo-format"
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "cargo-fmt"
+name = "Cargo fmt"
+entry = "cargo fmt --all"
+language = "system"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "cargo-check"
+name = "Cargo check"
+entry = "cargo check --workspace"
+language = "system"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "rust-clippy"
+name = "Cargo clippy"
+entry = "cargo clippy --all-targets --all-features -- -Dclippy::all -Dclippy::nursery"
+language = "system"
+pass_filenames = false
+
+[[repos]]
+repo = "https://github.com/zizmorcore/zizmor-pre-commit"
+rev = "v1.24.1"
+
+[[repos.hooks]]
+id = "zizmor"
+args = ["--pedantic"]

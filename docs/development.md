@@ -12,9 +12,9 @@ uv pip install '.[dev,docs]'
 On macOS and Windows, a Rust toolchain is required to build the native serial port
 enumeration extension. Install Rust via [rustup](https://rustup.rs/).
 
-Set up pre-commit hooks with `pre-commit install`. Your code will then be type checked
+Set up pre-commit hooks with `prek install`. Your code will then be type checked
 and auto-formatted when you run `git commit`. You can do this on-demand with
-`pre-commit run`.
+`prek run`.
 
 Serialx relies on automated testing. CI runs tests using both `socat` virtual PTYs
 (Linux/macOS) and socket-based serial pairs. To also test with physical adapter pairs,

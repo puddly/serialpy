@@ -4,6 +4,13 @@ on:
   push:
   pull_request: ~
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
   prepare-base:
     name: Prepare base dependencies
@@ -13,91 +20,91 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Set up Python ${{ matrix.python-version }}
         id: python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
           check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install system dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Set up Rust
         if: steps.cache-venv.outputs.cache-hit != 'true'
-        uses: dtolnay/rust-toolchain@stable
+        run: rustup default stable && rustup update stable
       - name: Create Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv venv venv
           . venv/bin/activate
-          uv pip install -U pip setuptools pre-commit setuptools-rust
+          uv pip install -U pip setuptools setuptools-rust prek
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 uv pip install -e .[dev]
       - name: Cache base Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: venv
           key: ${{ steps.cache-venv.outputs.cache-primary-key }}
 
-  pre-commit:
-    name: Run pre-commit
+  prek:
+    name: Run prek
     runs-on: ubuntu-latest
     needs: prepare-base
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Set up Python 3.10
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         id: python
         with:
           python-version: "3.10"
           check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
-      - name: Restore pre-commit environment from cache
-        id: cache-precommit
-        uses: actions/cache/restore@v4
+      - name: Restore prek environment from cache
+        id: cache-prek
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ~/.cache/pre-commit
+          path: ~/.cache/prek
           key: |
-            1-${{ runner.os }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Install pre-commit dependencies
-        if: steps.cache-precommit.outputs.cache-hit != 'true'
+            1-${{ runner.os }}-prek-${{ hashFiles('prek.toml') }}
+      - name: Install prek hooks
+        if: steps.cache-prek.outputs.cache-hit != 'true'
         run: |
           . venv/bin/activate
-          pre-commit install-hooks
-      - name: Cache pre-commit environment
-        if: steps.cache-precommit.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+          prek prepare-hooks
+      - name: Cache prek environment
+        if: steps.cache-prek.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ~/.cache/pre-commit
-          key: ${{ steps.cache-precommit.outputs.cache-primary-key }}
+          path: ~/.cache/prek
+          key: ${{ steps.cache-prek.outputs.cache-primary-key }}
       - name: Lint and static analysis
         run: |
           . venv/bin/activate
-          pre-commit run --show-diff-on-failure --color=always --all-files
+          prek run --show-diff-on-failure --color=always --all-files
 
   build-ser2net:
     name: Build ser2net
@@ -108,7 +115,7 @@ jobs:
     steps:
       - name: Restore cached ser2net binary
         id: cache-ser2net
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ser2net
           key: ser2net-${{ env.SER2NET_VERSION }}-gensio-${{ env.GENSIO_VERSION }}
@@ -160,7 +167,7 @@ jobs:
           $GITHUB_WORKSPACE/ser2net -v
       - name: Cache ser2net binary
         if: steps.cache-ser2net.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ser2net
           key: ${{ steps.cache-ser2net.outputs.cache-primary-key }}
@@ -170,18 +177,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Restore cached ESPHome binary
         id: cache-esphome
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            2-esphome-daemon-${{
-            hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+            2-esphome-daemon-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Set up Python 3.13
         if: steps.cache-esphome.outputs.cache-hit != 'true'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.13"
       - name: Compile ESPHome host daemon
@@ -196,7 +204,7 @@ jobs:
           esphome compile tests/esphome/host_daemon.yaml
       - name: Cache ESPHome binary
         if: steps.cache-esphome.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: ${{ steps.cache-esphome.outputs.cache-primary-key }}
@@ -212,9 +220,11 @@ jobs:
     name: Run tests Python ${{ matrix.python-version }} (Linux)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         id: python
         with:
           python-version: ${{ matrix.python-version }}
@@ -222,23 +232,20 @@ jobs:
           check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Restore cached ESPHome binary
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            2-esphome-daemon-${{
-            hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+            2-esphome-daemon-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Restore cached ser2net binary
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ser2net
           key: ser2net-4.6.7-gensio-3.0.2
@@ -251,7 +258,7 @@ jobs:
         run: echo "version=$(uname -r)" >> "$GITHUB_OUTPUT"
       - name: Restore cached tty0tty module
         id: cache-tty0tty
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: tty0tty.ko
           key: tty0tty-${{ env.TTY0TTY_COMMIT }}-${{ steps.kernel.outputs.version }}
@@ -297,7 +304,7 @@ jobs:
             --adapter-pair /dev/tnt0,/dev/tnt1,no-rts-cts,no-dtr-dsr,no-num-unwritten-bytes,no-reset-write-buffer,no-write-timeout,no-buffer-control \
             tests
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-${{ matrix.python-version }}
           include-hidden-files: true
@@ -308,34 +315,32 @@ jobs:
     name: Run tests Python 3.13 (macOS)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Set up Python
         id: python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.13"
           check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
       - name: Restore cached Rust extension
         id: cache-ext
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: serialx/_serialx_rust*
           key: >-
-            1-${{ runner.os }}-rust-ext-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
+            1-${{ runner.os }}-rust-ext-${{ steps.python.outputs.python-version }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
         if: steps.cache-ext.outputs.cache-hit != 'true'
-        uses: dtolnay/rust-toolchain@stable
+        run: rustup default stable && rustup update stable
       - name: Create Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
@@ -349,13 +354,13 @@ jobs:
           python setup.py build_ext --inplace
       - name: Cache base Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: venv
           key: ${{ steps.cache-venv.outputs.cache-primary-key }}
       - name: Cache Rust extension
         if: steps.cache-ext.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: serialx/_serialx_rust*
           key: ${{ steps.cache-ext.outputs.cache-primary-key }}
@@ -365,7 +370,7 @@ jobs:
           python -m serialx.tools.list_ports
           pytest --timeout=20 --cov=serialx tests
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-macos-latest
           include-hidden-files: true
@@ -376,7 +381,9 @@ jobs:
     name: Run tests Python 3.13 (Windows)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Install com0com and hub4com
         shell: pwsh
         working-directory: tests/data/windows
@@ -393,31 +400,27 @@ jobs:
           .\setupc.exe --wait 1 install PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr PortName=-,EmuBR=yes,cts=rrts,dsr=rdtr,dcd=rdtr
       - name: Set up Python
         id: python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.13"
           check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
       - name: Restore cached Rust extension
         id: cache-ext
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: serialx/_serialx_rust*
           key: >-
-            1-${{ runner.os }}-rust-ext-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
+            1-${{ runner.os }}-rust-ext-${{ steps.python.outputs.python-version }}-${{ hashFiles('Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Set up Rust
         if: steps.cache-ext.outputs.cache-hit != 'true'
-        uses: dtolnay/rust-toolchain@stable
+        run: rustup default stable && rustup update stable
       - name: Create Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: |
@@ -431,13 +434,13 @@ jobs:
           python setup.py build_ext --inplace
       - name: Cache base Python virtual environment
         if: steps.cache-venv.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: venv
           key: ${{ steps.cache-venv.outputs.cache-primary-key }}
       - name: Cache Rust extension
         if: steps.cache-ext.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: serialx/_serialx_rust*
           key: ${{ steps.cache-ext.outputs.cache-primary-key }}
@@ -448,7 +451,7 @@ jobs:
           python -m serialx.tools.list_ports
           pytest --timeout=20 --cov=serialx tests --adapter-pair CNCA0,CNCB0,no-buffer-control,no-rts-dtr-readback
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-windows-latest
           include-hidden-files: true
@@ -460,23 +463,23 @@ jobs:
     name: Run serialx-compat tests (Python 3.10)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Set up Python 3.10
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         id: python
         with:
           python-version: "3.10"
           check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Install serialx-compat and run tests
         run: |
           . venv/bin/activate
@@ -488,25 +491,26 @@ jobs:
     name: Run tests Pyodide (Bun)
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
       - name: Cache Pyodide package wheels
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: tests/data/pyodide/node_modules/pyodide
           key: >-
-            1-${{ runner.os }}-pyodide-${{
-            hashFiles('tests/data/pyodide/package.json',
+            1-${{ runner.os }}-pyodide-${{ hashFiles('tests/data/pyodide/package.json',
                       'tests/data/pyodide/bun.lock') }}
       - name: Install Bun dependencies
         run: bun install --cwd tests/data/pyodide --frozen-lockfile
       - name: Run tests under Pyodide
         run: bun tests/data/pyodide/run_tests.ts --cov=serialx --cov-report=
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: coverage-pyodide
           include-hidden-files: true
@@ -518,25 +522,25 @@ jobs:
     needs: [pytest, pytest-macos, pytest-windows, pytest-pyodide]
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
       - name: Set up Python 3.10
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         id: python
         with:
           python-version: "3.10"
           check-latest: true
       - name: Restore base Python virtual environment
         id: cache-venv
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{
-            steps.python.outputs.python-version }}-${{
-            hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
       - name: Download all coverage artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
       - name: Combine coverage results
         run: |
           . venv/bin/activate
@@ -546,7 +550,7 @@ jobs:
           coverage xml
       - name: Upload coverage to Codecov
         if: ${{ github.event.repository.fork == false }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false

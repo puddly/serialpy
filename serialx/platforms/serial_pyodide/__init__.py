@@ -269,7 +269,6 @@ class PyodideSerialTransport(BaseSerialTransport):
                 self._cleanup(e)
                 break
             finally:
-                assert not isinstance(chunk, type)
                 self._write_buffer_size -= len(chunk)
                 self._write_queue.task_done()
 
