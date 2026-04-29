@@ -3,6 +3,13 @@
 #:schema https://www.schemastore.org/prek.json
 
 [[repos]]
+repo = "builtin"
+
+[[repos.hooks]]
+id = "no-commit-to-branch"
+args = ["--branch", "dev"]
+
+[[repos]]
 repo = "https://github.com/codespell-project/codespell"
 rev = "v2.4.2"
 
