@@ -22,28 +22,23 @@ pub struct RustSerialPortInfo {
 
 #[cfg(target_os = "macos")]
 #[pyfunction]
-fn list_serial_ports_darwin_impl() -> PyResult<Vec<RustSerialPortInfo>> {
+fn list_serial_ports_impl() -> PyResult<Vec<RustSerialPortInfo>> {
     darwin::list_serial_ports().map_err(PyErr::new::<pyo3::exceptions::PyOSError, _>)
 }
 
 #[cfg(target_os = "windows")]
 #[pyfunction]
-fn list_serial_ports_windows_impl() -> PyResult<Vec<RustSerialPortInfo>> {
+fn list_serial_ports_impl() -> PyResult<Vec<RustSerialPortInfo>> {
     windows::list_serial_ports().map_err(PyErr::new::<pyo3::exceptions::PyOSError, _>)
 }
 
 #[pymodule]
 #[allow(unused_variables, clippy::missing_const_for_fn)]
 fn _serialx_rust(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         m.add_class::<RustSerialPortInfo>()?;
-        m.add_function(wrap_pyfunction!(list_serial_ports_darwin_impl, m)?)?;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        m.add_class::<RustSerialPortInfo>()?;
-        m.add_function(wrap_pyfunction!(list_serial_ports_windows_impl, m)?)?;
+        m.add_function(wrap_pyfunction!(list_serial_ports_impl, m)?)?;
     }
     Ok(())
 }
