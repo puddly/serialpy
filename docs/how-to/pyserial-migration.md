@@ -85,6 +85,26 @@ with serialx.serial_for_url("/dev/ttyUSB0", baudrate=115200) as serial:
 
 There is no equivalent for async code because the default `create_serial_connection` and `open_serial_connection` functions already transparently accept URIs.
 
+## Constants
+pyserial exposes parity, stop bit, and byte size settings as module-level constants (`serial.PARITY_NONE`, `serial.STOPBITS_ONE`, etc.). serialx replaces them with the `Parity` and `StopBits` enums. Properties like `serial.parity` and `serial.stopbits` now return enum members instead of raw strings or numbers.
+
+| Old Name                    | New Name                      |
+| ---                         | ---                           |
+| `PARITY_NONE`               | `Parity.NONE`                 |
+| `PARITY_EVEN`               | `Parity.EVEN`                 |
+| `PARITY_ODD`                | `Parity.ODD`                  |
+| `PARITY_MARK`               | `Parity.MARK`                 |
+| `PARITY_SPACE`              | `Parity.SPACE`                |
+| `STOPBITS_ONE`              | `StopBits.ONE`                |
+| `STOPBITS_ONE_POINT_FIVE`   | `StopBits.ONE_POINT_FIVE`     |
+| `STOPBITS_TWO`              | `StopBits.TWO`                |
+| `FIVEBITS`                  | `5`                           |
+| `SIXBITS`                   | `6`                           |
+| `SEVENBITS`                 | `7`                           |
+| `EIGHTBITS`                 | `8`                           |
+
+Migrate to the enum members. `Parity` is a `str` enum and `StopBits` is a `float` enum, so any lingering comparisons against raw values (`parity == "N"`, `stopbits == 1`) still hold during the transition. These direct comparisons should be migrated to use the enum members instead of assuming their values.
+
 ## Exceptions
 pyserial re-raises all errors as `serial.SerialException`, including OS-level failures and timeouts. serialx raises native exceptions directly so callers can handle them granularly:
 
