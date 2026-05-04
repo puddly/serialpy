@@ -7,11 +7,8 @@ from collections.abc import Callable
 import logging
 from typing import Any, Generic, TypeVar, cast
 
-from typing_extensions import Unpack
-
 from .common import (
     BaseSerialTransport,
-    ConnectKwargs,
     ModemPins,
     Parity,
     SerialException,
@@ -41,13 +38,13 @@ class AsyncSerial(asyncio.StreamReader, asyncio.StreamWriter):
         url: str | None,
         *,
         transport_cls: type[BaseSerialTransport] | None = None,
-        **kwargs: Unpack[ConnectKwargs],
+        **kwargs: Any,
     ) -> None:
         """Initialize an unopened serial port. Use `open()` or `async with` to connect."""
         # Defer parent initializers until open() — they need a running loop and
         # a transport, neither of which exists at construction time.
         self._url = url
-        self._connect_kwargs: ConnectKwargs = kwargs
+        self._connect_kwargs: dict[str, Any] = kwargs
         self._transport_cls = transport_cls
         self._opened = False
 
@@ -214,7 +211,7 @@ def async_serial_for_url(
     url: str | None,
     *,
     transport_cls: type[BaseSerialTransport] | None = None,
-    **kwargs: Unpack[ConnectKwargs],
+    **kwargs: Any,
 ) -> AsyncSerial:
     """Build an unopened AsyncSerial. Use `async with` or `await serial.open()`."""
     return AsyncSerial(url, transport_cls=transport_cls, **kwargs)
