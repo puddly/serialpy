@@ -15,11 +15,12 @@ __all__ = ["list_serial_ports_impl"]
 try:
     from serialx._serialx_rust import list_serial_ports_impl
 except ImportError:
-    LOGGER.warning(
-        "serialx Rust extension failed to load; serial port enumeration will "
-        "not be available"
-    )
 
     def list_serial_ports_impl() -> list[RustSerialPortInfo]:
         """Return an empty list when the Rust extension is unavailable."""
+        LOGGER.warning(
+            "serialx Rust extension failed to load; serial port enumeration will "
+            "not be available"
+        )
+
         return []
