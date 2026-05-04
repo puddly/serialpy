@@ -10,8 +10,8 @@ import logging
 import sys
 import termios
 
-from serialx._serialx_rust import list_serial_ports_darwin_impl
 from serialx.common import SerialPortInfo, register_uri_handler
+from serialx.serialx_rust import list_serial_ports_impl
 
 from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
@@ -84,7 +84,7 @@ def darwin_list_serial_ports() -> list[SerialPortInfo]:
             interface_description=port.interface_description,
             interface_num=port.interface_num,
         )
-        for port in list_serial_ports_darwin_impl()
+        for port in list_serial_ports_impl()
     ]
 
 

@@ -61,8 +61,8 @@ from win32file import (
 )
 from winerror import ERROR_IO_PENDING
 
-from serialx._serialx_rust import list_serial_ports_windows_impl
 from serialx.common import SerialPortInfo
+from serialx.serialx_rust import list_serial_ports_impl
 
 from ..common import (
     BaseSerial,
@@ -736,7 +736,7 @@ def win32_list_serial_ports() -> list[SerialPortInfo]:
             interface_description=port.interface_description,
             interface_num=port.interface_num,
         )
-        for port in list_serial_ports_windows_impl()
+        for port in list_serial_ports_impl()
     ]
 
 

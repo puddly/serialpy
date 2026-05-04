@@ -36,7 +36,7 @@ jobs:
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Install system dependencies
         if: steps.cache-venv.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
@@ -80,7 +80,7 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Restore prek environment from cache
@@ -237,7 +237,7 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Restore cached ESPHome binary
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -330,7 +330,7 @@ jobs:
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Restore cached Rust extension
         id: cache-ext
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -410,7 +410,7 @@ jobs:
         with:
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Restore cached Rust extension
         id: cache-ext
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -479,7 +479,7 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Install serialx-compat and run tests
         run: |
           . venv/bin/activate
@@ -538,7 +538,7 @@ jobs:
           fail-on-cache-miss: true
           path: venv
           key: >-
-            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'src/lib.rs') }}
+            1-${{ runner.os }}-base-venv-${{ steps.python.outputs.python-version }}-${{ hashFiles('pyproject.toml', 'Cargo.toml', 'Cargo.lock', 'src/**') }}
       - name: Download all coverage artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
       - name: Combine coverage results
