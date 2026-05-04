@@ -41,12 +41,13 @@ from aioesphomeapi.core import (
     PingResponse,
     TimeoutAPIError,
 )
-from typing_extensions import Buffer
+from typing_extensions import Buffer, Unpack
 
 from serialx import SerialException, UnsupportedSetting
 from serialx.common import (
     BaseSerial,
     BaseSerialTransport,
+    ConnectKwargs,
     ModemPins,
     Parity,
     PinState,
@@ -596,8 +597,10 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._close_task: asyncio.Task[None] | None = None
 
     @translate_esphome_errors
-    async def _connect(self, **kwargs: Any) -> None:
-        self._serial = self._serial_cls(loop=self._loop, **kwargs)
+    async def _connect(
+        self, *, path: str | None = None, **kwargs: Unpack[ConnectKwargs]
+    ) -> None:
+        self._serial = self._serial_cls(loop=self._loop, path=path, **kwargs)
         self._extra["serial"] = self._serial
 
         assert self._serial is not None

@@ -8,7 +8,7 @@ import os
 from typing import TYPE_CHECKING, Any, cast
 
 import pywintypes
-from typing_extensions import Buffer
+from typing_extensions import Buffer, Unpack
 from win32con import (
     DTR_CONTROL_ENABLE,
     DTR_CONTROL_HANDSHAKE,
@@ -67,6 +67,7 @@ from serialx.serialx_rust import list_serial_ports_impl
 from ..common import (
     BaseSerial,
     BaseSerialTransport,
+    ConnectKwargs,
     ModemPins,
     Parity,
     PinState,
@@ -567,7 +568,9 @@ class Win32SerialTransport(BaseSerialTransport):
         self._open_fut = None
         self._handle = handle
 
-    async def _connect(self, **kwargs: Any) -> None:
+    async def _connect(
+        self, *, path: str | None = None, **kwargs: Unpack[ConnectKwargs]
+    ) -> None:
         """Connect to the serial port."""
         if self._closing:
             self._resolve_closed_waiter()
@@ -575,7 +578,6 @@ class Win32SerialTransport(BaseSerialTransport):
 
         self._connect_in_progress = True
 
-        path = kwargs.pop("path", None)
         if path is None:
             raise ValueError("A serial path is required")
 
@@ -588,7 +590,7 @@ class Win32SerialTransport(BaseSerialTransport):
             # If 0 (default), ReadFile with default timeouts might wait for full buffer.
             original_inter_byte_timeout = kwargs.get("inter_byte_timeout", 0)
             if original_inter_byte_timeout == 0:
-                kwargs["inter_byte_timeout"] = 0.01
+                kwargs["inter_byte_timeout"] = 0.01  # type: ignore[typeddict-unknown-key]
 
             self._serial = Win32Serial(
                 **kwargs,
