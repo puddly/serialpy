@@ -153,8 +153,7 @@ async def test_externally_passed_api_close_after_disconnect() -> None:
             # Disconnect the API before closing the transport
             await api.disconnect()
 
-            serial.close()
-            await serial.wait_closed()
+            await serial.close()
 
 
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")

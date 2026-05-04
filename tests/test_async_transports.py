@@ -427,17 +427,15 @@ async def test_async_read_with_timeout(serial_pair: SerialPair) -> None:
 
 
 async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
-    """Test closing writer multiple times is safe and drains buffer state."""
+    """Test closing the serial port multiple times is safe."""
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.close()
-        await left.wait_closed()
         assert left.transport.get_write_buffer_size() == 0
-
-        # Second close should be no-op
-        left.close()
-        await left.wait_closed()
+        await left.close()
+        # Second close should be a no-op
+        await left.close()
+        assert left.is_closed
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
