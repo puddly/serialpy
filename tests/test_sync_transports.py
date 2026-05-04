@@ -869,6 +869,11 @@ def test_fast_open_close(serial_pair: SerialPair) -> None:
     with Serial.from_url(serial_pair.left, baudrate=115200) as left:
         with Serial.from_url(serial_pair.right, baudrate=115200) as right:
             right.write(message)
+            right.flush()
+
+            # Some backends (notably complex chained RFC2217) lose data on close, making
+            # this test flaky without a tiny delay
+            time.sleep(0.01)
 
         assert left.readexactly(len(message)) == message
 
