@@ -52,6 +52,7 @@ from .types import (
     SetModemstateMaskCmd,
     SetParityCmd,
     SetStopsizeCmd,
+    SignatureCmd,
     TelnetCmdId,
     TelnetCommand,
     TelnetOption,
@@ -665,7 +666,12 @@ class RFC2217Serial(SocketSerial):
         return self._engine.get_modem_pins()
 
     def _flush(self) -> None:
-        """Flush write buffers (no-op, TCP handles buffering)."""
+        """Wait for the server to acknowledge all preceding writes."""
+        if not self._engine.negotiated:
+            return
+
+        # RFC2217 has no flush. Instead, we "flush" the pipe with a req/rsp sequence.
+        self._send_and_wait(SignatureCmd())
 
 
 class _RFC2217ProxyProtocol(asyncio.Protocol):
@@ -1007,7 +1013,13 @@ class RFC2217SerialTransport(BaseSerialTransport):
             self._tcp_connection_lost(None)
 
     async def flush(self) -> None:
-        """Flush write buffers (no-op, TCP transport handles buffering)."""
+        """Wait for the server to acknowledge all preceding writes."""
+        assert self._serial is not None
+        if not self._serial._engine.negotiated:
+            return
+
+        # RFC2217 has no flush. Instead, we "flush" the pipe with a req/rsp sequence.
+        await self._send_and_wait(SignatureCmd())
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
