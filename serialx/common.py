@@ -176,7 +176,7 @@ class UnknownUriScheme(SerialException):
     """Raised when a URI scheme has no registered handler."""
 
 
-class StopBits(Enum):
+class StopBits(float, Enum):
     """Stop bits configuration."""
 
     ONE = 1
