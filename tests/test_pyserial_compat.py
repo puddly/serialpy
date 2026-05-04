@@ -11,7 +11,23 @@ if sys.platform == "emscripten":
         allow_module_level=True,
     )
 
-from serialx import Parity, Serial, SerialPortInfo
+from serialx import (
+    EIGHTBITS,
+    FIVEBITS,
+    PARITY_EVEN,
+    PARITY_MARK,
+    PARITY_NONE,
+    PARITY_ODD,
+    PARITY_SPACE,
+    SEVENBITS,
+    SIXBITS,
+    STOPBITS_ONE,
+    STOPBITS_ONE_POINT_FIVE,
+    STOPBITS_TWO,
+    Parity,
+    Serial,
+    SerialPortInfo,
+)
 from serialx.tools.list_ports import comports, grep
 from serialx.tools.list_ports_common import ListPortInfo
 from tests.common import SerialPair
@@ -141,6 +157,24 @@ def test_compat_do_not_open(serial_pair: SerialPair) -> None:
 
     s = Serial(serial_pair.left, do_not_open=True)
     assert not s.is_open
+
+
+def test_compat_constants() -> None:
+    """Test that pyserial module-level constants are re-exported with correct values."""
+    assert FIVEBITS == 5
+    assert SIXBITS == 6
+    assert SEVENBITS == 7
+    assert EIGHTBITS == 8
+
+    assert PARITY_NONE == "N"
+    assert PARITY_EVEN == "E"
+    assert PARITY_ODD == "O"
+    assert PARITY_MARK == "M"
+    assert PARITY_SPACE == "S"
+
+    assert STOPBITS_ONE == 1  # type: ignore[comparison-overlap]
+    assert STOPBITS_ONE_POINT_FIVE == 1.5
+    assert STOPBITS_TWO == 2
 
 
 def test_compat_tools_module() -> None:
