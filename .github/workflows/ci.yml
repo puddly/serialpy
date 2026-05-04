@@ -102,6 +102,8 @@ jobs:
           path: ~/.cache/prek
           key: ${{ steps.cache-prek.outputs.cache-primary-key }}
       - name: Lint and static analysis
+        env:
+          SKIP: no-commit-to-branch
         run: |
           . venv/bin/activate
           prek run --show-diff-on-failure --color=always --all-files
