@@ -52,7 +52,6 @@ from .types import (
     SetModemstateMaskCmd,
     SetParityCmd,
     SetStopsizeCmd,
-    SignatureCmd,
     TelnetCmdId,
     TelnetCommand,
     TelnetOption,
@@ -671,7 +670,7 @@ class RFC2217Serial(SocketSerial):
             return
 
         # RFC2217 has no flush. Instead, we "flush" the pipe with a req/rsp sequence.
-        self._send_and_wait(SignatureCmd())
+        self._send_and_wait(SetBaudrateCmd(baudrate=self._baudrate))
 
 
 class _RFC2217ProxyProtocol(asyncio.Protocol):
@@ -1019,7 +1018,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
             return
 
         # RFC2217 has no flush. Instead, we "flush" the pipe with a req/rsp sequence.
-        await self._send_and_wait(SignatureCmd())
+        await self._send_and_wait(SetBaudrateCmd(baudrate=self._serial._baudrate))
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
