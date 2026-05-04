@@ -88,7 +88,7 @@ There is no equivalent for async code because the default `create_serial_connect
 ## Constants
 pyserial exposes parity, stop bit, and byte size settings as module-level constants (`serial.PARITY_NONE`, `serial.STOPBITS_ONE`, etc.). serialx replaces them with the `Parity` and `StopBits` enums. Properties like `serial.parity` and `serial.stopbits` now return enum members instead of raw strings or numbers.
 
-| pyserial                    | serialx                       |
+| Old Name                    | New Name                      |
 | ---                         | ---                           |
 | `PARITY_NONE`               | `Parity.NONE`                 |
 | `PARITY_EVEN`               | `Parity.EVEN`                 |
