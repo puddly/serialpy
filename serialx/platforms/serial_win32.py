@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import pywintypes
 from typing_extensions import Buffer, Unpack
@@ -20,6 +20,7 @@ from win32con import (
     GENERIC_READ,
     GENERIC_WRITE,
     MARKPARITY,
+    MAXDWORD,
     NOPARITY,
     ODDPARITY,
     ONE5STOPBITS,
@@ -30,13 +31,7 @@ from win32con import (
     SPACEPARITY,
     TWOSTOPBITS,
 )
-from win32event import (
-    INFINITE,
-    WAIT_TIMEOUT,
-    CreateEvent,
-    ResetEvent,
-    WaitForSingleObject,
-)
+from win32event import CreateEvent, ResetEvent
 from win32file import (
     OVERLAPPED,
     PURGE_RXABORT,
@@ -118,6 +113,16 @@ def _normalize_windows_port_path(path: os.PathLike[str] | str) -> str:
     return path
 
 
+class CommTimeouts(NamedTuple):
+    """COMMTIMEOUTS struct as a 5-tuple, accepted directly by SetCommTimeouts."""
+
+    ReadIntervalTimeout: int
+    ReadTotalTimeoutMultiplier: int
+    ReadTotalTimeoutConstant: int
+    WriteTotalTimeoutMultiplier: int
+    WriteTotalTimeoutConstant: int
+
+
 def _safe_close_handle(handle: int) -> None:
     """Close a Win32 handle, suppressing and logging errors."""
     try:
@@ -146,6 +151,50 @@ class Win32Serial(BaseSerial):
         self._write_buffer_size = write_buffer_size
         self._overlapped_read: PyOVERLAPPED | None = None
         self._overlapped_write: PyOVERLAPPED | None = None
+        self._commtimeouts: CommTimeouts | None = None
+
+    def _apply_commtimeouts(
+        self,
+        *,
+        read_timeout: float | None = None,
+        write_timeout: float | None = None,
+    ) -> None:
+        """Encode and push timeouts to the kernel; skip the syscall if unchanged."""
+        assert self._handle is not None
+        interval = (
+            max(int(self._inter_byte_timeout * 1000), 1)
+            if self._inter_byte_timeout
+            else 0
+        )
+
+        if read_timeout == 0:
+            # Documented sentinel: return immediately with whatever's buffered
+            read_interval_timeout = MAXDWORD
+            read_total_timeout_constant = 0
+        elif read_timeout is None:
+            read_interval_timeout = interval
+            read_total_timeout_constant = 0
+        else:
+            read_interval_timeout = interval
+            read_total_timeout_constant = max(int(read_timeout * 1000), 1)
+
+        if write_timeout is None or write_timeout == 0:
+            write_total_timeout_constant = 0
+        else:
+            write_total_timeout_constant = max(int(write_timeout * 1000), 1)
+
+        timeouts = CommTimeouts(
+            ReadIntervalTimeout=read_interval_timeout,
+            ReadTotalTimeoutMultiplier=0,
+            ReadTotalTimeoutConstant=read_total_timeout_constant,
+            WriteTotalTimeoutMultiplier=0,
+            WriteTotalTimeoutConstant=write_total_timeout_constant,
+        )
+
+        if self._commtimeouts == timeouts:
+            return
+        SetCommTimeouts(self._handle, timeouts)
+        self._commtimeouts = timeouts
 
     def _open(self) -> None:
         """Open the serial port."""
@@ -191,23 +240,7 @@ class Win32Serial(BaseSerial):
         assert self._handle is not None
 
         try:
-            interval = int(1000 * self._inter_byte_timeout)
-            if interval <= 0 and self._inter_byte_timeout > 0:
-                interval = 1  # Minimum 1ms if burst timeout is set but small
-
-            timeouts = (
-                # ReadIntervalTimeout
-                interval,
-                # ReadTotalTimeoutMultiplier
-                0,
-                # ReadTotalTimeoutConstant
-                0,
-                # WriteTotalTimeoutMultiplier
-                0,
-                # WriteTotalTimeoutConstant
-                0,
-            )
-            SetCommTimeouts(self._handle, timeouts)
+            self._apply_commtimeouts()
 
             # Setup buffers
             SetupComm(self._handle, self._read_buffer_size, self._write_buffer_size)
@@ -294,6 +327,7 @@ class Win32Serial(BaseSerial):
 
             _safe_close_handle(self._handle)
             self._handle = None
+            self._commtimeouts = None
 
         if self._overlapped_read is not None and self._overlapped_read.hEvent:
             _safe_close_handle(self._overlapped_read.hEvent)
@@ -360,63 +394,45 @@ class Win32Serial(BaseSerial):
         """Read data into the provided bytearray."""
         assert self._overlapped_read is not None
         assert self._handle is not None
+
+        self._apply_commtimeouts(read_timeout=timeout)
         ResetEvent(self._overlapped_read.hEvent)
 
         try:
-            rc, _ = ReadFile(self._handle, b, self._overlapped_read)  # type:ignore[call-overload]
+            ReadFile(self._handle, b, self._overlapped_read)  # type:ignore[call-overload]
         except pywintypes.error as e:
-            raise OSError(e.winerror, e.strerror) from e
+            if e.winerror != ERROR_IO_PENDING:
+                raise OSError(e.winerror, e.strerror) from e
 
-        if rc == ERROR_IO_PENDING:
-            # IO is pending, wait for it
-            timeout_ms = int(timeout * 1000) if timeout is not None else INFINITE
-            res = WaitForSingleObject(self._overlapped_read.hEvent, timeout_ms)
-
-            if res == WAIT_TIMEOUT:
-                CancelIo(self._handle)
-                # Wait for cancellation to complete to avoid data corruption or races
-                WaitForSingleObject(self._overlapped_read.hEvent, INFINITE)
-                return 0
-
-        # Get the actual number of bytes read
         try:
-            n = GetOverlappedResult(self._handle, self._overlapped_read, True)
+            return GetOverlappedResult(self._handle, self._overlapped_read, True)
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror) from e
-
-        return n
 
     def _write(self, data: Buffer, *, timeout: float | None) -> int:
         """Write data to the serial port synchronously."""
         assert self._overlapped_write is not None
         assert self._handle is not None
+
+        self._apply_commtimeouts(write_timeout=timeout)
         ResetEvent(self._overlapped_write.hEvent)
 
         try:
-            err, n = WriteFile(self._handle, data, self._overlapped_write)  # type:ignore[arg-type]
+            err, _ = WriteFile(self._handle, data, self._overlapped_write)  # type:ignore[arg-type]
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror) from e
 
-        if err == ERROR_IO_PENDING:
-            if timeout == 0:
-                # Non-blocking: the kernel accepted the whole write
-                return memoryview(data).nbytes
+        if err == ERROR_IO_PENDING and timeout == 0:
+            # Fire-and-forget: the kernel accepted the whole write.
+            return memoryview(data).nbytes
 
-            # IO is pending, wait for it
-            timeout_ms = int(timeout * 1000) if timeout is not None else INFINITE
-            res = WaitForSingleObject(self._overlapped_write.hEvent, timeout_ms)
-
-            if res == WAIT_TIMEOUT:
-                CancelIo(self._handle)
-                # Wait for cancellation to complete
-                WaitForSingleObject(self._overlapped_write.hEvent, INFINITE)
-                raise TimeoutError("Write timeout") from None
-
-        # Get the actual number of bytes written
         try:
             n = GetOverlappedResult(self._handle, self._overlapped_write, True)
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror) from e
+
+        if timeout is not None and timeout > 0 and n != memoryview(data).nbytes:
+            raise TimeoutError("Write timeout")
 
         return n
 
@@ -584,13 +600,6 @@ class Win32SerialTransport(BaseSerialTransport):
         try:
             exclusive = kwargs.get("exclusive", True)
             await self._open(path, exclusive=exclusive)
-
-            # Ensure inter_byte_timeout is set to a small value to enable
-            # "Wait for first byte, then return on gap" behavior for ReadFile.
-            # If 0 (default), ReadFile with default timeouts might wait for full buffer.
-            original_inter_byte_timeout = kwargs.get("inter_byte_timeout", 0)
-            if original_inter_byte_timeout == 0:
-                kwargs["inter_byte_timeout"] = 0.01  # type: ignore[typeddict-unknown-key]
 
             self._serial = Win32Serial(
                 **kwargs,
