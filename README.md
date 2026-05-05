@@ -10,7 +10,8 @@ native asynchronous APIs for all platforms.
 pip install serialx
 ```
 
-For drop-in import compatibility (`serial`, `serial_asyncio`, `serial_asyncio_fast`), install:
+For drop-in import compatibility (`serial`, `serial_asyncio`, `serial_asyncio_fast`) in
+environments where existing code cannot be migrated:
 ```console
 pip install serialx-compat
 ```
@@ -31,41 +32,64 @@ with serialx.serial_for_url("/dev/serial/by-id/port", baudrate=115200) as serial
     assert pins.dtr is serialx.PinState.HIGH
 ```
 
-A high-level asynchronous serial `(reader, writer)` pair:
+An async equivalent of the synchronous API:
 
 ```Python
 import asyncio
-import contextlib
-
 import serialx
 
 async def main():
-	reader, writer = await serialx.open_serial_connection("/dev/serial/by-id/port", baudrate=115200)
+    async with serialx.async_serial_for_url(
+        "/dev/serial/by-id/port", baudrate=115200,
+    ) as serial:
+        data = await serial.readexactly(5)
+        serial.write(b"test")
+        await serial.flush()
 
-	with contextlib.closing(writer):
-	    data = await reader.readexactly(5)
-	    writer.write(b"test")
-	    await writer.drain()
+        await serial.set_modem_pins(rts=True, dtr=True)
+        pins = await serial.get_modem_pins()
+        assert pins.rts is serialx.PinState.HIGH
 ```
 
-And a low-level asynchronous serial transport:
+A `(StreamReader, StreamWriter)` pair is also available for code already wired up to
+the asyncio streams API:
 
 ```Python
 import asyncio
 import serialx
 
 async def main():
-	loop = asyncio.get_running_loop()
-	protocol = YourProtocol()
+    reader, writer = await serialx.open_serial_connection(
+        "/dev/serial/by-id/port", baudrate=115200,
+    )
 
-	transport, protocol = await serialx.create_serial_connection(
-	    loop,
-	    lambda: protocol,
-	    url="/dev/serial/by-id/port",
-	    baudrate=115200
-	)
+    try:
+        data = await reader.readexactly(5)
+        writer.write(b"test")
+        await writer.drain()
+    finally:
+    	writer.close()
+	    await writer.wait_closed()
+```
 
-	await transport.set_modem_pins(rts=True, dtr=True)
+And a low-level asynchronous serial transport for protocol-style consumers:
+
+```Python
+import asyncio
+import serialx
+
+async def main():
+    loop = asyncio.get_running_loop()
+    protocol = YourProtocol()
+
+    transport, protocol = await serialx.create_serial_connection(
+        loop,
+        lambda: protocol,
+        url="/dev/serial/by-id/port",
+        baudrate=115200,
+    )
+
+    await transport.set_modem_pins(rts=True, dtr=True)
 ```
 
 ## ESPHome serial proxy

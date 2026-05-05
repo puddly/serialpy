@@ -11,7 +11,3 @@
    :members:
    :member-order: bysource
 ```
-
-```{eval-rst}
-.. autofunction:: serialx.platforms.serial_posix.posix_list_serial_ports
-```
