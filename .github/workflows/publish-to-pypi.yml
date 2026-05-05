@@ -6,6 +6,7 @@ on:
       - published
   workflow_dispatch:
   push:
+    branches: [dev]
     paths:
       - ".github/workflows/publish-to-pypi.yml"
   pull_request:
