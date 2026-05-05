@@ -14,7 +14,7 @@ async def test_unopened_state() -> None:
     assert serial.is_open is False
 
 
-def test_repr_unopened() -> None:
+async def test_repr_unopened() -> None:
     """repr() works on an unopened instance and reports url + null transport."""
     serial = async_serial_for_url("socket://1.2.3.4:5678", baudrate=115200)
     text = repr(serial)
