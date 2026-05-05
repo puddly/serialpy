@@ -474,8 +474,11 @@ class Win32Serial(BaseSerial):
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror) from e
 
-        if timeout is not None and timeout > 0 and n != memoryview(data).nbytes:
-            raise TimeoutError("Write timeout")
+        expected_bytes = memoryview(data).nbytes
+        if timeout is not None and timeout > 0 and n != expected_bytes:
+            raise TimeoutError(
+                f"Write timeout: wrote {n} of {expected_bytes} in {timeout:0.2f}"
+            )
 
         return n
 
