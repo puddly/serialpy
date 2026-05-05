@@ -619,14 +619,11 @@ class RFC2217Serial(SocketSerial):
         # Individual RFC2217 socket reads may not always translate into real serial data
         # we need to loop until it actually produces some, or we hit the timeout limit
         while True:
-            if timeout is not None and timeout <= 0:
-                return 0
-
             with measure_time() as get_elapsed:
                 try:
                     with self._socket_timeout(timeout):
                         n = self._socket.recv_into(buf)
-                except TimeoutError:
+                except (TimeoutError, BlockingIOError):
                     return 0
 
             if timeout is not None:
