@@ -435,7 +435,6 @@ async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
         await left.close()
         # Second close should be a no-op
         await left.close()
-        assert left.is_closed
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
@@ -1090,11 +1089,12 @@ async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
 
     async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, exclusive=False
-    ) as left:
+    ) as left1:
         async with serialx.async_serial_for_url(
             serial_pair.left, baudrate=115200, exclusive=False
-        ) as left:
-            left.write(b"test")
+        ) as left2:
+            left1.write(b"hello")
+            left2.write(b"world")
 
 
 async def test_async_connect_nonexistent_port() -> None:

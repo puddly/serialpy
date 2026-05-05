@@ -115,11 +115,6 @@ class AsyncSerial:
         """Whether the connection is currently open."""
         return self._transport is not None and not self._transport.is_closing()
 
-    @property
-    def is_closed(self) -> bool:
-        """Whether the connection is currently closed."""
-        return not self.is_open
-
     async def __aenter__(self) -> Self:
         """Open the connection and return self."""
         await self.open()

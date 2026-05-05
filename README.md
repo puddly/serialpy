@@ -68,8 +68,8 @@ async def main():
         writer.write(b"test")
         await writer.drain()
     finally:
-    	writer.close()
-	    await writer.wait_closed()
+        writer.close()
+        await writer.wait_closed()
 ```
 
 And a low-level asynchronous serial transport for protocol-style consumers:
