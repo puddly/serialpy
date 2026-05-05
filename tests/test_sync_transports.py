@@ -692,12 +692,7 @@ def test_sync_short_timeout_preserves_buffered_bytes(serial_pair: SerialPair) ->
 
 
 def test_sync_zero_timeout_returns_buffered_data(serial_pair: SerialPair) -> None:
-    """timeout=0 should return buffered data immediately (POSIX-style non-blocking).
-
-    Tests the prior assertion that on Win32 the current `WaitForSingleObject(0)
-    + CancelIo + return 0` path violates this contract even when bytes are
-    sitting in the driver's RX FIFO.
-    """
+    """Reading with `timeout=0` should return buffered data immediately."""
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(
