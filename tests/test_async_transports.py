@@ -86,6 +86,58 @@ async def test_async_null_bytes(serial_pair: SerialPair) -> None:
         assert result == null_data
 
 
+async def test_async_readuntil(serial_pair: SerialPair) -> None:
+    """Test readuntil reads up to and including the default newline separator."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"hello\nworld\n")
+        assert await right.readuntil() == b"hello\n"
+        assert await right.readuntil(b"\n") == b"world\n"
+
+
+async def test_async_readuntil_custom_separator(serial_pair: SerialPair) -> None:
+    """Test readuntil with a multi-byte custom separator."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"first||second||tail")
+        assert await right.readuntil(b"||") == b"first||"
+        assert await right.readuntil(b"||") == b"second||"
+
+
+async def test_async_readuntil_repeated_separator(serial_pair: SerialPair) -> None:
+    """Test readuntil with consecutive separators that don't align as framing."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"foo|||||bar||tail||")
+        assert await right.readuntil(b"||") == b"foo||"
+        assert await right.readuntil(b"||") == b"||"
+        assert await right.readuntil(b"||") == b"|bar||"
+        assert await right.readuntil(b"||") == b"tail||"
+
+
+async def test_async_readline(serial_pair: SerialPair) -> None:
+    """Test readline returns successive newline-terminated lines."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"alpha\nbeta\ngamma\n")
+        assert await right.readline() == b"alpha\n"
+        assert await right.readline() == b"beta\n"
+        assert await right.readline() == b"gamma\n"
+
+
+async def test_async_writelines(serial_pair: SerialPair) -> None:
+    """Test writelines writes an iterable of buffers in order."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.writelines([b"foo", b"bar", b"baz"])
+        assert await right.readexactly(9) == b"foobarbaz"
+
+
 async def test_async_overlapping_read_write(serial_pair: SerialPair) -> None:
     """Test that read and write can overlap, data is buffered."""
     async with async_create_serial_pair(
@@ -1070,7 +1122,9 @@ async def test_async_exclusive(serial_pair: SerialPair) -> None:
     """Test that exclusive setting is respected for async connections."""
     async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, exclusive=True
-    ):
+    ) as left:
+        assert left.exclusive is True
+
         with pytest.raises(OSError):
             async with serialx.async_serial_for_url(
                 serial_pair.left, baudrate=115200, exclusive=True
@@ -1090,9 +1144,13 @@ async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
     async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, exclusive=False
     ) as left1:
+        assert left1.exclusive is False
+
         async with serialx.async_serial_for_url(
             serial_pair.left, baudrate=115200, exclusive=False
         ) as left2:
+            assert left2.exclusive is False
+
             left1.write(b"hello")
             left2.write(b"world")
 

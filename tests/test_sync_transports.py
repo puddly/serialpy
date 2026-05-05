@@ -102,6 +102,43 @@ def test_sync_null_bytes(serial_pair: SerialPair) -> None:
         assert right.readexactly(len(null_data)) == null_data
 
 
+def test_sync_readline(serial_pair: SerialPair) -> None:
+    """Test readline returns successive newline-terminated lines."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=1.0) as right,
+    ):
+        left.write(b"alpha\nbeta\ngamma\n")
+        assert right.readline() == b"alpha\n"
+        assert right.readline() == b"beta\n"
+        assert right.readline() == b"gamma\n"
+
+
+def test_sync_readline_returns_partial_on_timeout(serial_pair: SerialPair) -> None:
+    """Test readline returns the partial line if no newline arrives before timeout."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=0.5) as right,
+    ):
+        left.write(b"no newline here")
+
+        with measure_time() as elapsed:
+            result = right.readline()
+
+        assert result == b"no newline here"
+        assert elapsed() == pytest.approx(0.5, abs=0.2)
+
+
+def test_sync_writelines(serial_pair: SerialPair) -> None:
+    """Test writelines writes an iterable of buffers in order."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        left.writelines([b"foo", b"bar", b"baz"])
+        assert right.readexactly(9) == b"foobarbaz"
+
+
 def test_sync_overlapping_read_write(serial_pair: SerialPair) -> None:
     """Test that read and write can overlap, data is buffered."""
     with (
@@ -657,6 +694,19 @@ def test_sync_read_until(serial_pair: SerialPair) -> None:
 
         assert right.read_until(b"\n") == b"hello\n"
         assert right.read_until(b"\n") == b"world\n"
+
+
+def test_sync_read_until_repeated_separator(serial_pair: SerialPair) -> None:
+    """Test read_until with consecutive separators that don't align as framing."""
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200, read_timeout=1.0) as right,
+    ):
+        left.write(b"foo|||||bar||tail||")
+        assert right.read_until(b"||") == b"foo||"
+        assert right.read_until(b"||") == b"||"
+        assert right.read_until(b"||") == b"|bar||"
+        assert right.read_until(b"||") == b"tail||"
 
 
 def test_sync_readexactly_total_timeout(serial_pair: SerialPair) -> None:
