@@ -717,13 +717,7 @@ def test_sync_zero_timeout_returns_buffered_data(serial_pair: SerialPair) -> Non
 def test_sync_buffered_bytes_recovered_after_short_timeout(
     serial_pair: SerialPair,
 ) -> None:
-    """Bytes are deferred, not lost: a follow-up read after a short timeout recovers them.
-
-    Tests the prior assertion that even when `_readinto` returns 0 on a
-    too-short caller timeout, the bytes remain queued in the driver and a
-    subsequent read picks them up. If the bug were truly lossy (data overwritten
-    in the user buffer and discarded), `n1 + n2` would not reach 5.
-    """
+    """Bytes are deferred, not lost, after a short timeout."""
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(
@@ -748,13 +742,7 @@ def test_sync_buffered_bytes_recovered_after_short_timeout(
 def test_sync_inter_byte_timeout_bounds_trailing_latency(
     serial_pair: SerialPair,
 ) -> None:
-    """`inter_byte_timeout` sets the trailing-chunk latency on Win32.
-
-    Tests the prior assertion that on Win32, a partial reply (size > delivered)
-    pays one `inter_byte_timeout` of latency before `readinto` returns. Backends
-    without a kernel-side gap timer should return well before this — that
-    asymmetry is what makes this assertion Win32-specific.
-    """
+    """`inter_byte_timeout` sets the trailing-chunk latency."""
     with (
         Serial.from_url(serial_pair.left, baudrate=115200) as left,
         Serial.from_url(
@@ -777,13 +765,7 @@ def test_sync_inter_byte_timeout_bounds_trailing_latency(
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_WRITE_TIMEOUT)
 def test_sync_write_short_timeout_partial_delivery(serial_pair: SerialPair) -> None:
-    """A `write_timeout` firing should still deliver the bytes the kernel pushed.
-
-    Tests the prior assertion that on Win32 the `_write` cancel path raises
-    TimeoutError without reporting a partial count, but the bytes that made it
-    out of the kernel before the cancel are still on the wire — the receiver
-    should observe them.
-    """
+    """A `write_timeout` firing should still deliver the bytes the kernel pushed."""
     with (
         Serial.from_url(
             serial_pair.left,
