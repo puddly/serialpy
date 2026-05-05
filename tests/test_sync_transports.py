@@ -391,6 +391,7 @@ def test_sync_valid_byte_size(serial_pair: SerialPair, byte_size: int) -> None:
     with Serial.from_url(
         serial_pair.left, baudrate=115200, byte_size=byte_size
     ) as serial:
+        assert serial.byte_size == byte_size
         serial.write(b"test")
 
 

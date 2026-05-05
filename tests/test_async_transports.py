@@ -401,6 +401,7 @@ async def test_async_valid_byte_size(serial_pair: SerialPair, byte_size: int) ->
     async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, byte_size=byte_size
     ) as left:
+        assert left.byte_size == byte_size
         left.write(b"test")
 
 
