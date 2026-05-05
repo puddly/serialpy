@@ -739,6 +739,7 @@ def test_sync_buffered_bytes_recovered_after_short_timeout(
         assert bytes(buf[: n1 + n2]) == b"hello"
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_INTER_BYTE_TIMEOUT)
 def test_sync_inter_byte_timeout_bounds_trailing_latency(
     serial_pair: SerialPair,
 ) -> None:
