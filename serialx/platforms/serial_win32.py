@@ -31,7 +31,7 @@ from win32con import (
     SPACEPARITY,
     TWOSTOPBITS,
 )
-from win32event import CreateEvent, ResetEvent
+from win32event import CreateEvent as _CreateEvent, ResetEvent
 from win32file import (
     OVERLAPPED,
     PURGE_RXABORT,
@@ -41,7 +41,7 @@ from win32file import (
     CancelIo,
     ClearCommError,
     CloseHandle,
-    CreateFile,
+    CreateFile as _CreateFile,
     EscapeCommFunction,
     FlushFileBuffers,
     GetCommModemStatus,
@@ -71,7 +71,7 @@ from ..common import (
 )
 
 if TYPE_CHECKING:
-    from _win32typing import PyOVERLAPPED
+    from _win32typing import PyOVERLAPPED, PySECURITY_ATTRIBUTES
 
 # Constants missing from win32con
 MS_CTS_ON = 0x0010
@@ -123,13 +123,39 @@ class CommTimeouts(NamedTuple):
     WriteTotalTimeoutConstant: int
 
 
-class CreateEventArgs(NamedTuple):
-    """Positional arguments for win32event.CreateEvent."""
+def CreateEvent(  # noqa: N802
+    *,
+    EventAttributes: Any,
+    bManualReset: bool,
+    bInitialState: bool,
+    Name: str | None,
+) -> int:
+    """Keyword-only wrapper for win32event.CreateEvent."""
+    return _CreateEvent(EventAttributes, bManualReset, bInitialState, Name)
 
-    EventAttributes: Any
-    bManualReset: bool  # noqa: N815
-    bInitialState: bool  # noqa: N815
-    Name: str | None
+
+def CreateFile(  # noqa: N802
+    *,
+    FileName: str,
+    DesiredAccess: int,
+    ShareMode: int,
+    SecurityAttributes: PySECURITY_ATTRIBUTES | None,
+    CreationDisposition: int,
+    FlagsAndAttributes: int,
+    TemplateFile: int | None,
+) -> int:
+    """Keyword-only wrapper for win32file.CreateFile."""
+    result = _CreateFile(
+        FileName,
+        DesiredAccess,
+        ShareMode,
+        SecurityAttributes,
+        CreationDisposition,
+        FlagsAndAttributes,
+        TemplateFile,
+    )
+
+    return cast(int, result)
 
 
 def _safe_close_handle(handle: int) -> None:
@@ -218,30 +244,32 @@ class Win32Serial(BaseSerial):
         share_mode = 0 if self._exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
 
         try:
-            handle = CreateFile(
-                path,
-                GENERIC_READ | GENERIC_WRITE,
-                share_mode,
-                None,
-                OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                None,
+            self._handle = CreateFile(
+                FileName=path,
+                DesiredAccess=GENERIC_READ | GENERIC_WRITE,
+                ShareMode=share_mode,
+                SecurityAttributes=None,
+                CreationDisposition=OPEN_EXISTING,
+                FlagsAndAttributes=FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                TemplateFile=None,
             )
-
-            self._handle = cast(int, handle)
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror, path) from e
 
-        event_args = CreateEventArgs(
+        self._overlapped_read = OVERLAPPED()
+        self._overlapped_read.hEvent = CreateEvent(
             EventAttributes=None,
             bManualReset=True,
             bInitialState=False,
             Name=None,
         )
-        self._overlapped_read = OVERLAPPED()
-        self._overlapped_read.hEvent = CreateEvent(*event_args)
         self._overlapped_write = OVERLAPPED()
-        self._overlapped_write.hEvent = CreateEvent(*event_args)
+        self._overlapped_write.hEvent = CreateEvent(
+            EventAttributes=None,
+            bManualReset=True,
+            bInitialState=False,
+            Name=None,
+        )
 
         self._auto_close = True
 
@@ -573,19 +601,18 @@ class Win32SerialTransport(BaseSerialTransport):
         normalized_path = _normalize_windows_port_path(path)
         share_mode = 0 if exclusive else FILE_SHARE_READ | FILE_SHARE_WRITE
 
-        open_fut = self._loop.run_in_executor(
+        self._open_fut = self._loop.run_in_executor(
             None,
             lambda: CreateFile(
-                normalized_path,
-                GENERIC_READ | GENERIC_WRITE,
-                share_mode,
-                None,
-                OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                None,
+                FileName=normalized_path,
+                DesiredAccess=GENERIC_READ | GENERIC_WRITE,
+                ShareMode=share_mode,
+                SecurityAttributes=None,
+                CreationDisposition=OPEN_EXISTING,
+                FlagsAndAttributes=FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                TemplateFile=None,
             ),
         )
-        self._open_fut = cast(asyncio.Future[int], open_fut)
 
         try:
             handle = await self._open_fut
