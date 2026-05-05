@@ -21,7 +21,6 @@ import psutil
 from typing_extensions import Self
 
 import serialx
-from serialx.common import BaseSerialTransport
 
 _PYODIDE_PAIR_COUNTER = 0
 
@@ -576,48 +575,17 @@ def create_hub4com_pair(
 
 
 @contextlib.asynccontextmanager
-async def async_create_reader_writer(
-    *args: Any, **kwargs: Any
-) -> AsyncIterator[
-    tuple[asyncio.StreamReader, serialx.SerialStreamWriter[BaseSerialTransport]]
-]:
-    """Create a single reader/writer pair."""
-    reader, writer = await serialx.open_serial_connection(*args, **kwargs)
-
-    try:
-        yield (reader, writer)
-    finally:
-        writer.close()
-        await writer.wait_closed()
-
-
-@contextlib.asynccontextmanager
-async def async_create_reader_writer_pair(
+async def async_create_serial_pair(
     left: str,
     right: str,
     **kwargs: Any,
-) -> AsyncIterator[
-    tuple[
-        asyncio.StreamReader,
-        serialx.SerialStreamWriter[BaseSerialTransport],
-        asyncio.StreamReader,
-        serialx.SerialStreamWriter[BaseSerialTransport],
-    ]
-]:
-    """Create reader/writer pairs for both sides of a socat connection.
-
-    Returns (reader_left, writer_left, reader_right, writer_right).
-    """
-    reader_left, writer_left = await serialx.open_serial_connection(left, **kwargs)
-    reader_right, writer_right = await serialx.open_serial_connection(right, **kwargs)
-
-    try:
-        yield (reader_left, writer_left, reader_right, writer_right)
-    finally:
-        writer_left.close()
-        writer_right.close()
-        await writer_left.wait_closed()
-        await writer_right.wait_closed()
+) -> AsyncIterator[tuple[serialx.AsyncSerial, serialx.AsyncSerial]]:
+    """Create AsyncSerial objects for both sides of a socat connection."""
+    async with (
+        serialx.async_serial_for_url(left, **kwargs) as ser_left,
+        serialx.async_serial_for_url(right, **kwargs) as ser_right,
+    ):
+        yield ser_left, ser_right
 
 
 @contextlib.contextmanager

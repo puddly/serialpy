@@ -145,3 +145,15 @@ if pins.cts is serialx.PinState.HIGH:
 :::
 
 `set_modem_pins` accepts individual pin kwargs or a full `ModemPins` dataclass. Pins omitted from the call are left unchanged. `get_modem_pins` returns a `ModemPins` dataclass of `PinState` enum values, call `.to_bool()` on a pin for a `bool | None`.
+
+### Simplified async API
+If you have existing sync code using `serial_for_url` and want to make it async, use `async_serial_for_url`. The method names match the sync API (e.g. `read`, `readexactly`, `readline`, `readuntil`, `write`, `flush`) so the migration is mostly adding `async`/`await`:
+
+```diff
+-with serialx.serial_for_url("/dev/ttyUSB0", baudrate=115200) as serial:
+-    serial.write(b"ping")
+-    data = serial.readexactly(4)
++async with serialx.async_serial_for_url("/dev/ttyUSB0", baudrate=115200) as serial:
++    serial.write(b"ping")
++    data = await serial.readexactly(4)
+```

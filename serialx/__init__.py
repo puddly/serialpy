@@ -1,7 +1,9 @@
 """serialx serial port implementation."""
 
 from .async_serial import (
+    AsyncSerial,
     SerialStreamWriter,
+    async_serial_for_url,
     create_serial_connection,
     open_serial_connection,
 )
@@ -42,6 +44,8 @@ from .compat import (
 from .platforms import Serial, SerialTransport
 
 __all__ = [
+    "AsyncSerial",
+    "async_serial_for_url",
     "create_serial_connection",
     "get_serial_classes",
     "list_serial_ports",

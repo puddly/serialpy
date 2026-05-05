@@ -25,6 +25,7 @@ api
 :caption: How-to
 :hidden:
 
+how-to/async-serial
 how-to/esphome
 how-to/pyodide
 how-to/pyserial-migration

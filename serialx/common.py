@@ -21,7 +21,7 @@ from typing import Any, Concatenate, NamedTuple, ParamSpec, TypeVar, cast
 import urllib.parse
 import warnings
 
-from typing_extensions import Buffer, Self
+from typing_extensions import Buffer, Self, TypedDict, Unpack
 
 
 class Platform(str, Enum):
@@ -193,6 +193,20 @@ class Parity(str, Enum):
     EVEN = "E"
     MARK = "M"
     SPACE = "S"
+
+
+class ConnectKwargs(  # type: ignore[call-arg]  # PEP 728 not in mypy yet
+    TypedDict, total=False, extra_items=Any
+):
+    """Kwargs forwarded to BaseSerialTransport.connect / _connect."""
+
+    baudrate: int
+    parity: Parity
+    stopbits: StopBits
+    xonxoff: bool
+    rtscts: bool
+    exclusive: bool
+    byte_size: int
 
 
 class PinState(Enum):
@@ -935,7 +949,9 @@ class BaseSerialTransport(asyncio.Transport):
         return self._serial.exclusive
 
     @abstractmethod
-    async def _connect(self, **kwargs: Any) -> None:
+    async def _connect(
+        self, *, path: str | None, **kwargs: Unpack[ConnectKwargs]
+    ) -> None:
         """Connect to serial port."""
         raise NotImplementedError
 
@@ -943,13 +959,7 @@ class BaseSerialTransport(asyncio.Transport):
         self,
         *,
         path: str | None,
-        baudrate: int,
-        parity: Parity = Parity.NONE,
-        stopbits: StopBits = StopBits.ONE,
-        xonxoff: bool = False,
-        rtscts: bool = False,
-        byte_size: int = 8,
-        **kwargs: Any,
+        **kwargs: Unpack[ConnectKwargs],
     ) -> None:
         """Connect to serial port."""
         if path is not None:
@@ -960,16 +970,7 @@ class BaseSerialTransport(asyncio.Transport):
                 )
 
         try:
-            await self._connect(
-                path=path,
-                baudrate=baudrate,
-                parity=parity,
-                stopbits=stopbits,
-                xonxoff=xonxoff,
-                rtscts=rtscts,
-                byte_size=byte_size,
-                **kwargs,
-            )
+            await self._connect(path=path, **kwargs)
         except BaseException:
             # Intentionally catch cancellation too: callers should only observe
             # connect failure/cancel after transport resources are released.

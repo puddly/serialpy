@@ -14,6 +14,7 @@ else:
 
 import pytest
 
+import serialx
 from serialx import (
     BaseSerialTransport,
     ModemPins,
@@ -27,8 +28,7 @@ from tests.common import (
     SerialBackend,
     SerialPair,
     SerialQuirk,
-    async_create_reader_writer,
-    async_create_reader_writer_pair,
+    async_create_serial_pair,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -39,68 +39,120 @@ LOGGER = logging.getLogger(__name__)
 
 async def test_async_all_bytes(serial_pair: SerialPair) -> None:
     """Test that all bytes 0-255 can be transmitted."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         data = bytes(range(256))
-        writer_left.write(data)
-        result = await reader_right.readexactly(len(data))
+        left.write(data)
+        result = await right.readexactly(len(data))
         assert result == data
 
 
 async def test_async_segmented_binary_data(serial_pair: SerialPair) -> None:
     """Test binary data sent in segments."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         segment_size = 16
         data = bytes(range(256))
 
         for i in range(0, 256, segment_size):
             segment = data[i : i + segment_size]
-            writer_left.write(segment)
-            result = await reader_right.readexactly(len(segment))
+            left.write(segment)
+            result = await right.readexactly(len(segment))
             assert result == segment
 
 
 @pytest.mark.parametrize("size", [1, 16, 64, 256, 512, 1024])
 async def test_async_binary_payload_sizes(serial_pair: SerialPair, size: int) -> None:
     """Test various binary payload sizes."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         data = bytes([i % 256 for i in range(size)])
-        writer_left.write(data)
-        result = await reader_right.readexactly(len(data))
+        left.write(data)
+        result = await right.readexactly(len(data))
         assert result == data
 
 
 async def test_async_null_bytes(serial_pair: SerialPair) -> None:
     """Test that null bytes (0x00) can be transmitted."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         null_data = b"\x00" * 64
-        writer_left.write(null_data)
-        result = await reader_right.readexactly(len(null_data))
+        left.write(null_data)
+        result = await right.readexactly(len(null_data))
         assert result == null_data
+
+
+async def test_async_readuntil(serial_pair: SerialPair) -> None:
+    """Test readuntil reads up to and including the default newline separator."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"hello\nworld\n")
+        assert await right.readuntil() == b"hello\n"
+        assert await right.readuntil(b"\n") == b"world\n"
+
+
+async def test_async_readuntil_custom_separator(serial_pair: SerialPair) -> None:
+    """Test readuntil with a multi-byte custom separator."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"first||second||tail")
+        assert await right.readuntil(b"||") == b"first||"
+        assert await right.readuntil(b"||") == b"second||"
+
+
+async def test_async_readuntil_repeated_separator(serial_pair: SerialPair) -> None:
+    """Test readuntil with consecutive separators that don't align as framing."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"foo|||||bar||tail||")
+        assert await right.readuntil(b"||") == b"foo||"
+        assert await right.readuntil(b"||") == b"||"
+        assert await right.readuntil(b"||") == b"|bar||"
+        assert await right.readuntil(b"||") == b"tail||"
+
+
+async def test_async_readline(serial_pair: SerialPair) -> None:
+    """Test readline returns successive newline-terminated lines."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.write(b"alpha\nbeta\ngamma\n")
+        assert await right.readline() == b"alpha\n"
+        assert await right.readline() == b"beta\n"
+        assert await right.readline() == b"gamma\n"
+
+
+async def test_async_writelines(serial_pair: SerialPair) -> None:
+    """Test writelines writes an iterable of buffers in order."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        left.writelines([b"foo", b"bar", b"baz"])
+        assert await right.readexactly(9) == b"foobarbaz"
 
 
 async def test_async_overlapping_read_write(serial_pair: SerialPair) -> None:
     """Test that read and write can overlap, data is buffered."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         data = bytes(range(256))
         read = b""
 
-        writer_left.write(data[:100])
-        read += await reader_right.readexactly(10)
-        writer_left.write(data[100:150])
-        read += await reader_right.readexactly(10)
-        writer_left.write(data[150:])
-        read += await reader_right.readexactly(10)
-        read += await reader_right.readexactly(256 - 30)
+        left.write(data[:100])
+        read += await right.readexactly(10)
+        left.write(data[100:150])
+        read += await right.readexactly(10)
+        left.write(data[150:])
+        read += await right.readexactly(10)
+        read += await right.readexactly(256 - 30)
 
         assert read == data
 
@@ -133,12 +185,12 @@ async def test_async_random_large(
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=baudrate
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         data = os.urandom(chunk_size)
-        writer_left.write(data)
-        read_data = await reader_right.readexactly(chunk_size)
+        left.write(data)
+        read_data = await right.readexactly(chunk_size)
         assert read_data == data
 
 
@@ -147,30 +199,30 @@ async def test_async_repeated_write_read_cycles(
     serial_pair: SerialPair, iterations: int
 ) -> None:
     """Test repeated write/read cycles."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         data = bytes(range(256))
 
         for _ in range(iterations):
-            writer_left.write(data)
-            result = await reader_right.readexactly(len(data))
+            left.write(data)
+            result = await right.readexactly(len(data))
             assert result == data
 
 
 async def test_async_buffered_writes_then_read(serial_pair: SerialPair) -> None:
     """Test multiple writes followed by a single read."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         chunk = bytes(range(256))
         iterations = 4
 
         for _ in range(iterations):
-            writer_left.write(chunk)
+            left.write(chunk)
 
         total_size = len(chunk) * iterations
-        result = await reader_right.readexactly(total_size)
+        result = await right.readexactly(total_size)
         expected = chunk * iterations
         assert result == expected
 
@@ -184,27 +236,27 @@ async def test_async_large_payload(serial_pair: SerialPair, payload_size: int) -
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=921600
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         data = bytes([i % 256 for i in range(payload_size)])
-        writer_left.write(data)
-        result = await reader_right.readexactly(len(data))
+        left.write(data)
+        result = await right.readexactly(len(data))
         assert result == data
 
 
 async def test_async_rapid_small_writes(serial_pair: SerialPair) -> None:
     """Test rapid succession of small writes."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         iterations = 256
         received = bytearray()
 
         for i in range(iterations):
             data = bytes([i % 256])
-            writer_left.write(data)
-            result = await reader_right.readexactly(1)
+            left.write(data)
+            result = await right.readexactly(1)
             received.extend(result)
 
         expected = bytes([i % 256 for i in range(iterations)])
@@ -226,13 +278,13 @@ async def test_async_sustained_throughput(
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=baudrate
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         chunk = os.urandom(1024)
         for _ in range(iterations):
-            writer_left.write(chunk)
-            result = await reader_right.readexactly(len(chunk))
+            left.write(chunk)
+            result = await right.readexactly(len(chunk))
             assert result == chunk
 
 
@@ -254,12 +306,11 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
     ):
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    async with async_create_reader_writer(serial_pair.left, baudrate=baudrate) as (
-        _,
-        writer,
-    ):
-        assert writer.transport.baudrate == baudrate
-        writer.write(b"test")
+    async with serialx.async_serial_for_url(
+        serial_pair.left, baudrate=baudrate
+    ) as left:
+        assert left.baudrate == baudrate
+        left.write(b"test")
 
 
 async def test_async_nonstandard_baudrate(serial_pair: SerialPair) -> None:
@@ -270,12 +321,12 @@ async def test_async_nonstandard_baudrate(serial_pair: SerialPair) -> None:
     if sys.platform == "darwin" and SerialBackend.SER2NET in serial_pair.backends:
         pytest.xfail("macOS termios lacks constants above B230400")
 
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=200000
-    ) as (_, writer_left, reader_right, _):
-        assert writer_left.transport.baudrate == 200000
-        writer_left.write(b"test")
-        assert await reader_right.readexactly(4) == b"test"
+    ) as (left, right):
+        assert left.baudrate == 200000
+        left.write(b"test")
+        assert await right.readexactly(4) == b"test"
 
 
 @pytest.mark.parametrize(
@@ -298,11 +349,11 @@ async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> No
     ):
         pytest.skip("MARK/SPACE parity requires CMSPAR (Linux) or Win32")
 
-    async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, parity=parity
-    ) as (_, writer):
-        assert writer.transport.parity == parity
-        writer.write(b"test")
+    ) as left:
+        assert left.parity == parity
+        left.write(b"test")
 
 
 @pytest.mark.parametrize(
@@ -334,11 +385,11 @@ async def test_async_valid_stopbits(
     ):
         pytest.skip("1.5 stop bits only supported on Win32")
 
-    async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, stopbits=stopbits
-    ) as (_, writer):
-        assert writer.transport.stopbits == expected
-        writer.write(b"test")
+    ) as left:
+        assert left.stopbits == expected
+        left.write(b"test")
 
 
 @pytest.mark.parametrize("byte_size", [5, 6, 7, 8])
@@ -347,10 +398,11 @@ async def test_async_valid_byte_size(serial_pair: SerialPair, byte_size: int) ->
     if sys.platform == "emscripten" and byte_size in (5, 6):
         pytest.skip("Web Serial spec only defines dataBits 7 or 8")
 
-    async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, byte_size=byte_size
-    ) as (_, writer):
-        writer.write(b"test")
+    ) as left:
+        assert left.byte_size == byte_size
+        left.write(b"test")
 
 
 async def test_async_invalid_byte_size(serial_pair: SerialPair) -> None:
@@ -359,7 +411,7 @@ async def test_async_invalid_byte_size(serial_pair: SerialPair) -> None:
         pytest.skip("socket transport does not validate serial settings")
 
     with pytest.raises(Exception):
-        async with async_create_reader_writer(
+        async with serialx.async_serial_for_url(
             serial_pair.left, baudrate=115200, byte_size=123
         ):
             pass
@@ -368,10 +420,10 @@ async def test_async_invalid_byte_size(serial_pair: SerialPair) -> None:
 @pytest.mark.parametrize("xonxoff", [True, False])
 async def test_async_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> None:
     """Test that xonxoff setting is accepted."""
-    async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, xonxoff=xonxoff
-    ) as (_, writer):
-        writer.write(b"test")
+    ) as left:
+        left.write(b"test")
 
 
 @pytest.mark.parametrize("rtscts", [True, False])
@@ -380,11 +432,11 @@ async def test_async_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> No
     if rtscts and serial_pair.uri_scheme == "posix://":
         pytest.xfail("Strict POSIX backend does not support RTS/CTS flow control")
 
-    async with async_create_reader_writer(serial_pair.right, baudrate=115200):
-        async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(serial_pair.right, baudrate=115200):
+        async with serialx.async_serial_for_url(
             serial_pair.left, baudrate=115200, rtscts=rtscts
-        ) as (_, writer):
-            writer.write(b"test")
+        ) as left:
+            left.write(b"test")
 
 
 # --- Lifecycle ---
@@ -392,12 +444,12 @@ async def test_async_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> No
 
 async def test_async_concurrent_writes(serial_pair: SerialPair) -> None:
     """Test concurrent writes from multiple tasks."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
 
         async def write_data(data: bytes) -> None:
-            writer_left.write(data)
+            left.write(data)
 
         data1 = b"A" * 100
         data2 = b"B" * 100
@@ -409,56 +461,53 @@ async def test_async_concurrent_writes(serial_pair: SerialPair) -> None:
             write_data(data3),
         )
 
-        total_data = await reader_right.readexactly(300)
+        total_data = await right.readexactly(300)
         assert total_data == b"A" * 100 + b"B" * 100 + b"C" * 100
 
 
 async def test_async_read_with_timeout(serial_pair: SerialPair) -> None:
     """Test reading with timeout."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
-        writer_left.write(b"test")
+    ) as (left, right):
+        left.write(b"test")
 
-        result = await asyncio.wait_for(reader_right.readexactly(4), timeout=1.0)
+        result = await asyncio.wait_for(right.readexactly(4), timeout=1.0)
         assert result == b"test"
 
         with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(reader_right.readexactly(1), timeout=0.1)
+            await asyncio.wait_for(right.readexactly(1), timeout=0.1)
 
 
 async def test_async_close_is_idempotent(serial_pair: SerialPair) -> None:
-    """Test closing writer multiple times is safe and drains buffer state."""
-    async with async_create_reader_writer_pair(
+    """Test closing the serial port multiple times is safe."""
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, _, _):
-        writer_left.close()
-        await writer_left.wait_closed()
-        assert writer_left.transport.get_write_buffer_size() == 0
-
-        # Second close should be no-op
-        writer_left.close()
-        await writer_left.wait_closed()
+    ) as (left, right):
+        assert left.transport.get_write_buffer_size() == 0
+        await left.close()
+        # Second close should be a no-op
+        await left.close()
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     """Test transport pause and resume."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (reader_left, writer_left, _, writer_right):
-        writer_left.transport.pause_reading()
+    ) as (left, right):
+        left.transport.pause_reading()
 
-        writer_right.write(b"A long message")
-        await writer_right.drain()
+        right.write(b"A long message")
+        await right.drain()
 
         # Nothing can be read
         with pytest.raises(asyncio.TimeoutError):
             async with asyncio_timeout(1):
-                await reader_left.read(1)
+                await left.read(1)
 
-        writer_left.transport.resume_reading()
-        assert (await reader_left.read(14)) == b"A long message"
+        left.transport.resume_reading()
+        assert (await left.read(14)) == b"A long message"
 
 
 async def test_async_abort(serial_pair: SerialPair) -> None:
@@ -538,33 +587,30 @@ async def test_async_abort_before_connect(serial_pair: SerialPair) -> None:
 
 async def test_async_write_bytearray(serial_pair: SerialPair) -> None:
     """Test writing bytearray data."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
+    ) as (left, right):
         data = bytearray(b"hello bytearray")
-        writer_left.write(data)
-        result = await reader_right.readexactly(len(data))
+        left.write(data)
+        result = await right.readexactly(len(data))
         assert result == b"hello bytearray"
 
 
 async def test_async_write_empty(serial_pair: SerialPair) -> None:
     """Test writing empty data is a no-op."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
-        writer_left.write(b"")
-        writer_left.write(b"after_empty")
-        result = await reader_right.readexactly(len(b"after_empty"))
+    ) as (left, right):
+        left.write(b"")
+        left.write(b"after_empty")
+        result = await right.readexactly(len(b"after_empty"))
         assert result == b"after_empty"
 
 
 async def test_async_transport_api(serial_pair: SerialPair) -> None:
     """Test transport public API methods."""
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        _,
-        writer,
-    ):
-        transport = writer.transport
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        transport = left.transport
 
         # get/set protocol
         protocol = transport.get_protocol()
@@ -580,11 +626,8 @@ async def test_async_transport_api(serial_pair: SerialPair) -> None:
 async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> None:
     """Test get/set write buffer limits and can_write_eof."""
 
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        _,
-        writer,
-    ):
-        transport = writer.transport
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        transport = left.transport
 
         low, high = transport.get_write_buffer_limits()
         assert 0 <= low <= high
@@ -597,24 +640,24 @@ async def test_async_transport_write_buffer_limits(serial_pair: SerialPair) -> N
 
 async def test_async_flush(serial_pair: SerialPair) -> None:
     """Test flushing async transport write buffers."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, reader_right, _):
-        writer_left.write(b"flush test data")
-        await writer_left.transport.flush()
+    ) as (left, right):
+        left.write(b"flush test data")
+        await left.flush()
 
-        result = await reader_right.readexactly(len(b"flush test data"))
+        result = await right.readexactly(len(b"flush test data"))
         assert result == b"flush test data"
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_BUFFER_CONTROL)
 async def test_async_resume_reading_when_not_paused(serial_pair: SerialPair) -> None:
     """Test that resume_reading when not paused is a no-op."""
-    async with async_create_reader_writer_pair(
+    async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
-    ) as (_, writer_left, _, _):
+    ) as (left, right):
         # resume without prior pause should be a no-op
-        writer_left.transport.resume_reading()
+        left.transport.resume_reading()
 
 
 async def test_async_invalid_uri() -> None:
@@ -645,11 +688,8 @@ async def test_create_serial_connection_no_url_no_transport() -> None:
 
 async def test_async_get_modem_pins(serial_pair: SerialPair) -> None:
     """Test reading modem control bits."""
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        _,
-        writer,
-    ):
-        modem_pins = await writer.transport.get_modem_pins()
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        modem_pins = await left.get_modem_pins()
         assert isinstance(modem_pins, ModemPins)
         for field in ["le", "dtr", "rts", "st", "sr", "cts", "car", "rng", "dsr"]:
             value = getattr(modem_pins, field)
@@ -669,15 +709,12 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
     ):
         pytest.xfail("FreeBSD socat sets all pins to LOW")
 
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        _,
-        writer,
-    ):
-        await writer.transport.set_modem_pins(dtr=True, rts=True)
-        pins_high = await writer.transport.get_modem_pins()
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        await left.set_modem_pins(dtr=True, rts=True)
+        pins_high = await left.get_modem_pins()
 
-        await writer.transport.set_modem_pins(dtr=False, rts=False)
-        pins_low = await writer.transport.get_modem_pins()
+        await left.set_modem_pins(dtr=False, rts=False)
+        pins_low = await left.get_modem_pins()
 
         for pins in (pins_high, pins_low):
             assert isinstance(pins, ModemPins)
@@ -706,25 +743,22 @@ async def test_async_set_modem_pins_api(serial_pair: SerialPair) -> None:
 async def test_async_set_modem_pins(serial_pair: SerialPair) -> None:
     """Test setting modem control bits and verifying readback."""
 
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        _,
-        writer,
-    ):
-        await writer.transport.set_modem_pins(dtr=True, rts=True)
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        await left.set_modem_pins(dtr=True, rts=True)
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        modem_pins = await writer.transport.get_modem_pins()
+        modem_pins = await left.get_modem_pins()
         assert modem_pins.dtr is PinState.HIGH
         assert modem_pins.rts is PinState.HIGH
 
-        await writer.transport.set_modem_pins(dtr=False)
+        await left.set_modem_pins(dtr=False)
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        modem_pins = await writer.transport.get_modem_pins()
+        modem_pins = await left.get_modem_pins()
         assert modem_pins.dtr is PinState.LOW
         assert modem_pins.rts is PinState.HIGH
 
-        await writer.transport.set_modem_pins(dtr=False, rts=False)
+        await left.set_modem_pins(dtr=False, rts=False)
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        modem_pins = await writer.transport.get_modem_pins()
+        modem_pins = await left.get_modem_pins()
         assert modem_pins.dtr is PinState.LOW
         assert modem_pins.rts is PinState.LOW
 
@@ -953,35 +987,32 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
     ):
         pytest.skip("POSIX backends do not support deasserting pins on open")
 
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        reader_left,
-        writer_left,
-    ):
-        async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
-        ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(rts=True)
+        ) as right:
+            await right.set_modem_pins(rts=True)
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-            assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+            assert (await left.get_modem_pins()).cts is PinState.HIGH
 
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+        assert (await left.get_modem_pins()).cts is PinState.HIGH
 
-        async with async_create_reader_writer(
+        async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_open=PinState.LOW,
             rtsdtr_on_close=PinState.HIGH,
-        ) as (reader_right, writer_right):
+        ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-            assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
-            await writer_right.transport.set_modem_pins(rts=True)
+            assert (await left.get_modem_pins()).cts is PinState.LOW
+            await right.set_modem_pins(rts=True)
 
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+        assert (await left.get_modem_pins()).cts is PinState.HIGH
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
@@ -996,46 +1027,43 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
     ):
         pytest.skip("POSIX backends do not support deasserting pins on open")
 
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        reader_left,
-        writer_left,
-    ):
-        async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
-        ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(rts=True)
+        ) as right:
+            await right.set_modem_pins(rts=True)
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-            assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+            assert (await left.get_modem_pins()).cts is PinState.HIGH
 
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+        assert (await left.get_modem_pins()).cts is PinState.HIGH
 
-        async with async_create_reader_writer(
+        async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.HIGH,
             rtsdtr_on_open=PinState.HIGH,
-        ) as (reader_right, writer_right):
+        ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-            assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+            assert (await left.get_modem_pins()).cts is PinState.HIGH
 
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+        assert (await left.get_modem_pins()).cts is PinState.HIGH
 
-        async with async_create_reader_writer(
+        async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
             rtsdtr_on_close=PinState.LOW,
             rtsdtr_on_open=PinState.HIGH,
-        ) as (reader_right, writer_right):
+        ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-            assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+            assert (await left.get_modem_pins()).cts is PinState.HIGH
 
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        assert (await writer_left.transport.get_modem_pins()).cts is PinState.LOW
+        assert (await left.get_modem_pins()).cts is PinState.LOW
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
@@ -1065,42 +1093,41 @@ async def test_async_deassert_on_open_with_rtscts(
     ):
         pytest.skip("POSIX backends do not support deasserting pins on open")
 
-    async with async_create_reader_writer(serial_pair.left, baudrate=115200) as (
-        reader_left,
-        writer_left,
-    ):
-        async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(serial_pair.left, baudrate=115200) as left:
+        async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
             rtscts=False,
             rtsdtr_on_open=PinState.HIGH,
             rtsdtr_on_close=PinState.HIGH,
-        ) as (reader_right, writer_right):
-            await writer_right.transport.set_modem_pins(rts=True)
+        ) as right:
+            await right.set_modem_pins(rts=True)
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-            assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+            assert (await left.get_modem_pins()).cts is PinState.HIGH
 
         await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-        assert (await writer_left.transport.get_modem_pins()).cts is PinState.HIGH
+        assert (await left.get_modem_pins()).cts is PinState.HIGH
 
-        async with async_create_reader_writer(
+        async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
             rtscts=rtscts,
             rtsdtr_on_open=rtsdtr_on_open,
-        ) as (reader_right, writer_right):
+        ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
-            assert (await writer_left.transport.get_modem_pins()).cts is expected_state
+            assert (await left.get_modem_pins()).cts is expected_state
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
 async def test_async_exclusive(serial_pair: SerialPair) -> None:
     """Test that exclusive setting is respected for async connections."""
-    async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, exclusive=True
-    ):
+    ) as left:
+        assert left.exclusive is True
+
         with pytest.raises(OSError):
-            async with async_create_reader_writer(
+            async with serialx.async_serial_for_url(
                 serial_pair.left, baudrate=115200, exclusive=True
             ):
                 pass
@@ -1115,13 +1142,18 @@ async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
     if SerialBackend.SER2NET in serial_pair.backends:
         pytest.skip("ser2net only allows one connection per port")
 
-    async with async_create_reader_writer(
+    async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, exclusive=False
-    ) as (_, writer1):
-        async with async_create_reader_writer(
+    ) as left1:
+        assert left1.exclusive is False
+
+        async with serialx.async_serial_for_url(
             serial_pair.left, baudrate=115200, exclusive=False
-        ) as (_, writer2):
-            writer2.write(b"test")
+        ) as left2:
+            assert left2.exclusive is False
+
+            left1.write(b"hello")
+            left2.write(b"world")
 
 
 async def test_async_connect_nonexistent_port() -> None:

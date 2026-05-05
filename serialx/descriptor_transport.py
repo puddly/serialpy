@@ -10,7 +10,9 @@ import os
 from typing import Any
 import warnings
 
-from .common import BaseSerialTransport
+from typing_extensions import Unpack
+
+from .common import BaseSerialTransport, ConnectKwargs
 
 LOGGER = logging.getLogger(__name__)
 LOG_THRESHOLD_FOR_CONNLOST_WRITES = 5
@@ -110,7 +112,9 @@ class DescriptorTransport(BaseSerialTransport):
         self._closing = True
         self._maybe_background_close(None)
 
-    async def _connect(self, **_kwargs: Any) -> None:
+    async def _connect(
+        self, *, path: str | None = None, **_kwargs: Unpack[ConnectKwargs]
+    ) -> None:
         assert self._fileno is not None
         self._loop.add_reader(self._fileno, self._read_ready)
         self._connection_made = True

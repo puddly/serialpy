@@ -16,10 +16,11 @@ else:
 
 from typing import Any, overload
 
-from typing_extensions import Buffer
+from typing_extensions import Buffer, Unpack
 
 from ...common import (
     BaseSerialTransport,
+    ConnectKwargs,
     ModemPins,
     Parity,
     PinState,
@@ -721,10 +722,12 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     async def _connect(
         self,
-        **kwargs: Any,
+        *,
+        path: str | None = None,
+        **kwargs: Unpack[ConnectKwargs],
     ) -> None:
         """Connect to the RFC 2217 server and negotiate COM-PORT-OPTION."""
-        self._serial = RFC2217Serial(**kwargs)
+        self._serial = RFC2217Serial(path=path, **kwargs)
         assert self._serial is not None
 
         self._extra["serial"] = self._serial
