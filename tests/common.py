@@ -107,7 +107,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_EXCLUSIVITY,
-            SerialQuirk.NO_INTER_BYTE_TIMEOUT,
         }
     ),
     SerialBackend.ESPHOME_HOST: frozenset(
@@ -120,7 +119,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_RTS_CTS,
             SerialQuirk.NO_EXCLUSIVITY,
             SerialQuirk.NO_UNPLUG,
-            SerialQuirk.NO_INTER_BYTE_TIMEOUT,
         }
     ),
     SerialBackend.RFC2217: frozenset(
@@ -154,7 +152,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_WRITE_LIMITS,
             SerialQuirk.NO_EXCLUSIVITY,
-            SerialQuirk.NO_INTER_BYTE_TIMEOUT,
         }
     ),
 }
