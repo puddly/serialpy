@@ -170,7 +170,7 @@ class SocketSerial(BaseSerial):
         try:
             with self._socket_timeout(timeout):
                 return self._socket.recv_into(m)
-        except TimeoutError:
+        except (TimeoutError, BlockingIOError):
             return 0
 
     def _close(self) -> None:
