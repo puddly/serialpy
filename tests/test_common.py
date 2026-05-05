@@ -128,6 +128,96 @@ def test_register_uri_handler_dispatch_and_unregister() -> None:
         get_uri_handler("test-shared-2://")
 
 
+@pytest.mark.parametrize(
+    ("port", "expected"),
+    [
+        # CP2102: product and interface_description are identical
+        (
+            SerialPortInfo(
+                device="/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_ec4903cb-if00-port0",
+                resolved_device="/dev/ttyUSB0",
+                vid=0x10C4,
+                pid=0xEA60,
+                serial_number="ec4903cb",
+                manufacturer="Silicon Labs",
+                product="CP2102 USB to UART Bridge Controller",
+                bcd_device=0x0100,
+                interface_description="CP2102 USB to UART Bridge Controller",
+                interface_num=0,
+            ),
+            "CP2102 USB to UART Bridge Controller - CP2102 USB to UART Bridge Controller",
+        ),
+        # Prolific: interface_description is None, falls back to product
+        (
+            SerialPortInfo(
+                device="/dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_DSDCb147613-if00-port0",
+                resolved_device="/dev/ttyUSB3",
+                vid=0x067B,
+                pid=0x23A3,
+                serial_number="DSDCb147613",
+                manufacturer="Prolific Technology Inc.",
+                product="USB-Serial Controller",
+                bcd_device=0x0605,
+                interface_description=None,
+                interface_num=0,
+            ),
+            "USB-Serial Controller",
+        ),
+        # ZBT-2: distinct product and interface_description (regression case)
+        (
+            SerialPortInfo(
+                device="/dev/serial/by-id/usb-Nabu_Casa_ZBT-2_80B54EEFAE18-if00",
+                resolved_device="/dev/ttyACM0",
+                vid=0x303A,
+                pid=0x4005,
+                serial_number="80B54EEFAE18",
+                manufacturer="Nabu Casa",
+                product="ZBT-2",
+                bcd_device=0x0100,
+                interface_description="Nabu Casa ZBT-2",
+                interface_num=0,
+            ),
+            "ZBT-2 - Nabu Casa ZBT-2",
+        ),
+        # Native UART: no USB info, falls back to basename of resolved_device
+        (
+            SerialPortInfo(
+                device="/dev/ttyAMA0",
+                resolved_device="/dev/ttyAMA0",
+                vid=None,
+                pid=None,
+                serial_number=None,
+                manufacturer=None,
+                product=None,
+                bcd_device=None,
+                interface_description=None,
+                interface_num=None,
+            ),
+            "ttyAMA0",
+        ),
+        # Bug-for-bug: interface_description without product
+        (
+            SerialPortInfo(
+                device="/dev/ttyUSB9",
+                resolved_device="/dev/ttyUSB9",
+                vid=0x1234,
+                pid=0x5678,
+                serial_number=None,
+                manufacturer=None,
+                product=None,
+                bcd_device=None,
+                interface_description="Some Interface",
+                interface_num=0,
+            ),
+            "None - Some Interface",
+        ),
+    ],
+)
+def test_serial_port_info_description(port: SerialPortInfo, expected: str) -> None:
+    """`description` mirrors pyserial's `usb_description()` output."""
+    assert port.description == expected
+
+
 @pytest.mark.parametrize("platform", list(Platform))
 def test_list_serial_ports_all_platforms(platform: Platform) -> None:
     """Sync listing returns a list of `SerialPortInfo` for every platform."""
