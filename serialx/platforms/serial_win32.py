@@ -123,6 +123,15 @@ class CommTimeouts(NamedTuple):
     WriteTotalTimeoutConstant: int
 
 
+class CreateEventArgs(NamedTuple):
+    """Positional arguments for win32event.CreateEvent."""
+
+    EventAttributes: Any
+    bManualReset: bool  # noqa: N815
+    bInitialState: bool  # noqa: N815
+    Name: str | None
+
+
 def _safe_close_handle(handle: int) -> None:
     """Close a Win32 handle, suppressing and logging errors."""
     try:
@@ -223,10 +232,16 @@ class Win32Serial(BaseSerial):
         except pywintypes.error as e:
             raise OSError(e.winerror, e.strerror, path) from e
 
+        event_args = CreateEventArgs(
+            EventAttributes=None,
+            bManualReset=True,
+            bInitialState=False,
+            Name=None,
+        )
         self._overlapped_read = OVERLAPPED()
-        self._overlapped_read.hEvent = CreateEvent(None, 1, 0, None)
+        self._overlapped_read.hEvent = CreateEvent(*event_args)
         self._overlapped_write = OVERLAPPED()
-        self._overlapped_write.hEvent = CreateEvent(None, 1, 0, None)
+        self._overlapped_write.hEvent = CreateEvent(*event_args)
 
         self._auto_close = True
 
