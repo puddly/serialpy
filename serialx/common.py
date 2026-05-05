@@ -13,6 +13,7 @@ import dataclasses
 from enum import Enum
 import functools
 import io
+import os.path
 from pathlib import Path
 import time
 from types import TracebackType
@@ -1066,19 +1067,22 @@ class SerialPortInfo:
         return (str(self.device), self.description, "")[key]
 
     @property
-    def description(self) -> str | None:
-        """Deprecated alias for `product`.
+    def description(self) -> str:
+        """Description of the device.
 
         Warning:
-            Deprecated, use `product` instead.
+            Deprecated, this description is unstable and will change in the future.
 
         """
-        warnings.warn(
-            "`description` is deprecated, use `product` instead",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.product
+
+        if self.interface_description is not None:
+            product = self.product if self.product is not None else "None"
+            return f"{product} - {self.interface_description}"
+
+        if self.product is not None:
+            return self.product
+
+        return os.path.basename(self.resolved_device)
 
 
 def list_serial_ports(
