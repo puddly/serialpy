@@ -82,8 +82,8 @@ def test_set_non_posix_baudrate_handles_actual_hardware_rate() -> None:
     written = Termios2Struct.from_buffer_copy(captured[0])
     assert written.c_ispeed == 250000
     assert written.c_ospeed == 250000
-    assert written.c_cflag & CBAUDEX
-    assert written.c_cflag & CBAUD == 0
+    # CBAUDEX should be the only CBAUD bit set, signalling "use ispeed/ospeed"
+    assert written.c_cflag & CBAUD == CBAUDEX
 
 
 def test_set_non_posix_baudrate_zero_speed_raises() -> None:
