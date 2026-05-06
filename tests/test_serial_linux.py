@@ -9,6 +9,7 @@ if sys.platform != "linux":
 
 import asyncio
 import contextlib
+import ctypes
 import errno
 import fcntl
 import os
@@ -16,11 +17,92 @@ import threading
 from typing import Any
 from unittest.mock import ANY, call, patch
 
-from serialx.platforms.serial_linux import LinuxSerial, LinuxSerialTransport
+import pytest
+
+from serialx.platforms.serial_linux import (
+    CBAUD,
+    CBAUDEX,
+    TCGETS2,
+    TCSETS2,
+    LinuxSerial,
+    LinuxSerialTransport,
+    Termios2Struct,
+)
 from tests.common import async_create_socat_pair, create_socat_pair
 
 TIOCSSERIAL = 0x0000541F
 TIOCGSERIAL = 0x0000541E
+
+
+def _make_ioctl_mock(initial_buffer: bytes, captured_writes: list[bytes]) -> Any:
+    """Build an ioctl side_effect that fakes TCGETS2 and captures TCSETS2."""
+    ioctl_orig = fcntl.ioctl
+
+    def ioctl(fd: int, request: int, arg: Any = 0, mutate_flag: bool = True) -> Any:
+        if request == TCGETS2:
+            arg[: len(initial_buffer)] = initial_buffer
+            return 0
+        if request == TCSETS2:
+            captured_writes.append(bytes(arg))
+            return 0
+        return ioctl_orig(fd, request, arg, mutate_flag)
+
+    return ioctl
+
+
+def test_set_non_posix_baudrate_handles_actual_hardware_rate() -> None:
+    """Regression for issue #83: cp210x writes back the actual hardware rate."""
+    captured: list[bytes] = []
+
+    with create_socat_pair() as (left, _right):
+        with LinuxSerial(left, baudrate=115200) as serial:
+            with patch(
+                "serialx.platforms.serial_linux.fcntl.ioctl",
+                side_effect=_make_ioctl_mock(
+                    # `struct termios2` after `tcsetattr(B115200)` on a typical Linux
+                    # pty, but with c_ispeed/c_ospeed reporting the cp210x actual
+                    # hardware rate (115384) instead of the requested 115200. See
+                    # issue #83.
+                    bytes.fromhex(
+                        "00000000"
+                        "00000000"
+                        "b01c0000"
+                        "00000000"
+                        "00"
+                        "031c7f150400000011131a00120f1716000000"
+                        "b8c20100"
+                        "b8c20100"
+                    ),
+                    captured,
+                ),
+            ):
+                serial._set_non_posix_baudrate(250000)
+
+    assert len(captured) == 1
+    written = Termios2Struct.from_buffer_copy(captured[0])
+    assert written.c_ispeed == 250000
+    assert written.c_ospeed == 250000
+    assert written.c_cflag & CBAUDEX
+    assert written.c_cflag & CBAUD == 0
+
+
+def test_set_non_posix_baudrate_zero_speed_raises() -> None:
+    """A zero-filled readback indicates the struct layout is wrong."""
+    zeros = bytes(ctypes.sizeof(Termios2Struct))
+    captured: list[bytes] = []
+
+    with create_socat_pair() as (left, _right):
+        with LinuxSerial(left, baudrate=115200) as serial:
+            with patch(
+                "serialx.platforms.serial_linux.fcntl.ioctl",
+                side_effect=_make_ioctl_mock(zeros, captured),
+            ):
+                with pytest.raises(
+                    RuntimeError, match="termios2 speed fields are zero"
+                ):
+                    serial._set_non_posix_baudrate(250000)
+
+    assert captured == []
 
 
 @patch("serialx.platforms.serial_linux.TIOCGSERIAL", TIOCGSERIAL)

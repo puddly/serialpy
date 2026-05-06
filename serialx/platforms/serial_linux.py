@@ -51,6 +51,7 @@ class Termios2Struct(ctypes.Structure):
     """The `termios2` struct."""
 
     _pack_ = 1
+    _layout_ = "ms"
     _fields_ = (
         ("c_iflag", ctypes.c_uint32),
         ("c_oflag", ctypes.c_uint32),
