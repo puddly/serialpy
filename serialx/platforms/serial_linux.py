@@ -288,7 +288,13 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
             except OSError:
                 LOGGER.debug("USB device %r disappeared during iteration", usb_device)
                 continue
-        elif subsystem == "serial-base":
+        elif subsystem in ("serial-base", "platform", "pnp", "amba"):
+            # `serial-base` is the per-port subsystem introduced in Linux 6.10.
+            # Older kernels expose native ports through their bus directly:
+            #   `platform` - 8250 placeholders, RP1 `pl011-axi`, most ARM SoCs
+            #   `pnp`      - PnP-discovered 16550A on x86
+            #   `amba`     - ARM PrimeCell UART (`uart-pl011`) on BCM2712 etc.
+            # All four expose `/sys/class/tty/<tty>/type`.
             try:
                 port_type = (path / "type").read_text()
             except OSError:
