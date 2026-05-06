@@ -80,10 +80,15 @@ class DescriptorTransport(BaseSerialTransport):
         )
 
         try:
-            self._fileno = await self._open_fut
+            # Shield so that a cancellation of the awaiting task does NOT cancel
+            # the executor future. Otherwise, when `os.open` completes after the
+            # cancel, `future.set_result(fd)` is rejected (future already
+            # cancelled) and the fd is silently leaked.
+            self._fileno = await asyncio.shield(self._open_fut)
         except asyncio.CancelledError:
-            # `os.open` may still finish in the executor after cancellation. If that
-            # happens, close the resulting fd to avoid leaks.
+            # `os.open` may still finish in the executor after cancellation. The
+            # shield kept the underlying future alive, so the done-callback will
+            # see the fd and arrange to close it.
             self._open_fut.add_done_callback(self._on_cancelled_open_done)
             raise
         except BaseException:
