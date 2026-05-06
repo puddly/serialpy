@@ -115,7 +115,7 @@ class PosixSerial(BaseSerial):
             raise ValueError("Serial port is already open")
 
         assert self._path is not None
-        self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY)
+        self._fileno = os.open(self._path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         self._auto_close = True
 
         if self._exclusive:
@@ -397,12 +397,14 @@ class PosixSerial(BaseSerial):
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
 
-            if timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], timeout)
-                if not ready:
-                    return 0
+            ready, _, _ = select.select([self._fileno], [], [], timeout)
+            if not ready:
+                return 0
 
-            n = os.readinto(self._fileno, b)
+            try:
+                n = os.readinto(self._fileno, b)
+            except BlockingIOError:
+                return 0
             LOGGER.debug("Read %d bytes", n)
 
             return n
@@ -413,16 +415,18 @@ class PosixSerial(BaseSerial):
             """Read bytes from serial port into buffer."""
             assert self._fileno is not None
 
-            if timeout is not None:
-                ready, _, _ = select.select([self._fileno], [], [], timeout)
-                if not ready:
-                    return 0
+            ready, _, _ = select.select([self._fileno], [], [], timeout)
+            if not ready:
+                return 0
 
             m = memoryview(b).cast("B")
             size = len(m)
             LOGGER.debug("Reading up to %d bytes", size)
 
-            chunk = os.read(self._fileno, size)
+            try:
+                chunk = os.read(self._fileno, size)
+            except BlockingIOError:
+                return 0
 
             n = len(chunk)
             m[:n] = chunk
@@ -435,12 +439,32 @@ class PosixSerial(BaseSerial):
         LOGGER.debug("Writing %d bytes: %r", len(data), data)  # type: ignore[arg-type]
         assert self._fileno is not None
 
-        if timeout is not None:
-            _, ready, _ = select.select([], [self._fileno], [], timeout)
+        view = memoryview(data).cast("B")
+        deadline = time.monotonic() + timeout if timeout is not None else None
+        written = 0
+
+        while written < len(view):
+            remaining: float | None
+
+            if deadline is None:
+                remaining = None
+            else:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("Write timeout")
+
+            _, ready, _ = select.select([], [self._fileno], [], remaining)
             if not ready:
                 raise TimeoutError("Write timeout")
 
-        return os.write(self._fileno, data)
+            try:
+                n = os.write(self._fileno, view[written:])
+            except BlockingIOError:
+                continue
+
+            written += n
+
+        return written
 
     def num_unread_bytes(self) -> int:
         """Return the number of bytes waiting to be read."""
