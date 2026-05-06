@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-if sys.platform != "linux":
+if sys.platform not in ("linux", "darwin"):
     pytest.skip("Linux-only tests", allow_module_level=True)
 
 from pathlib import Path
@@ -386,6 +386,28 @@ def test_list_serial_ports_unknown_subsystem(
     names = {Path(p.resolved_device).name for p in ports}
     assert "ttyAMA0" not in names
     assert "Unknown serial device subsystem 'some-unknown-bus'" in caplog.text
+
+
+def test_list_serial_ports_missing_subsystem(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Devices whose parent has no `subsystem` symlink are silently skipped."""
+    sys_root, dev_root = load_umockdev(tmp_path, DATA_DIR / "haos-yellow-6.6.umockdev")
+
+    # Drop ttyAMA0's parent subsystem symlink so resolve(strict=True) raises.
+    parent = sys_root / "devices/platform/axi/1000120000.pcie/1f00030000.serial"
+    (parent / "subsystem").unlink()
+
+    with (
+        caplog.at_level(logging.WARNING),
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    names = {Path(p.resolved_device).name for p in ports}
+    assert "ttyAMA0" not in names
+    assert not caplog.text
 
 
 def test_replay_github_actions_ubuntu_24_04_kernel_6_17(
