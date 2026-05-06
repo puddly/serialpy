@@ -13,11 +13,10 @@ import ctypes
 import errno
 import fcntl
 import os
+import termios
 import threading
 from typing import Any
 from unittest.mock import ANY, call, patch
-
-import pytest
 
 from serialx.platforms.serial_linux import (
     CBAUD,
@@ -52,29 +51,25 @@ def _make_ioctl_mock(initial_buffer: bytes, captured_writes: list[bytes]) -> Any
 
 def test_set_non_posix_baudrate_handles_actual_hardware_rate() -> None:
     """Regression for issue #83: cp210x writes back the actual hardware rate."""
-    captured: list[bytes] = []
 
+    # `struct termios2` after `tcsetattr(B115200)` on a typical Linux pty, but with
+    # c_ispeed/c_ospeed reporting the cp210x actual hardware rate (115384) instead of
+    # the requested 115200.
+    initial = Termios2Struct(
+        c_cflag=(
+            termios.CS8 | termios.CREAD | termios.HUPCL | termios.CLOCAL | CBAUDEX
+        ),
+        c_ispeed=115384,
+        c_ospeed=115384,
+    )
+    initial_buffer = bytes(initial)
+
+    captured: list[bytes] = []
     with create_socat_pair() as (left, _right):
         with LinuxSerial(left, baudrate=115200) as serial:
             with patch(
                 "serialx.platforms.serial_linux.fcntl.ioctl",
-                side_effect=_make_ioctl_mock(
-                    # `struct termios2` after `tcsetattr(B115200)` on a typical Linux
-                    # pty, but with c_ispeed/c_ospeed reporting the cp210x actual
-                    # hardware rate (115384) instead of the requested 115200. See
-                    # issue #83.
-                    bytes.fromhex(
-                        "00000000"
-                        "00000000"
-                        "b01c0000"
-                        "00000000"
-                        "00"
-                        "031c7f150400000011131a00120f1716000000"
-                        "b8c20100"
-                        "b8c20100"
-                    ),
-                    captured,
-                ),
+                side_effect=_make_ioctl_mock(initial_buffer, captured),
             ):
                 serial._set_non_posix_baudrate(250000)
 
