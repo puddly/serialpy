@@ -762,6 +762,51 @@ def test_list_serial_ports_debian_12(
     assert "Unknown serial device subsystem" not in caplog.text
 
 
+def test_list_serial_ports_yellow_haos_kernel_6_6(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test Home Assistant Yellow on HAOS / kernel 6.6 (pre-`serial-base`)."""
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    # /dev/ttyAMA0..2: RP1 PL011 UARTs over PCIe, subsystem `platform`
+    for i, addr in enumerate(("1f00030000", "1f0003c000", "1f00040000")):
+        create_device(
+            sys_root,
+            dev_root,
+            tty_name=f"ttyAMA{i}",
+            device_path=f"devices/platform/axi/1000120000.pcie/{addr}.serial/tty/ttyAMA{i}",
+            bus="platform",
+            subsystem="platform",
+            port_type=32,
+        )
+
+    # /dev/ttyAMA10: BCM2712 SoC PL011, subsystem `amba`
+    create_device(
+        sys_root,
+        dev_root,
+        tty_name="ttyAMA10",
+        device_path="devices/platform/soc/107d001000.serial/tty/ttyAMA10",
+        bus="amba",
+        subsystem="amba",
+        port_type=32,
+    )
+
+    with (
+        caplog.at_level(logging.WARNING),
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    assert len(ports) == 4
+    names = {Path(p.resolved_device).name for p in ports}
+    assert names == {"ttyAMA0", "ttyAMA1", "ttyAMA2", "ttyAMA10"}
+    assert "Unknown serial device subsystem" not in caplog.text
+
+
 def test_list_serial_ports_empty(tmp_path: Path) -> None:
     """Test that listing serial ports still works when there are no ports."""
     sys_root = tmp_path / "sys"
