@@ -388,26 +388,42 @@ def test_list_serial_ports_unknown_subsystem(
     assert "Unknown serial device subsystem 'some-unknown-bus'" in caplog.text
 
 
-def test_list_serial_ports_no_subsystem(
+def test_replay_github_actions_ubuntu_24_04_kernel_6_17(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Test that devices whose parent has no subsystem are silently filtered."""
-    sys_root, dev_root = load_umockdev(tmp_path, DATA_DIR / "haos-yellow-6.6.umockdev")
+    """GitHub Actions Azure runner: 2 PnP 16550A + 30 serial8250 placeholders."""
+    with caplog.at_level(logging.WARNING):
+        dev_root, ports = _list_ports(
+            tmp_path, "github-actions-ubuntu-24.04-6.17.umockdev"
+        )
+    assert "Unknown serial device subsystem" not in caplog.text
 
-    # Strip ttyAMA0's parent subsystem symlink entirely.
-    parent = sys_root / "devices/platform/axi/1000120000.pcie/1f00030000.serial"
-    (parent / "subsystem").unlink()
-
-    with (
-        caplog.at_level(logging.WARNING),
-        patch.object(serial_linux, "SYS_ROOT", sys_root),
-        patch.object(serial_linux, "DEV_ROOT", dev_root),
-    ):
-        ports = linux_list_serial_ports()
-
-    names = {Path(p.resolved_device).name for p in ports}
-    assert "ttyAMA0" not in names
-    assert not caplog.text
+    assert ports == [
+        SerialPortInfo(
+            device=str(dev_root / "ttyS0"),
+            resolved_device=str(dev_root / "ttyS0"),
+            vid=None,
+            pid=None,
+            serial_number=None,
+            manufacturer=None,
+            product=None,
+            bcd_device=None,
+            interface_description=None,
+            interface_num=None,
+        ),
+        SerialPortInfo(
+            device=str(dev_root / "ttyS1"),
+            resolved_device=str(dev_root / "ttyS1"),
+            vid=None,
+            pid=None,
+            serial_number=None,
+            manufacturer=None,
+            product=None,
+            bcd_device=None,
+            interface_description=None,
+            interface_num=None,
+        ),
+    ]
 
 
 def test_list_serial_ports_empty(tmp_path: Path) -> None:
