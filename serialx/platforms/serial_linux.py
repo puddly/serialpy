@@ -42,24 +42,22 @@ CBAUDEX = getattr(termios, "CBAUDEX", 0o00010000)
 NON_POSIX_FALLBACK_BAUDRATE = 115200
 NON_POSIX_FALLBACK_BAUDRATE_CONST = termios.B115200
 
+# `NCCS` is 19 on every Linux architecture and the `struct termios2` layout has been
+# stable since 2007
+NCCS = 19
 
-class TermiosStruct(ctypes.Structure):
-    """The `termios` struct."""
 
+class Termios2Struct(ctypes.Structure):
+    """The `termios2` struct."""
+
+    _pack_ = 1
     _fields_ = (
         ("c_iflag", ctypes.c_uint32),
         ("c_oflag", ctypes.c_uint32),
         ("c_cflag", ctypes.c_uint32),
         ("c_lflag", ctypes.c_uint32),
         ("c_line", ctypes.c_uint8),
-        ("c_cc", ctypes.c_uint8 * 64),  # NCCS is usually 19 bytes, let's be safe
-    )
-
-
-class Termios2SpeedStruct(ctypes.Structure):
-    """The extra `c_ispeed` and `c_ospeed` members at the end of `struct termios2`."""
-
-    _fields_ = (
+        ("c_cc", ctypes.c_uint8 * NCCS),
         ("c_ispeed", ctypes.c_uint32),
         ("c_ospeed", ctypes.c_uint32),
     )
@@ -82,43 +80,24 @@ class LinuxSerial(ExtendedPosixSerial):
         """Set the baudrate of the serial port, must be called after `tcsetattr`."""
         assert self._fileno is not None
 
-        # The termios2 struct is going to be smaller than the sum of these two objects
-        buffer = bytearray(
-            ctypes.sizeof(TermiosStruct) + ctypes.sizeof(Termios2SpeedStruct)
-        )
+        buffer = bytearray(ctypes.sizeof(Termios2Struct))
         fcntl.ioctl(self._fileno, TCGETS2, buffer)
 
+        termios2 = Termios2Struct.from_buffer(buffer)
+
+        # Sanity check that our struct layout matches the kernel's
+        if termios2.c_ispeed == 0 or termios2.c_ospeed == 0:
+            raise RuntimeError(f"termios2 speed fields are zero: {buffer.hex()}")
+
         # The POSIX baudrates are stored in the lower bits of `c_cflag`. We clear them.
-        termios_struct = TermiosStruct.from_buffer(buffer)
-        termios_struct.c_cflag &= ~CBAUD
-        termios_struct.c_cflag |= CBAUDEX
+        termios2.c_cflag &= ~CBAUD
+        termios2.c_cflag |= CBAUDEX
 
-        # `termios2` extends `termios` with two extra fields. The problem is that these
-        # fields appear *after* the `c_cc` array, which has a length defined by `NCCS`,
-        # a constant that we do not have access to. We overcome this by searching for
-        # the speed fields directly, since we set them to a known value earlier.
-        try:
-            temp_speed_buffer = bytearray(ctypes.sizeof(Termios2SpeedStruct))
-            temp_speed_struct = Termios2SpeedStruct.from_buffer(temp_speed_buffer)
-            temp_speed_struct.c_ispeed = NON_POSIX_FALLBACK_BAUDRATE
-            temp_speed_struct.c_ospeed = NON_POSIX_FALLBACK_BAUDRATE
+        termios2.c_ispeed = baudrate
+        termios2.c_ospeed = baudrate
 
-            offset = buffer.index(temp_speed_buffer)
-        except ValueError as exc:
-            raise RuntimeError(
-                f"Could not determine offset of termios2 speed fields: {buffer.hex()}"
-            ) from exc
-
-        termios2_speed_struct = Termios2SpeedStruct.from_buffer(buffer, offset)
-        termios2_speed_struct.c_ispeed = baudrate
-        termios2_speed_struct.c_ospeed = baudrate
-
-        # The ctypes structures mutate the buffer in place
-        LOGGER.debug(
-            "Writing termios2 struct (c_ispeed offset %d bytes): %r",
-            offset,
-            buffer.hex(),
-        )
+        # The ctypes structure mutates the buffer in place
+        LOGGER.debug("Writing termios2 struct: %r", buffer.hex())
         fcntl.ioctl(self._fileno, TCSETS2, buffer)
 
     def _build_parity_flags(self) -> int:
