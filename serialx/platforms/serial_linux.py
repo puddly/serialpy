@@ -288,7 +288,11 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
             except OSError:
                 LOGGER.debug("USB device %r disappeared during iteration", usb_device)
                 continue
-        elif subsystem == "serial-base":
+        elif subsystem in ("serial-base", "platform", "pnp"):
+            # `serial-base` is the per-port subsystem introduced in Linux 6.10.
+            # Older kernels expose native 8250 ports via the shared `serial8250`
+            # platform device (subsystem `platform`), and PnP-discovered serial
+            # ports via subsystem `pnp`. All three expose `/sys/class/tty/<tty>/type`.
             try:
                 port_type = (path / "type").read_text()
             except OSError:

@@ -701,6 +701,67 @@ def test_list_serial_ports_no_subsystem(
     assert not caplog.text
 
 
+def test_list_serial_ports_debian_12(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test Debian 12 (kernel 6.1) layout: PnP serial port + serial8250 placeholders."""
+
+    sys_root = tmp_path / "sys"
+    dev_root = tmp_path / "dev"
+    sys_root.mkdir()
+    dev_root.mkdir()
+
+    # /dev/ttyS0: real serial port, PnP-discovered (PORT_16550A)
+    create_device(
+        sys_root,
+        dev_root,
+        tty_name="ttyS0",
+        device_path="devices/pnp0/00:00/tty/ttyS0",
+        bus="pnp",
+        subsystem="pnp",
+        port_type=4,
+    )
+
+    # /dev/ttyS1..ttyS3: phantom serial8250 placeholders, subsystem `platform`.
+    # On pre-6.10 kernels (and kernels without per-port `serial-base` for these
+    # devices), native 8250 ports show subsystem `platform`, and PnP-discovered 16550A
+    # ports show subsystem `pnp`. The unused 8250 placeholders all share
+    # `/sys/devices/platform/serial8250` and have type=0 (PORT_UNKNOWN).
+    for i in range(1, 4):
+        create_device(
+            sys_root,
+            dev_root,
+            tty_name=f"ttyS{i}",
+            device_path=f"devices/platform/serial8250_{i}/tty/ttyS{i}",
+            bus="platform",
+            subsystem="platform",
+            port_type=0,
+        )
+
+    with (
+        caplog.at_level(logging.WARNING),
+        patch.object(serial_linux, "SYS_ROOT", sys_root),
+        patch.object(serial_linux, "DEV_ROOT", dev_root),
+    ):
+        ports = linux_list_serial_ports()
+
+    # Only the real PnP port should be reported; placeholders are silently skipped
+    assert len(ports) == 1
+    assert ports[0] == SerialPortInfo(
+        device=str(dev_root / "ttyS0"),
+        resolved_device=str(dev_root / "ttyS0"),
+        vid=None,
+        pid=None,
+        serial_number=None,
+        manufacturer=None,
+        product=None,
+        bcd_device=None,
+        interface_description=None,
+        interface_num=None,
+    )
+    assert "Unknown serial device subsystem" not in caplog.text
+
+
 def test_list_serial_ports_empty(tmp_path: Path) -> None:
     """Test that listing serial ports still works when there are no ports."""
     sys_root = tmp_path / "sys"
