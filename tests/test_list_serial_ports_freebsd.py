@@ -21,7 +21,7 @@ from serialx.platforms.serial_freebsd import (
 
 DATA_DIR = Path(__file__).parent / "data" / "freebsd"
 SYSCTL_OUTPUT = (DATA_DIR / "sysctl_dev.txt").read_text()
-USBCONFIG_OUTPUT = (DATA_DIR / "usbconfig_dump_device_desc.txt").read_text()
+USBCONFIG_OUTPUT = (DATA_DIR / "usbconfig_dump_all_desc.txt").read_text()
 
 
 async def test_freebsd_list_serial_ports() -> None:
@@ -36,7 +36,7 @@ async def test_freebsd_list_serial_ports() -> None:
         if args[:3] == ["sysctl", "-e", "dev"]:
             return Result(SYSCTL_OUTPUT)
 
-        if args[:2] == ["usbconfig", "dump_device_desc"]:
+        if args[:2] == ["usbconfig", "dump_all_desc"]:
             return Result(USBCONFIG_OUTPUT)
 
         raise ValueError(f"Unexpected command: {args}")
@@ -59,7 +59,7 @@ async def test_freebsd_list_serial_ports() -> None:
                 manufacturer="FTDI",
                 product="FT232R USB UART",
                 bcd_device=0x0600,
-                interface_description=None,
+                interface_description="FT232R USB UART",
                 interface_num=0,
             ),
             # /dev/cuaU1: FTDI FT232R (ugen8.2)
@@ -72,7 +72,7 @@ async def test_freebsd_list_serial_ports() -> None:
                 manufacturer="FTDI",
                 product="FT232R USB UART",
                 bcd_device=0x0600,
-                interface_description=None,
+                interface_description="FT232R USB UART",
                 interface_num=0,
             ),
             # /dev/cuaU2: Prolific USB-Serial (ugen8.3)
@@ -98,7 +98,7 @@ async def test_freebsd_list_serial_ports() -> None:
                 manufacturer="Silicon Labs",
                 product="CP2102 USB to UART Bridge Controller",
                 bcd_device=0x0100,
-                interface_description=None,
+                interface_description="CP2102 USB to UART Bridge Controller",
                 interface_num=0,
             ),
             # /dev/cuaU4: FTDI FT232R (ugen8.5)
@@ -111,7 +111,7 @@ async def test_freebsd_list_serial_ports() -> None:
                 manufacturer="FTDI",
                 product="FT232R USB UART",
                 bcd_device=0x0600,
-                interface_description=None,
+                interface_description="FT232R USB UART",
                 interface_num=0,
             ),
             # /dev/cuaU5: Nabu Casa Home Assistant Connect ZBT-1 (ugen8.6)
@@ -137,7 +137,7 @@ async def test_freebsd_list_serial_ports() -> None:
                 manufacturer="Nabu Casa",
                 product="ZBT-2",
                 bcd_device=0x0100,
-                interface_description=None,
+                interface_description="Nabu Casa ZBT-2",
                 interface_num=0,
             ),
         ]
@@ -156,7 +156,7 @@ async def test_freebsd_list_serial_ports_no_devices() -> None:
         if args[:3] == ["sysctl", "-e", "dev"]:
             return Result("dev.uhub.0.%parent=xhci0\n")
 
-        if args[:2] == ["usbconfig", "dump_device_desc"]:
+        if args[:2] == ["usbconfig", "dump_all_desc"]:
             return Result("")
 
         raise ValueError(f"Unexpected command: {args}")

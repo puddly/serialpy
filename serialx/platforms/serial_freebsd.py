@@ -7,16 +7,31 @@ import logging
 import re
 import subprocess
 import sys
+from typing import NamedTuple
 
 from ..common import SerialPortInfo, register_uri_handler
 from .serial_extended_posix import ExtendedPosixSerial, ExtendedPosixSerialTransport
 
 LOGGER = logging.getLogger(__name__)
 
+
+class _UsbKey(NamedTuple):
+    ugen: str
+    interface_num: int | None
+
+
+class _UsbStrings(NamedTuple):
+    manufacturer: str | None
+    product: str | None
+    interface_description: str | None
+
+
 _PNPINFO_RE = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
 _LOCATION_RE = re.compile(r"(\w+)=(\S+)")
 _MANUFACTURER_RE = re.compile(r"iManufacturer\s*=\s*0x\w+\s+<(.+)>")
 _PRODUCT_RE = re.compile(r"iProduct\s*=\s*0x\w+\s+<(.+)>")
+_INTERFACE_HEADER_RE = re.compile(r"^    Interface (\d+)$")
+_IINTERFACE_RE = re.compile(r"iInterface\s*=\s*0x\w+\s+<(.+)>")
 
 
 class FreeBSDSerial(ExtendedPosixSerial):
@@ -55,40 +70,52 @@ def _parse_location(location: str) -> dict[str, str]:
     return result
 
 
-def _get_all_usb_strings() -> dict[str, tuple[str | None, str | None]]:
-    """Get manufacturer and product strings for all USB devices via usbconfig."""
+def _get_all_usb_strings() -> dict[_UsbKey, _UsbStrings]:
+    """Get manufacturer/product/interface descriptor strings via usbconfig."""
     result = subprocess.run(
-        ["usbconfig", "dump_device_desc"],
+        ["usbconfig", "dump_all_desc"],
         capture_output=True,
         text=True,
         check=True,
     )
 
-    devices: dict[str, tuple[str | None, str | None]] = {}
+    devices: dict[_UsbKey, _UsbStrings] = {}
     current_ugen: str | None = None
+    current_interface: int | None = None
     manufacturer: str | None = None
     product: str | None = None
 
     for line in result.stdout.splitlines():
         if line.startswith("ugen"):
-            if current_ugen is not None:
-                devices[current_ugen] = (manufacturer, product)
             current_ugen = line.split(":")[0]
+            current_interface = None
             manufacturer = None
             product = None
             continue
 
+        match = _INTERFACE_HEADER_RE.match(line)
+        if match:
+            current_interface = int(match.group(1))
+            continue
+
         match = _MANUFACTURER_RE.search(line)
         if match:
-            manufacturer = match.group(1)
+            manufacturer = None if match.group(1) == "no string" else match.group(1)
             continue
 
         match = _PRODUCT_RE.search(line)
         if match:
-            product = match.group(1)
+            product = None if match.group(1) == "no string" else match.group(1)
+            continue
 
-    if current_ugen is not None:
-        devices[current_ugen] = (manufacturer, product)
+        match = _IINTERFACE_RE.search(line)
+        if match and current_ugen is not None and current_interface is not None:
+            iface_desc = None if match.group(1) == "no string" else match.group(1)
+            devices[_UsbKey(current_ugen, current_interface)] = _UsbStrings(
+                manufacturer=manufacturer,
+                product=product,
+                interface_description=iface_desc,
+            )
 
     return devices
 
@@ -130,7 +157,11 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
         pnpinfo = _parse_pnpinfo(sysctl[f"{parent}.%pnpinfo"])
         location = _parse_location(sysctl[f"{parent}.%location"])
 
-        manufacturer, product = usb_strings.get(location["ugen"], (None, None))
+        interface_num = int(location["interface"]) if "interface" in location else None
+        usb = usb_strings.get(
+            _UsbKey(location["ugen"], interface_num),
+            _UsbStrings(None, None, None),
+        )
 
         device = f"/dev/cua{ttyname}"
         vid_str = pnpinfo.get("vendor")
@@ -144,13 +175,11 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
                 vid=int(vid_str, 16) if vid_str else None,
                 pid=int(pid_str, 16) if pid_str else None,
                 serial_number=pnpinfo.get("sernum"),
-                manufacturer=manufacturer,
-                product=product,
+                manufacturer=usb.manufacturer,
+                product=usb.product,
                 bcd_device=int(release_str, 16) if release_str else None,
-                interface_description=None,
-                interface_num=(
-                    int(location["interface"]) if "interface" in location else None
-                ),
+                interface_description=usb.interface_description,
+                interface_num=interface_num,
             )
         )
 
