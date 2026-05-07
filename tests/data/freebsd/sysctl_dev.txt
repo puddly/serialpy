@@ -1,49 +1,65 @@
 dev.umodem.0.ttyports=1
-dev.umodem.0.ttyname=U0
+dev.umodem.0.ttyname=U6
 dev.umodem.0.%iommu=
-dev.umodem.0.%parent=uhub4
-dev.umodem.0.%pnpinfo=vendor=0x303a product=0x4001 devclass=0xef devsubclass=0x02 devproto=0x01 sernum="80B54EEFAE18" release=0x0101 mode=host intclass=0x02 intsubclass=0x02 intprotocol=0x00 ttyname=U0 ttyports=1
-dev.umodem.0.%location=bus=8 hubaddr=1 port=19 devaddr=4 interface=0 ugen=ugen8.4
+dev.umodem.0.%parent=uhub3
+dev.umodem.0.%pnpinfo=vendor=0x303a product=0x4001 devclass=0xef devsubclass=0x02 devproto=0x01 sernum="10B41DE589E4" release=0x0100 mode=host intclass=0x02 intsubclass=0x02 intprotocol=0x00 ttyname=U6 ttyports=1
+dev.umodem.0.%location=bus=8 hubaddr=1 port=21 devaddr=7 interface=0 ugen=ugen8.7
 dev.umodem.0.%driver=umodem
-dev.umodem.0.%desc=Nabu Casa ZBT-2, class 239/2, rev 2.00/1.01, addr 3
+dev.umodem.0.%desc=Nabu Casa ZBT-2, class 239/2, rev 2.00/1.00, addr 6
 dev.umodem.%parent=
-dev.uplcom.%parent=
+dev.uslcom.1.ttyports=1
+dev.uslcom.1.ttyname=U5
+dev.uslcom.1.%iommu=
+dev.uslcom.1.%parent=uhub3
+dev.uslcom.1.%pnpinfo=vendor=0x10c4 product=0xea60 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="a28a310e2bedec118f3d4540ad51a8b2" release=0x0100 mode=host intclass=0xff intsubclass=0x00 intprotocol=0x00 ttyname=U5 ttyports=1
+dev.uslcom.1.%location=bus=8 hubaddr=1 port=20 devaddr=6 interface=0 ugen=ugen8.6
+dev.uslcom.1.%driver=uslcom
+dev.uslcom.1.%desc=Nabu Casa Home Assistant Connect ZBT-1, class 0/0, rev 2.00/1.00, addr 5
 dev.uslcom.0.ttyports=1
 dev.uslcom.0.ttyname=U3
 dev.uslcom.0.%iommu=
-dev.uslcom.0.%parent=uhub4
-dev.uslcom.0.%pnpinfo=vendor=0x10c4 product=0xea60 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="ec4903cb" release=0x0100 mode=host intclass=0xff intsubclass=0x00 intprotocol=0x00 ttyname=U3 ttyports=1
-dev.uslcom.0.%location=bus=8 hubaddr=1 port=20 devaddr=5 interface=0 ugen=ugen8.5
+dev.uslcom.0.%parent=uhub3
+dev.uslcom.0.%pnpinfo=vendor=0x10c4 product=0xea60 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="41b06ea8" release=0x0100 mode=host intclass=0xff intsubclass=0x00 intprotocol=0x00 ttyname=U3 ttyports=1
+dev.uslcom.0.%location=bus=8 hubaddr=1 port=18 devaddr=4 interface=0 ugen=ugen8.4
 dev.uslcom.0.%driver=uslcom
-dev.uslcom.0.%desc=Silicon Labs CP2102 USB to UART Bridge Controller, class 0/0, rev 1.10/1.00, addr 4
+dev.uslcom.0.%desc=Silicon Labs CP2102 USB to UART Bridge Controller, class 0/0, rev 1.10/1.00, addr 3
 dev.uslcom.%parent=
-dev.uftdi.0.ttyports=1
-dev.uftdi.0.ttyname=U4
-dev.uftdi.0.%iommu=
-dev.uftdi.0.%parent=uhub4
-dev.uftdi.0.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="rutabaga" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U4 ttyports=1
-dev.uftdi.0.%location=bus=8 hubaddr=1 port=18 devaddr=6 interface=0 ugen=ugen8.6
-dev.uftdi.0.%driver=uftdi
-dev.uftdi.0.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 5
+dev.uplcom.0.ttyports=1
+dev.uplcom.0.ttyname=U2
+dev.uplcom.0.%iommu=
+dev.uplcom.0.%parent=uhub3
+dev.uplcom.0.%pnpinfo=vendor=0x067b product=0x23a3 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="DSDCb147613" release=0x0605 mode=host intclass=0xff intsubclass=0x00 intprotocol=0x00 ttyname=U2 ttyports=1
+dev.uplcom.0.%location=bus=8 hubaddr=1 port=17 devaddr=3 interface=0 ugen=ugen8.3
+dev.uplcom.0.%driver=uplcom
+dev.uplcom.0.%desc=Prolific Technology Inc. USB-Serial Controller, class 0/0, rev 2.00/6.05, addr 2
+dev.uplcom.%parent=
 dev.uftdi.2.ttyports=1
-dev.uftdi.2.ttyname=U2
+dev.uftdi.2.ttyname=U4
 dev.uftdi.2.%iommu=
-dev.uftdi.2.%parent=uhub4
-dev.uftdi.2.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="A5069RR4" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U2 ttyports=1
-dev.uftdi.2.%location=bus=8 hubaddr=1 port=17 devaddr=3 interface=0 ugen=ugen8.3
+dev.uftdi.2.%parent=uhub3
+dev.uftdi.2.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="A5069RR4" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U4 ttyports=1
+dev.uftdi.2.%location=bus=8 hubaddr=1 port=19 devaddr=5 interface=0 ugen=ugen8.5
 dev.uftdi.2.%driver=uftdi
-dev.uftdi.2.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 2
+dev.uftdi.2.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 4
 dev.uftdi.1.ttyports=1
 dev.uftdi.1.ttyname=U1
 dev.uftdi.1.%iommu=
-dev.uftdi.1.%parent=uhub4
+dev.uftdi.1.%parent=uhub3
 dev.uftdi.1.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="A5069RR4" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U1 ttyports=1
 dev.uftdi.1.%location=bus=8 hubaddr=1 port=16 devaddr=2 interface=0 ugen=ugen8.2
 dev.uftdi.1.%driver=uftdi
 dev.uftdi.1.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 1
+dev.uftdi.0.ttyports=1
+dev.uftdi.0.ttyname=U0
+dev.uftdi.0.%iommu=
+dev.uftdi.0.%parent=uhub3
+dev.uftdi.0.%pnpinfo=vendor=0x0403 product=0x6001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="rutabaga" release=0x0600 mode=host intclass=0xff intsubclass=0xff intprotocol=0xff ttyname=U0 ttyports=1
+dev.uftdi.0.%location=bus=8 hubaddr=1 port=22 devaddr=8 interface=0 ugen=ugen8.8
+dev.uftdi.0.%driver=uftdi
+dev.uftdi.0.%desc=FTDI FT232R USB UART, class 0/0, rev 2.00/6.00, addr 7
 dev.uftdi.%parent=
 dev.uhid.0.%iommu=
-dev.uhid.0.%parent=uhub7
+dev.uhid.0.%parent=uhub1
 dev.uhid.0.%pnpinfo=vendor=0x0627 product=0x0001 devclass=0x00 devsubclass=0x00 devproto=0x00 sernum="28754-0000:00:1d.7-1" release=0x0000 mode=host intclass=0x03 intsubclass=0x00 intprotocol=0x00
 dev.uhid.0.%location=bus=7 hubaddr=1 port=1 devaddr=2 interface=0 ugen=ugen7.2
 dev.uhid.0.%driver=uhid
@@ -73,23 +89,23 @@ dev.ichsmb.%parent=
 dev.uhub.8.disable_port_power=0
 dev.uhub.8.disable_enumeration=0
 dev.uhub.8.%iommu=
-dev.uhub.8.%parent=usbus3
+dev.uhub.8.%parent=usbus5
 dev.uhub.8.%pnpinfo=
 dev.uhub.8.%location=
 dev.uhub.8.%driver=uhub
-dev.uhub.8.%desc=Intel EHCI root HUB, class 9/0, rev 2.00/1.00, addr 1
+dev.uhub.8.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
 dev.uhub.7.disable_port_power=0
 dev.uhub.7.disable_enumeration=0
 dev.uhub.7.%iommu=
-dev.uhub.7.%parent=usbus7
+dev.uhub.7.%parent=usbus2
 dev.uhub.7.%pnpinfo=
 dev.uhub.7.%location=
 dev.uhub.7.%driver=uhub
-dev.uhub.7.%desc=Intel EHCI root HUB, class 9/0, rev 2.00/1.00, addr 1
+dev.uhub.7.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
 dev.uhub.6.disable_port_power=0
 dev.uhub.6.disable_enumeration=0
 dev.uhub.6.%iommu=
-dev.uhub.6.%parent=usbus5
+dev.uhub.6.%parent=usbus1
 dev.uhub.6.%pnpinfo=
 dev.uhub.6.%location=
 dev.uhub.6.%driver=uhub
@@ -97,7 +113,7 @@ dev.uhub.6.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
 dev.uhub.5.disable_port_power=0
 dev.uhub.5.disable_enumeration=0
 dev.uhub.5.%iommu=
-dev.uhub.5.%parent=usbus0
+dev.uhub.5.%parent=usbus4
 dev.uhub.5.%pnpinfo=
 dev.uhub.5.%location=
 dev.uhub.5.%driver=uhub
@@ -105,19 +121,19 @@ dev.uhub.5.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
 dev.uhub.4.disable_port_power=0
 dev.uhub.4.disable_enumeration=0
 dev.uhub.4.%iommu=
-dev.uhub.4.%parent=usbus8
+dev.uhub.4.%parent=usbus3
 dev.uhub.4.%pnpinfo=
 dev.uhub.4.%location=
 dev.uhub.4.%driver=uhub
-dev.uhub.4.%desc=(0x1b36) XHCI root HUB, class 9/0, rev 3.00/1.00, addr 1
+dev.uhub.4.%desc=Intel EHCI root HUB, class 9/0, rev 2.00/1.00, addr 1
 dev.uhub.3.disable_port_power=0
 dev.uhub.3.disable_enumeration=0
 dev.uhub.3.%iommu=
-dev.uhub.3.%parent=usbus1
+dev.uhub.3.%parent=usbus8
 dev.uhub.3.%pnpinfo=
 dev.uhub.3.%location=
 dev.uhub.3.%driver=uhub
-dev.uhub.3.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.3.%desc=(0x1b36) XHCI root HUB, class 9/0, rev 3.00/1.00, addr 1
 dev.uhub.2.disable_port_power=0
 dev.uhub.2.disable_enumeration=0
 dev.uhub.2.%iommu=
@@ -129,20 +145,173 @@ dev.uhub.2.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
 dev.uhub.1.disable_port_power=0
 dev.uhub.1.disable_enumeration=0
 dev.uhub.1.%iommu=
-dev.uhub.1.%parent=usbus4
+dev.uhub.1.%parent=usbus7
 dev.uhub.1.%pnpinfo=
 dev.uhub.1.%location=
 dev.uhub.1.%driver=uhub
-dev.uhub.1.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
+dev.uhub.1.%desc=Intel EHCI root HUB, class 9/0, rev 2.00/1.00, addr 1
 dev.uhub.0.disable_port_power=0
 dev.uhub.0.disable_enumeration=0
 dev.uhub.0.%iommu=
-dev.uhub.0.%parent=usbus2
+dev.uhub.0.%parent=usbus0
 dev.uhub.0.%pnpinfo=
 dev.uhub.0.%location=
 dev.uhub.0.%driver=uhub
 dev.uhub.0.%desc=Intel UHCI root HUB, class 9/0, rev 1.00/1.00, addr 1
 dev.uhub.%parent=
+dev.pcm.1.mode=7
+dev.pcm.1.bitperfect=0
+dev.pcm.1.buffersize=65536
+dev.pcm.1.rec.vchanformat=s16le:2.0
+dev.pcm.1.rec.vchanrate=48000
+dev.pcm.1.rec.vchanmode=fixed
+dev.pcm.1.rec.vchans=1
+dev.pcm.1.play.vchanformat=s16le:2.0
+dev.pcm.1.play.vchanrate=48000
+dev.pcm.1.play.vchanmode=fixed
+dev.pcm.1.play.vchans=1
+dev.pcm.1.%iommu=
+dev.pcm.1.%parent=hdaa1
+dev.pcm.1.%pnpinfo=
+dev.pcm.1.%location=nid=3,5
+dev.pcm.1.%driver=pcm
+dev.pcm.1.%desc=Generic (0x1af40022) (Analog)
+dev.pcm.0.mode=7
+dev.pcm.0.bitperfect=0
+dev.pcm.0.buffersize=65536
+dev.pcm.0.rec.vchanformat=s16le:2.0
+dev.pcm.0.rec.vchanrate=48000
+dev.pcm.0.rec.vchanmode=fixed
+dev.pcm.0.rec.vchans=1
+dev.pcm.0.play.vchanformat=s16le:2.0
+dev.pcm.0.play.vchanrate=48000
+dev.pcm.0.play.vchanmode=fixed
+dev.pcm.0.play.vchans=1
+dev.pcm.0.%iommu=
+dev.pcm.0.%parent=hdaa0
+dev.pcm.0.%pnpinfo=
+dev.pcm.0.%location=nid=3,5
+dev.pcm.0.%driver=pcm
+dev.pcm.0.%desc=Generic (0x1af40032) (Analog)
+dev.pcm.%parent=
+dev.hdaa.1.init_clear=0
+dev.hdaa.1.reconfig=0
+dev.hdaa.1.gpo_config=
+dev.hdaa.1.gpo_state=
+dev.hdaa.1.gpio_config=
+dev.hdaa.1.gpio_state=
+dev.hdaa.1.gpi_state=
+dev.hdaa.1.config=forcestereo,ivref50,ivref80,ivref100,ivref,vref
+dev.hdaa.1.nid5_original=0x00805020 as=2 seq=0 device=Line-in conn=Jack ctype=Unknown loc=0x00 color=Red misc=0
+dev.hdaa.1.nid5_config=0x00805020 as=2 seq=0 device=Line-in conn=Jack ctype=Unknown loc=0x00 color=Red misc=0
+dev.hdaa.1.nid5=pin: Line-in (Red Jack)
+     Widget cap: 0x00400001 STEREO
+    Association: 1 (0x0001)
+            OSS: line (line)
+        Pin cap: 0x00000020 IN
+     Pin config: 0x00805020 as=2 seq=0 device=Line-in conn=Jack ctype=Unknown loc=0x00 color=Red misc=0
+    Pin control: 0x00000020 IN
+
+dev.hdaa.1.nid4=audio input
+     Widget cap: 0x0010011b STEREO
+    Association: 1 (0x0001)
+     Stream cap: 0x00000001 PCM
+        PCM cap: 0x000201fc 16 bits, 16 22 32 44 48 88 96 KHz
+      Input amp: 0x80034a4a mute=1 step=74 size=3 offset=74 (-74/0dB)
+    Connections: 1
+          + <- nid=5 [pin: Line-in (Red Jack)]
+
+dev.hdaa.1.nid3_original=0x00004010 as=1 seq=0 device=Line-out conn=Jack ctype=Unknown loc=0x00 color=Green misc=0
+dev.hdaa.1.nid3_config=0x00004010 as=1 seq=0 device=Line-out conn=Jack ctype=Unknown loc=0x00 color=Green misc=0
+dev.hdaa.1.nid3=pin: Line-out (Green Jack)
+     Widget cap: 0x00400101 STEREO
+    Association: 0 (0x0001)
+        Pin cap: 0x00000010 OUT
+     Pin config: 0x00004010 as=1 seq=0 device=Line-out conn=Jack ctype=Unknown loc=0x00 color=Green misc=0
+    Pin control: 0x00000040 OUT
+    Connections: 1
+          + <- nid=2 [audio output]
+
+dev.hdaa.1.nid2=audio output
+     Widget cap: 0x0000001d STEREO
+    Association: 0 (0x0001)
+            OSS: pcm (pcm)
+     Stream cap: 0x00000001 PCM
+        PCM cap: 0x000201fc 16 bits, 16 22 32 44 48 88 96 KHz
+     Output amp: 0x80034a4a mute=1 step=74 size=3 offset=74 (-74/0dB)
+
+dev.hdaa.1.%iommu=
+dev.hdaa.1.%parent=hdacc1
+dev.hdaa.1.%pnpinfo=type=0x01 subsystem=0x1af40022
+dev.hdaa.1.%location=nid=1
+dev.hdaa.1.%driver=hdaa
+dev.hdaa.1.%desc=Generic (0x1af40022) Audio Function Group
+dev.hdaa.0.init_clear=0
+dev.hdaa.0.reconfig=0
+dev.hdaa.0.gpo_config=
+dev.hdaa.0.gpo_state=
+dev.hdaa.0.gpio_config=
+dev.hdaa.0.gpio_state=
+dev.hdaa.0.gpi_state=
+dev.hdaa.0.config=forcestereo,ivref50,ivref80,ivref100,ivref,vref
+dev.hdaa.0.nid5_original=0x00a05020 as=2 seq=0 device=Mic conn=Jack ctype=Unknown loc=0x00 color=Red misc=0
+dev.hdaa.0.nid5_config=0x00a05020 as=2 seq=0 device=Mic conn=Jack ctype=Unknown loc=0x00 color=Red misc=0
+dev.hdaa.0.nid5=pin: Mic (Red Jack)
+     Widget cap: 0x00400001 STEREO
+    Association: 1 (0x0001)
+            OSS: mic (mic)
+        Pin cap: 0x00000020 IN
+     Pin config: 0x00a05020 as=2 seq=0 device=Mic conn=Jack ctype=Unknown loc=0x00 color=Red misc=0
+    Pin control: 0x00000020 IN
+
+dev.hdaa.0.nid4=audio input
+     Widget cap: 0x0010011b STEREO
+    Association: 1 (0x0001)
+     Stream cap: 0x00000001 PCM
+        PCM cap: 0x000201fc 16 bits, 16 22 32 44 48 88 96 KHz
+      Input amp: 0x80034a4a mute=1 step=74 size=3 offset=74 (-74/0dB)
+    Connections: 1
+          + <- nid=5 [pin: Mic (Red Jack)]
+
+dev.hdaa.0.nid3_original=0x00104010 as=1 seq=0 device=Speaker conn=Jack ctype=Unknown loc=0x00 color=Green misc=0
+dev.hdaa.0.nid3_config=0x00104010 as=1 seq=0 device=Speaker conn=Jack ctype=Unknown loc=0x00 color=Green misc=0
+dev.hdaa.0.nid3=pin: Speaker (Green Jack)
+     Widget cap: 0x00400101 STEREO
+    Association: 0 (0x0001)
+        Pin cap: 0x00000010 OUT
+     Pin config: 0x00104010 as=1 seq=0 device=Speaker conn=Jack ctype=Unknown loc=0x00 color=Green misc=0
+    Pin control: 0x00000040 OUT
+    Connections: 1
+          + <- nid=2 [audio output]
+
+dev.hdaa.0.nid2=audio output
+     Widget cap: 0x0000001d STEREO
+    Association: 0 (0x0001)
+            OSS: pcm (pcm)
+     Stream cap: 0x00000001 PCM
+        PCM cap: 0x000201fc 16 bits, 16 22 32 44 48 88 96 KHz
+     Output amp: 0x80034a4a mute=1 step=74 size=3 offset=74 (-74/0dB)
+
+dev.hdaa.0.%iommu=
+dev.hdaa.0.%parent=hdacc0
+dev.hdaa.0.%pnpinfo=type=0x01 subsystem=0x1af40032
+dev.hdaa.0.%location=nid=1
+dev.hdaa.0.%driver=hdaa
+dev.hdaa.0.%desc=Generic (0x1af40032) Audio Function Group
+dev.hdaa.%parent=
+dev.hdacc.1.%iommu=
+dev.hdacc.1.%parent=hdac1
+dev.hdacc.1.%pnpinfo=vendor=0x1af4 device=0x0022 revision=0x01 stepping=0x01
+dev.hdacc.1.%location=cad=1
+dev.hdacc.1.%driver=hdacc
+dev.hdacc.1.%desc=Generic (0x1af40022) HDA CODEC
+dev.hdacc.0.%iommu=
+dev.hdacc.0.%parent=hdac1
+dev.hdacc.0.%pnpinfo=vendor=0x1af4 device=0x0032 revision=0x01 stepping=0x01
+dev.hdacc.0.%location=cad=0
+dev.hdacc.0.%driver=hdacc
+dev.hdacc.0.%desc=Generic (0x1af40032) HDA CODEC
+dev.hdacc.%parent=
 dev.attimer.0.%iommu=
 dev.attimer.0.%parent=isa0
 dev.attimer.0.%pnpinfo=
@@ -295,22 +464,22 @@ dev.xhci.0.%driver=xhci
 dev.xhci.0.%desc=XHCI (generic) USB 3.0 controller
 dev.xhci.%parent=
 dev.vtnet.0.txq0.rescheduled=0
-dev.vtnet.0.txq0.tso=135
-dev.vtnet.0.txq0.csum=41914
+dev.vtnet.0.txq0.tso=10
+dev.vtnet.0.txq0.csum=92
 dev.vtnet.0.txq0.omcasts=6
-dev.vtnet.0.txq0.obytes=7208777
-dev.vtnet.0.txq0.opackets=41995
+dev.vtnet.0.txq0.obytes=43900
+dev.vtnet.0.txq0.opackets=102
 dev.vtnet.0.rxq0.rescheduled=0
 dev.vtnet.0.rxq0.host_lro=0
 dev.vtnet.0.rxq0.csum_failed=0
-dev.vtnet.0.rxq0.csum=17583
+dev.vtnet.0.rxq0.csum=12
 dev.vtnet.0.rxq0.ierrors=0
 dev.vtnet.0.rxq0.iqdrops=0
-dev.vtnet.0.rxq0.ibytes=37948248
-dev.vtnet.0.rxq0.ipackets=85409
+dev.vtnet.0.rxq0.ibytes=131347
+dev.vtnet.0.rxq0.ipackets=698
 dev.vtnet.0.tx_task_rescheduled=0
-dev.vtnet.0.tx_tso_offloaded=135
-dev.vtnet.0.tx_csum_offloaded=41917
+dev.vtnet.0.tx_tso_offloaded=10
+dev.vtnet.0.tx_csum_offloaded=92
 dev.vtnet.0.tx_defrag_failed=0
 dev.vtnet.0.tx_defragged=0
 dev.vtnet.0.tx_tso_without_csum=0
@@ -318,7 +487,7 @@ dev.vtnet.0.tx_tso_not_tcp=0
 dev.vtnet.0.tx_csum_proto_mismatch=0
 dev.vtnet.0.tx_csum_unknown_ethtype=0
 dev.vtnet.0.rx_task_rescheduled=0
-dev.vtnet.0.rx_csum_offloaded=17583
+dev.vtnet.0.rx_csum_offloaded=12
 dev.vtnet.0.rx_csum_failed=0
 dev.vtnet.0.rx_csum_inaccessible_ipproto=0
 dev.vtnet.0.rx_csum_bad_offset=0
@@ -376,6 +545,14 @@ dev.virtio_pci.0.%location=slot=8 function=0 dbsf=pci0:6:8:0 handle=\_SB_.PCI0.S
 dev.virtio_pci.0.%driver=virtio_pci
 dev.virtio_pci.0.%desc=VirtIO PCI (legacy) Console adapter
 dev.virtio_pci.%parent=
+dev.hdac.1.polling=0
+dev.hdac.1.pindump=0
+dev.hdac.1.%iommu=rid=0xf0
+dev.hdac.1.%parent=pci8
+dev.hdac.1.%pnpinfo=vendor=0x8086 device=0x293e subvendor=0x1af4 subdevice=0x1100 class=0x040300
+dev.hdac.1.%location=slot=12 function=0 dbsf=pci0:8:12:0 handle=\_SB_.PCI0.SF0_.S18_.S60_
+dev.hdac.1.%driver=hdac
+dev.hdac.1.%desc=Intel 82801I HDA Controller
 dev.hdac.0.polling=0
 dev.hdac.0.pindump=0
 dev.hdac.0.%iommu=rid=0xd8
@@ -774,8 +951,8 @@ dev.atrtc.0.%driver=atrtc
 dev.atrtc.0.%desc=AT realtime clock
 dev.atrtc.%parent=
 dev.cpu.3.cx_method=C1/hlt
-dev.cpu.3.cx_usage_counters=503522
-dev.cpu.3.cx_usage=100.00% last 27us
+dev.cpu.3.cx_usage_counters=2639
+dev.cpu.3.cx_usage=100.00% last 2354us
 dev.cpu.3.cx_lowest=C1
 dev.cpu.3.cx_supported=C1/1/0
 dev.cpu.3.%iommu=
@@ -785,8 +962,8 @@ dev.cpu.3.%location=handle=\_SB_.CPUS.C003
 dev.cpu.3.%driver=cpu
 dev.cpu.3.%desc=ACPI CPU
 dev.cpu.2.cx_method=C1/hlt
-dev.cpu.2.cx_usage_counters=527877
-dev.cpu.2.cx_usage=100.00% last 4092us
+dev.cpu.2.cx_usage_counters=3054
+dev.cpu.2.cx_usage=100.00% last 25119us
 dev.cpu.2.cx_lowest=C1
 dev.cpu.2.cx_supported=C1/1/0
 dev.cpu.2.%iommu=
@@ -796,8 +973,8 @@ dev.cpu.2.%location=handle=\_SB_.CPUS.C002
 dev.cpu.2.%driver=cpu
 dev.cpu.2.%desc=ACPI CPU
 dev.cpu.1.cx_method=C1/hlt
-dev.cpu.1.cx_usage_counters=501138
-dev.cpu.1.cx_usage=100.00% last 25991us
+dev.cpu.1.cx_usage_counters=2750
+dev.cpu.1.cx_usage=100.00% last 22520us
 dev.cpu.1.cx_lowest=C1
 dev.cpu.1.cx_supported=C1/1/0
 dev.cpu.1.%iommu=
@@ -807,8 +984,8 @@ dev.cpu.1.%location=handle=\_SB_.CPUS.C001
 dev.cpu.1.%driver=cpu
 dev.cpu.1.%desc=ACPI CPU
 dev.cpu.0.cx_method=C1/hlt
-dev.cpu.0.cx_usage_counters=1260378
-dev.cpu.0.cx_usage=100.00% last 20062us
+dev.cpu.0.cx_usage_counters=3995
+dev.cpu.0.cx_usage=100.00% last 4092us
 dev.cpu.0.cx_lowest=C1
 dev.cpu.0.cx_supported=C1/1/0
 dev.cpu.0.%iommu=
