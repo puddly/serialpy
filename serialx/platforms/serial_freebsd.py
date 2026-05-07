@@ -17,6 +17,10 @@ _PNPINFO_RE = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
 _LOCATION_RE = re.compile(r"(\w+)=(\S+)")
 _MANUFACTURER_RE = re.compile(r"iManufacturer\s*=\s*0x\w+\s+<(.+)>")
 _PRODUCT_RE = re.compile(r"iProduct\s*=\s*0x\w+\s+<(.+)>")
+_SYSCTL_RE = re.compile(
+    r"^([A-Za-z0-9._%-]+)=(.*?)(?=\n[A-Za-z0-9._%-]+=|\Z)",
+    re.DOTALL | re.MULTILINE,
+)
 
 
 class FreeBSDSerial(ExtendedPosixSerial):
@@ -101,7 +105,7 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
         text=True,
         check=True,
     ).stdout
-    sysctl = dict(line.split("=", 1) for line in sysctl_text.splitlines())
+    sysctl = dict(_SYSCTL_RE.findall(sysctl_text))
 
     usb_strings = _get_all_usb_strings()
     results = []

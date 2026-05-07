@@ -49,16 +49,16 @@ async def test_freebsd_list_serial_ports() -> None:
         sorted(ports_sync, key=lambda p: p.device)
         == sorted(ports_async, key=lambda p: p.device)
         == [
-            # /dev/cuaU0: Nabu Casa ZBT-2 (CDC ACM via umodem)
+            # /dev/cuaU0: FTDI FT232R with custom serial (ugen8.8)
             SerialPortInfo(
                 device="/dev/cuaU0",
                 resolved_device="/dev/cuaU0",
-                vid=0x303A,
-                pid=0x4001,
-                serial_number="80B54EEFAE18",
-                manufacturer="Nabu Casa",
-                product="ZBT-2",
-                bcd_device=0x0101,
+                vid=0x0403,
+                pid=0x6001,
+                serial_number="rutabaga",
+                manufacturer="FTDI",
+                product="FT232R USB UART",
+                bcd_device=0x0600,
                 interface_description=None,
                 interface_num=0,
             ),
@@ -75,10 +75,36 @@ async def test_freebsd_list_serial_ports() -> None:
                 interface_description=None,
                 interface_num=0,
             ),
-            # /dev/cuaU2: FTDI FT232R (ugen8.3)
+            # /dev/cuaU2: Prolific USB-Serial (ugen8.3)
             SerialPortInfo(
                 device="/dev/cuaU2",
                 resolved_device="/dev/cuaU2",
+                vid=0x067B,
+                pid=0x23A3,
+                serial_number="DSDCb147613",
+                manufacturer="Prolific Technology Inc. ",
+                product="USB-Serial Controller ",
+                bcd_device=0x0605,
+                interface_description=None,
+                interface_num=0,
+            ),
+            # /dev/cuaU3: Silicon Labs CP2102 (ugen8.4)
+            SerialPortInfo(
+                device="/dev/cuaU3",
+                resolved_device="/dev/cuaU3",
+                vid=0x10C4,
+                pid=0xEA60,
+                serial_number="41b06ea8",
+                manufacturer="Silicon Labs",
+                product="CP2102 USB to UART Bridge Controller",
+                bcd_device=0x0100,
+                interface_description=None,
+                interface_num=0,
+            ),
+            # /dev/cuaU4: FTDI FT232R (ugen8.5)
+            SerialPortInfo(
+                device="/dev/cuaU4",
+                resolved_device="/dev/cuaU4",
                 vid=0x0403,
                 pid=0x6001,
                 serial_number="A5069RR4",
@@ -88,29 +114,29 @@ async def test_freebsd_list_serial_ports() -> None:
                 interface_description=None,
                 interface_num=0,
             ),
-            # /dev/cuaU3: Silicon Labs CP2102 (ugen8.5)
+            # /dev/cuaU5: Nabu Casa Home Assistant Connect ZBT-1 (ugen8.6)
             SerialPortInfo(
-                device="/dev/cuaU3",
-                resolved_device="/dev/cuaU3",
+                device="/dev/cuaU5",
+                resolved_device="/dev/cuaU5",
                 vid=0x10C4,
                 pid=0xEA60,
-                serial_number="ec4903cb",
-                manufacturer="Silicon Labs",
-                product="CP2102 USB to UART Bridge Controller",
+                serial_number="a28a310e2bedec118f3d4540ad51a8b2",
+                manufacturer="Nabu Casa",
+                product="Home Assistant Connect ZBT-1",
                 bcd_device=0x0100,
                 interface_description=None,
                 interface_num=0,
             ),
-            # /dev/cuaU4: FTDI FT232R with custom serial (ugen8.6)
+            # /dev/cuaU6: Nabu Casa ZBT-2 (CDC ACM via umodem, ugen8.7)
             SerialPortInfo(
-                device="/dev/cuaU4",
-                resolved_device="/dev/cuaU4",
-                vid=0x0403,
-                pid=0x6001,
-                serial_number="rutabaga",
-                manufacturer="FTDI",
-                product="FT232R USB UART",
-                bcd_device=0x0600,
+                device="/dev/cuaU6",
+                resolved_device="/dev/cuaU6",
+                vid=0x303A,
+                pid=0x4001,
+                serial_number="10B41DE589E4",
+                manufacturer="Nabu Casa",
+                product="ZBT-2",
+                bcd_device=0x0100,
                 interface_description=None,
                 interface_num=0,
             ),
