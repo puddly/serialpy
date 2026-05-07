@@ -17,10 +17,6 @@ _PNPINFO_RE = re.compile(r'(\w+)=(?:"([^"]*)"|(\S+))')
 _LOCATION_RE = re.compile(r"(\w+)=(\S+)")
 _MANUFACTURER_RE = re.compile(r"iManufacturer\s*=\s*0x\w+\s+<(.+)>")
 _PRODUCT_RE = re.compile(r"iProduct\s*=\s*0x\w+\s+<(.+)>")
-_SYSCTL_RE = re.compile(
-    r"^([A-Za-z0-9._%-]+)=(.*?)(?=\n[A-Za-z0-9._%-]+=|\Z)",
-    re.DOTALL | re.MULTILINE,
-)
 
 
 class FreeBSDSerial(ExtendedPosixSerial):
@@ -97,6 +93,21 @@ def _get_all_usb_strings() -> dict[str, tuple[str | None, str | None]]:
     return devices
 
 
+def _parse_sysctl(text: str) -> dict[str, str]:
+    """Parse `sysctl -e dev` output, folding multi-line values into the prior key."""
+    sysctl: dict[str, str] = {}
+    current_key = ""
+
+    for line in text.splitlines():
+        if line.startswith("dev."):
+            current_key, _, value = line.partition("=")
+            sysctl[current_key] = value
+        else:
+            sysctl[current_key] += "\n" + line
+
+    return sysctl
+
+
 def freebsd_list_serial_ports() -> list[SerialPortInfo]:
     """List available serial ports on FreeBSD."""
     sysctl_text = subprocess.run(
@@ -105,7 +116,7 @@ def freebsd_list_serial_ports() -> list[SerialPortInfo]:
         text=True,
         check=True,
     ).stdout
-    sysctl = dict(_SYSCTL_RE.findall(sysctl_text))
+    sysctl = _parse_sysctl(sysctl_text)
 
     usb_strings = _get_all_usb_strings()
     results = []
