@@ -126,6 +126,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
             SerialQuirk.NO_EXCLUSIVITY,
+            SerialQuirk.NO_UNPLUG,
         }
     ),
     SerialBackend.SER2NET: frozenset({}),
@@ -200,6 +201,9 @@ class SerialPair(UnresolvedSerialPair):
     original_right: str
 
     uri_scheme: str
+
+    unplug_left: Callable[[], None] | None = None
+    unplug_right: Callable[[], None] | None = None
 
 
 def _get_listening_ports(pid: int) -> list[int]:
@@ -352,7 +356,9 @@ def create_esphome_pair(
 
 
 @contextlib.contextmanager
-def create_socat_pair() -> Iterator[tuple[str, str]]:
+def create_socat_pair() -> Iterator[
+    tuple[str, str, Callable[[], None], Callable[[], None]]
+]:
     """Create a bridged pair of virtual PTYs using two socat processes.
 
     Each PTY is managed by its own socat process, linked via a UNIX socket.
@@ -402,8 +408,17 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
             name="socat(left)",
         )
 
+        def _kill(proc: subprocess.Popen[Any]) -> None:
+            proc.kill()
+            proc.wait()
+
         try:
-            yield (left_tty, right_tty)
+            yield (
+                left_tty,
+                right_tty,
+                lambda: _kill(left_proc),
+                lambda: _kill(right_proc),
+            )
         finally:
             for proc in (left_proc, right_proc):
                 if proc.returncode is None:

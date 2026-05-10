@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Generator
 from contextlib import suppress
 from enum import IntEnum
+import errno
 import logging
 import sys
 
@@ -537,7 +538,10 @@ class RFC2217Serial(SocketSerial):
         n = self._socket.recv_into(buf)
 
         if n == 0:
-            raise SerialException("RFC 2217 connection closed by server")
+            self._mark_broken(
+                OSError(errno.EIO, "RFC 2217 connection closed by server")
+            )
+            self._check_broken()
 
         raw = bytes(buf[:n])
         LOGGER.debug("RX raw: %d bytes  [%s]", n, raw.hex(" "))
@@ -963,6 +967,8 @@ class RFC2217SerialTransport(BaseSerialTransport):
         self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
+
+        self._mark_broken(OSError(errno.EIO, "RFC 2217 connection closed by server"))
 
         # Fail any pending waiters
         waiter_exc = exc or SerialException("RFC 2217 connection closed by server")

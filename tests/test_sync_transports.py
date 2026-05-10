@@ -1074,6 +1074,34 @@ def test_deassert_on_open_with_rtscts(
             assert left.get_modem_pins().cts is expected_state
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
+def test_sync_unplug_raises(serial_pair: SerialPair) -> None:
+    """Each operation on an unplugged port raises rather than silently EOFing."""
+    assert serial_pair.unplug_left is not None
+
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200, timeout=2.0) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        right.write(b"ping\n")
+        right.flush()
+        assert left.readline() == b"ping\n"
+
+        serial_pair.unplug_left()
+
+        with pytest.raises(OSError):
+            left.read(1)
+
+        with pytest.raises(OSError):
+            left.write(b"x")
+
+        with pytest.raises(OSError):
+            left.get_modem_pins()
+
+        with pytest.raises(OSError):
+            left.set_modem_pins(rts=True)
+
+
 @pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_WRITE_TIMEOUT)
 def test_write_timeout_cts_held(serial_pair: SerialPair) -> None:
     """Test that write timeout fires when CTS is deasserted (flow control hold)."""

@@ -65,7 +65,7 @@ def test_set_non_posix_baudrate_handles_actual_hardware_rate() -> None:
     initial_buffer = bytes(initial)
 
     captured: list[bytes] = []
-    with create_socat_pair() as (left, _right):
+    with create_socat_pair() as (left, _right, _, _):
         with LinuxSerial(left, baudrate=115200) as serial:
             with patch(
                 "serialx.platforms.serial_linux.fcntl.ioctl",
@@ -86,7 +86,7 @@ def test_set_non_posix_baudrate_zero_speed_raises() -> None:
     zeros = bytes(ctypes.sizeof(Termios2Struct))
     captured: list[bytes] = []
 
-    with create_socat_pair() as (left, _right):
+    with create_socat_pair() as (left, _right, _, _):
         with LinuxSerial(left, baudrate=115200) as serial:
             with patch(
                 "serialx.platforms.serial_linux.fcntl.ioctl",
@@ -115,7 +115,7 @@ def test_tiocgserial_ioctl_not_supported() -> None:
     with patch(
         "serialx.platforms.serial_linux.fcntl.ioctl", side_effect=ioctl
     ) as mock_ioctl:
-        with create_socat_pair() as (left, _right):
+        with create_socat_pair() as (left, _right, _, _):
             with LinuxSerial(left, baudrate=115200):
                 # The serial port still opens
                 pass
@@ -138,7 +138,7 @@ def test_tiocgserial_ioctl_unexpected() -> None:
     with patch(
         "serialx.platforms.serial_linux.fcntl.ioctl", side_effect=ioctl
     ) as mock_ioctl:
-        with create_socat_pair() as (left, _right):
+        with create_socat_pair() as (left, _right, _, _):
             with pytest.raises(OSError, match="Invalid argument"):
                 with LinuxSerial(left, baudrate=115200):
                     # The serial port will fail to open

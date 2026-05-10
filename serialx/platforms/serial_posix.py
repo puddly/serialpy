@@ -405,6 +405,14 @@ class PosixSerial(BaseSerial):
             n = os.readinto(self._fileno, b)
             LOGGER.debug("Read %d bytes", n)
 
+            if n == 0:
+                self._mark_broken(
+                    OSError(
+                        errno.EIO, "device disconnected or in use by another process"
+                    )
+                )
+                self._check_broken()
+
             return n
 
     else:
@@ -427,6 +435,14 @@ class PosixSerial(BaseSerial):
             n = len(chunk)
             m[:n] = chunk
             LOGGER.debug("Read %d bytes: %r", n, chunk)
+
+            if n == 0:
+                self._mark_broken(
+                    OSError(
+                        errno.EIO, "device disconnected or in use by another process"
+                    )
+                )
+                self._check_broken()
 
             return n
 

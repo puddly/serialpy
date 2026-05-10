@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 import contextlib
 import dataclasses
 import os
@@ -254,13 +254,17 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     stack = contextlib.ExitStack()
     left = spec.left
     right = spec.right
+    unplug_left: Callable[[], None] | None = None
+    unplug_right: Callable[[], None] | None = None
 
     for backend in spec.backends[::-1]:
         match backend:
             # Synthetic backends don't have an underlying serial port
             case SerialBackend.SOCAT:
                 assert left is None and right is None
-                left, right = stack.enter_context(create_socat_pair())
+                left, right, unplug_left, unplug_right = stack.enter_context(
+                    create_socat_pair()
+                )
 
             case SerialBackend.SOCKET:
                 assert left is None and right is None
@@ -325,6 +329,8 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             backends=spec.backends,
             quirks=spec.quirks,
             uri_scheme=effective_scheme,
+            unplug_left=unplug_left,
+            unplug_right=unplug_right,
         )
     finally:
         stack.close()
