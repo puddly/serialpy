@@ -426,6 +426,10 @@ def create_socat_pair() -> Iterator[
                     proc.terminate()
                     proc.wait()
 
+                # The unplug callables hold references to the Popen objects
+                if proc.stderr is not None:
+                    proc.stderr.close()
+
 
 @contextlib.contextmanager
 def create_pyodide_pair() -> Iterator[tuple[str, str]]:
