@@ -149,6 +149,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_WRITE_LIMITS,
             SerialQuirk.NO_EXCLUSIVITY,
+            SerialQuirk.NO_UNPLUG,
         }
     ),
 }
