@@ -18,6 +18,7 @@ import time
 from typing import IO, Any
 
 import psutil
+import pytest
 from typing_extensions import Self
 
 import serialx
@@ -203,6 +204,31 @@ class SerialPair(UnresolvedSerialPair):
 
     unplug_left: Callable[[], None] | None = None
     unplug_right: Callable[[], None] | None = None
+
+
+def _snapshot_fds() -> set[int]:
+    """Return the set of open fd numbers for this process."""
+    if sys.platform == "linux":
+        with contextlib.suppress(FileNotFoundError):
+            return {int(e) for e in os.listdir(f"/proc/{os.getpid()}/fd")}
+
+    proc = psutil.Process()
+    fds: set[int] = {f.fd for f in proc.open_files() if f.fd >= 0}
+    fds |= {c.fd for c in proc.net_connections(kind="all") if c.fd >= 0}
+    return fds
+
+
+@contextlib.contextmanager
+def check_fd_leaks() -> Iterator[None]:
+    """Fail if any file descriptor is opened in this block without being closed."""
+    before = _snapshot_fds()
+
+    try:
+        yield
+    finally:
+        leaked = _snapshot_fds() - before
+        if leaked:
+            pytest.fail(f"Leaked file descriptors: {sorted(leaked)}")
 
 
 def _get_listening_ports(pid: int) -> list[int]:

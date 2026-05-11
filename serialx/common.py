@@ -405,9 +405,8 @@ class BaseSerial(io.RawIOBase):
     def open(self) -> None:
         """Open the serial port."""
         self._broken = None
-        self._open()
-
         try:
+            self._open()
             self._configure_port()
         except BaseException:
             self.close()

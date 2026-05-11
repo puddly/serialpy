@@ -1332,10 +1332,17 @@ async def test_async_unplug_raises_on_streamreader_readline(
 
     reader, writer = await open_serial_connection(serial_pair.left, baudrate=115200)
     try:
-        serial_pair.unplug_left()
+        async with serialx.async_serial_for_url(
+            serial_pair.right, baudrate=115200
+        ) as right:
+            right.write(b"ping\n")
+            await right.drain()
+            assert await reader.readline() == b"ping\n"
 
-        with pytest.raises(OSError):
-            await reader.readline()
+            serial_pair.unplug_left()
+
+            with pytest.raises(OSError):
+                await reader.readline()
     finally:
         writer.close()
         with contextlib.suppress(OSError):

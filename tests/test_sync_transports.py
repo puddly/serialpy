@@ -15,7 +15,13 @@ if sys.platform == "emscripten":
     )
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
-from tests.common import SerialBackend, SerialPair, SerialQuirk, measure_time
+from tests.common import (
+    SerialBackend,
+    SerialPair,
+    SerialQuirk,
+    check_fd_leaks,
+    measure_time,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -436,6 +442,17 @@ def test_sync_exclusive(serial_pair: SerialPair) -> None:
         with pytest.raises(OSError):
             with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True):
                 pass
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
+def test_sync_exclusive_open_failure_does_not_leak(serial_pair: SerialPair) -> None:
+    """A failed exclusive open must not leak the fd it acquired before locking."""
+    with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True):
+        # We check explicitly to ensure the gc doesn't hide a leak
+        with check_fd_leaks():
+            blocked = Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True)
+            with pytest.raises(OSError):
+                blocked.open()
 
 
 def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
