@@ -709,8 +709,8 @@ class Win32SerialTransport(BaseSerialTransport):
         if self._internal_transport is not None:
             self._internal_transport.set_protocol(protocol)
 
-    async def flush(self) -> None:
-        """Flush write buffers, waiting until all data is written."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         assert self._serial is not None
         assert self._internal_transport is not None
         try:
@@ -721,6 +721,16 @@ class Win32SerialTransport(BaseSerialTransport):
             await self._loop.run_in_executor(None, self._serial.flush)
         finally:
             self._internal_transport._reset_empty_waiter()  # type:ignore[attr-defined]
+
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        assert self._serial is not None
+        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
+        assert self._serial is not None
+        await self._loop.run_in_executor(None, self._serial.set_modem_pins, modem_pins)
 
 
 def win32_list_serial_ports() -> list[SerialPortInfo]:

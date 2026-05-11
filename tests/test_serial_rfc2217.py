@@ -26,7 +26,7 @@ from serialx.platforms.serial_rfc2217.types import (
 )
 
 from .common import HUB4COM_BINARY, SerialBackend, SerialPair, create_hub4com_pair
-from .socket_relay import create_silent_server
+from .socket_relay import create_accept_then_close_server, create_silent_server
 
 
 def test_unknown_telnet_option() -> None:
@@ -102,6 +102,16 @@ async def test_async_negotiate_timeout_silent_server() -> None:
                 )
 
         assert 0.1 <= elapsed() < 1.0
+
+
+def test_sync_peer_close_during_negotiation_raises() -> None:
+    """Peer-side TCP close surfaces as OSError, not a silent 0-byte read."""
+    with create_accept_then_close_server() as addr:
+        with pytest.raises(OSError, match="RFC 2217 connection closed by server"):
+            with Serial.from_url(
+                f"rfc2217://{addr}", baudrate=115200, connect_timeout=2.0
+            ):
+                pass
 
 
 @pytest.mark.skipif(not HUB4COM_BINARY, reason="hub4com not available")

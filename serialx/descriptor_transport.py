@@ -136,11 +136,14 @@ class DescriptorTransport(BaseSerialTransport):
             if data:
                 self._protocol.data_received(data)
             else:
-                LOGGER.info("%r was closed by peer", self)
-                self._closing = True
-                self._loop.remove_reader(self._fileno)
-                self._loop.call_soon(self._protocol.eof_received)
-                self._maybe_background_close(None)
+                # Linux's hung_up_tty_read returns 0 (drivers/tty/tty_io.c); surface
+                # this as -EIO to match what write/ioctl already get from the kernel,
+                # so consumers don't busy-loop on b''.
+                disconnect = OSError(
+                    errno.EIO, "device disconnected or in use by another process"
+                )
+                self._mark_broken(disconnect)
+                self._close(disconnect)
 
     def pause_reading(self) -> None:
         """Pause reading from the file descriptor."""

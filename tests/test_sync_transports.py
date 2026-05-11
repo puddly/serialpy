@@ -15,7 +15,13 @@ if sys.platform == "emscripten":
     )
 
 from serialx import ModemPins, Parity, PinState, Serial, StopBits, serial_for_url
-from tests.common import SerialBackend, SerialPair, SerialQuirk, measure_time
+from tests.common import (
+    SerialBackend,
+    SerialPair,
+    SerialQuirk,
+    check_fd_leaks,
+    measure_time,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -436,6 +442,17 @@ def test_sync_exclusive(serial_pair: SerialPair) -> None:
         with pytest.raises(OSError):
             with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True):
                 pass
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_EXCLUSIVITY)
+def test_sync_exclusive_open_failure_does_not_leak(serial_pair: SerialPair) -> None:
+    """A failed exclusive open must not leak the fd it acquired before locking."""
+    with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True):
+        # We check explicitly to ensure the gc doesn't hide a leak
+        with check_fd_leaks():
+            blocked = Serial.from_url(serial_pair.left, baudrate=115200, exclusive=True)
+            with pytest.raises(OSError):
+                blocked.open()
 
 
 def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
@@ -1072,6 +1089,34 @@ def test_deassert_on_open_with_rtscts(
         ):
             time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is expected_state
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
+def test_sync_unplug_raises(serial_pair: SerialPair) -> None:
+    """Each operation on an unplugged port raises rather than silently EOFing."""
+    assert serial_pair.unplug_left is not None
+
+    with (
+        Serial.from_url(serial_pair.left, baudrate=115200, timeout=2.0) as left,
+        Serial.from_url(serial_pair.right, baudrate=115200) as right,
+    ):
+        right.write(b"ping\n")
+        right.flush()
+        assert left.readline() == b"ping\n"
+
+        serial_pair.unplug_left()
+
+        with pytest.raises(OSError):
+            left.read(1)
+
+        with pytest.raises(OSError):
+            left.write(b"x")
+
+        with pytest.raises(OSError):
+            left.get_modem_pins()
+
+        with pytest.raises(OSError):
+            left.set_modem_pins(rts=True)
 
 
 @pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_WRITE_TIMEOUT)

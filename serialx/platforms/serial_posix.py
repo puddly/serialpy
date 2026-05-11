@@ -405,6 +405,14 @@ class PosixSerial(BaseSerial):
             n = os.readinto(self._fileno, b)
             LOGGER.debug("Read %d bytes", n)
 
+            if n == 0:
+                self._mark_broken(
+                    OSError(
+                        errno.EIO, "device disconnected or in use by another process"
+                    )
+                )
+                self._check_broken()
+
             return n
 
     else:
@@ -427,6 +435,14 @@ class PosixSerial(BaseSerial):
             n = len(chunk)
             m[:n] = chunk
             LOGGER.debug("Read %d bytes: %r", n, chunk)
+
+            if n == 0:
+                self._mark_broken(
+                    OSError(
+                        errno.EIO, "device disconnected or in use by another process"
+                    )
+                )
+                self._check_broken()
 
             return n
 
@@ -509,8 +525,8 @@ class PosixSerialTransport(DescriptorTransport):
 
         self._protocol.connection_made(self)
 
-    async def flush(self) -> None:
-        """Flush write buffers, waiting until all data is written."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         assert self._serial is not None
 
         try:
@@ -522,6 +538,16 @@ class PosixSerialTransport(DescriptorTransport):
                 await self._loop.run_in_executor(None, self._serial.flush)
         finally:
             self._reset_empty_waiter()
+
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        assert self._serial is not None
+        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
+        assert self._serial is not None
+        await self._loop.run_in_executor(None, self._serial._set_modem_pins, modem_pins)
 
 
 register_uri_handler(

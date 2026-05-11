@@ -18,6 +18,7 @@ import time
 from typing import IO, Any
 
 import psutil
+import pytest
 from typing_extensions import Self
 
 import serialx
@@ -95,7 +96,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_NUM_UNREAD_BYTES,
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
             SerialQuirk.NO_EXCLUSIVITY,
-            SerialQuirk.NO_UNPLUG,
         }
     ),
     SerialBackend.ESPHOME: frozenset(
@@ -148,6 +148,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_BUFFER_CONTROL,
             SerialQuirk.NO_WRITE_LIMITS,
             SerialQuirk.NO_EXCLUSIVITY,
+            SerialQuirk.NO_UNPLUG,
         }
     ),
 }
@@ -200,6 +201,36 @@ class SerialPair(UnresolvedSerialPair):
     original_right: str
 
     uri_scheme: str
+
+    unplug_left: Callable[[], None] | None = None
+    unplug_right: Callable[[], None] | None = None
+
+
+def _snapshot_fds() -> set[int]:
+    """Return the set of open fd numbers for this process."""
+    if sys.platform == "linux":
+        return {int(e) for e in os.listdir(f"/proc/{os.getpid()}/fd")}
+
+    if sys.platform == "emscripten":
+        return set()
+
+    proc = psutil.Process()
+    fds: set[int] = {f.fd for f in proc.open_files() if f.fd >= 0}
+    fds |= {c.fd for c in proc.net_connections(kind="all") if c.fd >= 0}
+    return fds
+
+
+@contextlib.contextmanager
+def check_fd_leaks() -> Iterator[None]:
+    """Fail if any file descriptor is opened in this block without being closed."""
+    before = _snapshot_fds()
+
+    try:
+        yield
+    finally:
+        leaked = _snapshot_fds() - before
+        if leaked:
+            pytest.fail(f"Leaked file descriptors: {sorted(leaked)}")
 
 
 def _get_listening_ports(pid: int) -> list[int]:
@@ -352,7 +383,9 @@ def create_esphome_pair(
 
 
 @contextlib.contextmanager
-def create_socat_pair() -> Iterator[tuple[str, str]]:
+def create_socat_pair() -> Iterator[
+    tuple[str, str, Callable[[], None], Callable[[], None]]
+]:
     """Create a bridged pair of virtual PTYs using two socat processes.
 
     Each PTY is managed by its own socat process, linked via a UNIX socket.
@@ -402,13 +435,26 @@ def create_socat_pair() -> Iterator[tuple[str, str]]:
             name="socat(left)",
         )
 
+        def _kill(proc: subprocess.Popen[Any]) -> None:
+            proc.kill()
+            proc.wait()
+
         try:
-            yield (left_tty, right_tty)
+            yield (
+                left_tty,
+                right_tty,
+                lambda: _kill(left_proc),
+                lambda: _kill(right_proc),
+            )
         finally:
             for proc in (left_proc, right_proc):
                 if proc.returncode is None:
                     proc.terminate()
                     proc.wait()
+
+                # The unplug callables hold references to the Popen objects
+                if proc.stderr is not None:
+                    proc.stderr.close()
 
 
 @contextlib.contextmanager
@@ -464,7 +510,7 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 @contextlib.contextmanager
 def create_ser2net_pair(
     left_adapter: str, right_adapter: str
-) -> Iterator[tuple[str, str]]:
+) -> Iterator[tuple[str, str, Callable[[], None], Callable[[], None]]]:
     """Create a pair of independent RFC2217 sockets using ser2net."""
 
     # fmt: off
@@ -494,6 +540,10 @@ def create_ser2net_pair(
     )
     # fmt: on
 
+    def _kill() -> None:
+        proc.kill()
+        proc.wait()
+
     try:
         _wait_for_ready(
             proc,
@@ -504,14 +554,21 @@ def create_ser2net_pair(
 
         left, right = _get_listening_ports(proc.pid)
 
+        # ser2net serves both adapters from one process
         yield (
             f"rfc2217://127.0.0.1:{left}",
             f"rfc2217://127.0.0.1:{right}",
+            _kill,
+            _kill,
         )
     finally:
         if proc.returncode is None:
             proc.terminate()
             proc.wait()
+        if proc.stdout is not None:
+            proc.stdout.close()
+        if proc.stderr is not None:
+            proc.stderr.close()
 
 
 @contextlib.contextmanager

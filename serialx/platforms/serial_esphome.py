@@ -691,15 +691,20 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         finally:
             self._call_protocol_connection_lost(None)
 
-    async def flush(self) -> None:
-        """Flush write buffers."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         assert self._serial is not None
         await self._serial._async_flush()
 
-    async def get_modem_pins(self) -> ModemPins:
-        """Get modem control bits."""
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
         assert self._serial is not None
         return await self._serial._async_get_modem_pins()
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
+        assert self._serial is not None
+        await self._serial._async_set_modem_pins(modem_pins)
 
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""

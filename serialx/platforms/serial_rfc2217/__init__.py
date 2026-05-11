@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Generator
 from contextlib import suppress
 from enum import IntEnum
+import errno
 import logging
 import sys
 
@@ -537,7 +538,10 @@ class RFC2217Serial(SocketSerial):
         n = self._socket.recv_into(buf)
 
         if n == 0:
-            raise SerialException("RFC 2217 connection closed by server")
+            self._mark_broken(
+                OSError(errno.EIO, "RFC 2217 connection closed by server")
+            )
+            self._check_broken()
 
         raw = bytes(buf[:n])
         LOGGER.debug("RX raw: %d bytes  [%s]", n, raw.hex(" "))
@@ -633,7 +637,10 @@ class RFC2217Serial(SocketSerial):
                 timeout -= get_elapsed()
 
             if n == 0:
-                return 0
+                self._mark_broken(
+                    OSError(errno.EIO, "RFC 2217 connection closed by server")
+                )
+                self._check_broken()
 
             raw = bytes(buf[:n])
             LOGGER.debug("RX raw (readinto): %d bytes  [%s]", n, raw.hex(" "))
@@ -902,12 +909,13 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial port, escaping IAC bytes."""
-        assert self._tcp_transport is not None
+        if self._tcp_transport is None:
+            return
         escaped = iac_escape(bytes(data))
         LOGGER.debug("TX data: %d bytes (%d on wire)", len(data), len(escaped))
         self._tcp_transport.write(escaped)
 
-    async def get_modem_pins(self) -> ModemPins:
+    async def _get_modem_pins(self) -> ModemPins:
         """Return modem pin state from the last NOTIFY-MODEMSTATE."""
         assert self._serial is not None
         return self._serial._engine.get_modem_pins()
@@ -964,17 +972,19 @@ class RFC2217SerialTransport(BaseSerialTransport):
         self._closing = True
         self._tcp_transport = None
 
-        # Fail any pending waiters
-        waiter_exc = exc or SerialException("RFC 2217 connection closed by server")
+        if exc is None:
+            exc = OSError(errno.EIO, "RFC 2217 connection closed by server")
+        self._mark_broken(exc)
 
+        # Fail any pending waiters
         for _expected, telnet_waiter in self._telnet_waiters:
             if not telnet_waiter.done():
-                telnet_waiter.set_exception(waiter_exc)
+                telnet_waiter.set_exception(exc)
         self._telnet_waiters.clear()
 
         for rfc2217_waiter in self._rfc2217_waiters.values():
             if not rfc2217_waiter.done():
-                rfc2217_waiter.set_exception(waiter_exc)
+                rfc2217_waiter.set_exception(exc)
         self._rfc2217_waiters.clear()
 
         if self._serial is not None:
@@ -1014,8 +1024,8 @@ class RFC2217SerialTransport(BaseSerialTransport):
         else:
             self._tcp_connection_lost(None)
 
-    async def flush(self) -> None:
-        """Wait for the server to acknowledge all preceding writes."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         assert self._serial is not None
         if not self._serial._engine.negotiated:
             return

@@ -23,6 +23,7 @@ from serialx import (
     StopBits,
     create_serial_connection,
     get_serial_classes,
+    open_serial_connection,
 )
 from tests.common import (
     SerialBackend,
@@ -1292,3 +1293,57 @@ async def test_async_wait_closed_multiple_waiters_abort(
     await asyncio.wait_for(connection_lost_event.wait(), timeout=5.0)
     await asyncio.wait_for(asyncio.gather(wait_closed_1, wait_closed_2), timeout=5.0)
     assert transport.is_closing()
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
+async def test_async_unplug_raises(serial_pair: SerialPair) -> None:
+    """Each operation on an unplugged port raises rather than silently EOFing."""
+    assert serial_pair.unplug_left is not None
+
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        right.write(b"ping\n")
+        await right.drain()
+        assert await left.readline() == b"ping\n"
+
+        serial_pair.unplug_left()
+
+        with pytest.raises(OSError):
+            await left.read(1)
+
+        with pytest.raises(OSError):
+            left.write(b"x")
+            await left.drain()
+
+        with pytest.raises(OSError):
+            await left.get_modem_pins()
+
+        with pytest.raises(OSError):
+            await left.set_modem_pins(rts=True)
+
+
+@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
+async def test_async_unplug_raises_on_streamreader_readline(
+    serial_pair: SerialPair,
+) -> None:
+    """`reader.readline()` after unplug must raise, not silently return b''."""
+    assert serial_pair.unplug_left is not None
+
+    reader, writer = await open_serial_connection(serial_pair.left, baudrate=115200)
+    try:
+        async with serialx.async_serial_for_url(
+            serial_pair.right, baudrate=115200
+        ) as right:
+            right.write(b"ping\n")
+            await right.drain()
+            assert await reader.readline() == b"ping\n"
+
+            serial_pair.unplug_left()
+
+            with pytest.raises(OSError):
+                await reader.readline()
+    finally:
+        writer.close()
+        with contextlib.suppress(OSError):
+            await writer.wait_closed()

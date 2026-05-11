@@ -282,8 +282,8 @@ class PyodideSerialTransport(BaseSerialTransport):
             assert self._protocol is not None
             self._protocol.data_received(bytes(result.value))
 
-    async def get_modem_pins(self) -> ModemPins:
-        """Get modem control bits."""
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
         assert self._js_port is not None
         result = await self._js_port.getSignals()
 
@@ -315,8 +315,8 @@ class PyodideSerialTransport(BaseSerialTransport):
         """Return the number of bytes currently queued for writing."""
         return self._write_buffer_size
 
-    async def flush(self) -> None:
-        """Flush write buffers, waiting until all data is written."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         await self._write_queue.join()
 
     def abort(self) -> None:

@@ -382,6 +382,17 @@ class BaseSerial(io.RawIOBase):
 
         self._wrap_exceptions = _wrap_exceptions
 
+        # Enter a "broken" state so that an error condition can persist
+        self._broken: Exception | None = None
+
+    def _mark_broken(self, exc: Exception) -> None:
+        if self._broken is None:
+            self._broken = exc
+
+    def _check_broken(self) -> None:
+        if self._broken is not None:
+            raise self._broken
+
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
         """Create the appropriate serial port subclass for the given URL."""
@@ -393,9 +404,9 @@ class BaseSerial(io.RawIOBase):
     @maybe_wrap_exceptions
     def open(self) -> None:
         """Open the serial port."""
-        self._open()
-
+        self._broken = None
         try:
+            self._open()
             self._configure_port()
         except BaseException:
             self.close()
@@ -436,8 +447,10 @@ class BaseSerial(io.RawIOBase):
         """Get the write timeout in seconds."""
         return self._write_timeout
 
+    @maybe_wrap_exceptions
     def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
+        self._check_broken()
         return self._get_modem_pins()
 
     @maybe_wrap_exceptions
@@ -456,6 +469,8 @@ class BaseSerial(io.RawIOBase):
         dsr: PinState | bool | None = PinState.UNDEFINED,
     ) -> None:
         """Set modem control bits."""
+        self._check_broken()
+
         if modem_pins is None:
             modem_pins = ModemPins(
                 le=PinState.convert(le),
@@ -484,6 +499,7 @@ class BaseSerial(io.RawIOBase):
     @maybe_wrap_exceptions
     def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
         """Read bytes from serial port into buffer."""
+        self._check_broken()
         timeout = self._read_timeout if timeout is None else timeout
         return self._readinto(b, timeout=timeout)
 
@@ -495,6 +511,7 @@ class BaseSerial(io.RawIOBase):
     @maybe_wrap_exceptions
     def write(self, data: Buffer, *, timeout: float | None = None) -> int:
         """Write bytes to serial port."""
+        self._check_broken()
         timeout = self._write_timeout if timeout is None else timeout
         return self._write(data, timeout=timeout)
 
@@ -879,6 +896,14 @@ class BaseSerialTransport(asyncio.Transport):
         self._closing: bool = False
         self._closed_waiter: asyncio.Future[None] = loop.create_future()
 
+    def _mark_broken(self, exc: Exception) -> None:
+        if self._serial is not None:
+            self._serial._mark_broken(exc)
+
+    def _check_broken(self) -> None:
+        if self._serial is not None:
+            self._serial._check_broken()
+
     def is_closing(self) -> bool:
         """Return whether the transport is closing."""
         return self._closing
@@ -981,19 +1006,18 @@ class BaseSerialTransport(asyncio.Transport):
 
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
-        assert self._serial is not None
-        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
+        self._check_broken()
+        return await self._get_modem_pins()
 
+    @abstractmethod
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits, internal."""
-        await self._loop.run_in_executor(
-            None,
-            lambda: (
-                self._serial._set_modem_pins(modem_pins)
-                if self._serial is not None
-                else None
-            ),
-        )
+        raise NotImplementedError
 
     async def set_modem_pins(
         self,
@@ -1010,6 +1034,8 @@ class BaseSerialTransport(asyncio.Transport):
         dsr: PinState | bool | None = PinState.UNDEFINED,
     ) -> None:
         """Set modem control bits."""
+        self._check_broken()
+
         if modem_pins is None:
             modem_pins = ModemPins(
                 le=PinState.convert(le),
@@ -1027,6 +1053,12 @@ class BaseSerialTransport(asyncio.Transport):
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
+        self._check_broken()
+        await self._flush()
+
+    @abstractmethod
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         raise NotImplementedError
 
     async def wait_closed(self) -> None:

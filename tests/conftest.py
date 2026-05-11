@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 import contextlib
 import dataclasses
-import os
 import sys
 import urllib.parse
 
@@ -22,6 +21,7 @@ from tests.common import (
     SerialPair,
     SerialQuirk,
     UnresolvedSerialPair,
+    check_fd_leaks,
     create_adapter_pair,
     create_esphome_pair,
     create_hub4com_pair,
@@ -254,17 +254,23 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     stack = contextlib.ExitStack()
     left = spec.left
     right = spec.right
+    unplug_left: Callable[[], None] | None = None
+    unplug_right: Callable[[], None] | None = None
 
     for backend in spec.backends[::-1]:
         match backend:
             # Synthetic backends don't have an underlying serial port
             case SerialBackend.SOCAT:
                 assert left is None and right is None
-                left, right = stack.enter_context(create_socat_pair())
+                left, right, unplug_left, unplug_right = stack.enter_context(
+                    create_socat_pair()
+                )
 
             case SerialBackend.SOCKET:
                 assert left is None and right is None
-                left, right = stack.enter_context(create_socket_pair())
+                left, right, unplug_left, unplug_right = stack.enter_context(
+                    create_socket_pair()
+                )
 
             case SerialBackend.PYODIDE:
                 assert left is None and right is None
@@ -277,7 +283,9 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
 
             case SerialBackend.SER2NET:
                 assert left is not None and right is not None
-                left, right = stack.enter_context(create_ser2net_pair(left, right))
+                left, right, unplug_left, unplug_right = stack.enter_context(
+                    create_ser2net_pair(left, right)
+                )
 
             case SerialBackend.HUB4COM:
                 assert left is not None and right is not None
@@ -325,40 +333,15 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             backends=spec.backends,
             quirks=spec.quirks,
             uri_scheme=effective_scheme,
+            unplug_left=unplug_left,
+            unplug_right=unplug_right,
         )
     finally:
         stack.close()
 
 
-def _snapshot_fds() -> dict[int, str]:
-    """Return a mapping of open fd -> target path for this process."""
-    pid = os.getpid()
-    result = {}
-
-    try:
-        for entry in os.listdir(f"/proc/{pid}/fd"):
-            with contextlib.suppress(OSError):
-                result[int(entry)] = os.readlink(f"/proc/{pid}/fd/{entry}")
-    except FileNotFoundError:
-        pass
-
-    return result
-
-
 @pytest.fixture(autouse=True)
-async def check_fd_leaks(request: pytest.FixtureRequest) -> AsyncGenerator[None]:
-    """Detect leaked file descriptors between tests."""
-    if sys.platform != "linux":
+async def _check_fd_leaks_autouse() -> AsyncGenerator[None]:
+    """Run every test inside `check_fd_leaks` to catch unintended fd leaks."""
+    with check_fd_leaks():
         yield
-        return
-
-    before = _snapshot_fds()
-
-    try:
-        yield
-    finally:
-        after = _snapshot_fds()
-
-        leaked = {fd: path for fd, path in after.items() if fd not in before}
-        if leaked:
-            pytest.fail(f"Leaked file descriptors: {leaked}")

@@ -29,7 +29,7 @@ def test_socket_connect_timeout_property() -> None:
 
 def test_socket_effective_timeout_mismatched() -> None:
     """Test that mismatched read/write timeouts use min for socket timeout."""
-    with create_socket_pair() as (left_url, _right_url):
+    with create_socket_pair() as (left_url, _right_url, _, _):
         serial = Serial.from_url(
             left_url, baudrate=115200, read_timeout=2.0, write_timeout=1.0
         )

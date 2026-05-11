@@ -102,7 +102,7 @@ def base64(key: bytes) -> str:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_externally_passed_api() -> None:
     """Test passing an ESPHome API instance externally."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             # Connect to the ESPHome API externally
             parsed = urllib.parse.urlparse(left)
@@ -131,7 +131,7 @@ async def test_externally_passed_api() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_externally_passed_api_close_after_disconnect() -> None:
     """Test closing the transport after the API has been disconnected."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
             api = APIClient(
@@ -159,7 +159,7 @@ async def test_externally_passed_api_close_after_disconnect() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_connect_by_instance_id() -> None:
     """Test connecting to an ESPHome serial proxy by instance ID."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
 
@@ -174,7 +174,7 @@ async def test_connect_by_instance_id() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_connect_by_invalid_name() -> None:
     """Test that connecting with an invalid port name raises ValueError."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
             url = f"esphome://{parsed.hostname}:{parsed.port}?port_name=Nonexistent"
@@ -187,7 +187,7 @@ async def test_connect_by_invalid_name() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_connect_plaintext_to_encrypted_server() -> None:
     """Test that connecting without encryption to an encrypted server raises."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(
             socat_left,
             socat_right,
@@ -206,7 +206,7 @@ async def test_connect_plaintext_to_encrypted_server() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_connect_encrypted_plaintext_to_server() -> None:
     """Test that connecting with encryption to an unencrypted server raises."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(
             socat_left,
             socat_right,
@@ -244,7 +244,7 @@ async def test_noise_psk_key_alias() -> None:
     """Test that connecting without encryption to an encrypted server raises."""
     key = base64(b"A noise PSK 32 bytes in length..")
 
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(
             socat_left,
             socat_right,
@@ -317,7 +317,7 @@ async def test_esphome_list_serial_ports() -> None:
     assert list_serial_ports(Platform.ESPHOME) == []
     assert await async_list_serial_ports(Platform.ESPHOME) == []
 
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
             api = APIClient(
@@ -334,7 +334,7 @@ async def test_esphome_list_serial_ports() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_async_esphome_list_serial_ports_via_uri() -> None:
     """Test listing ESPHome serial ports asynchronously via a URI."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
 
@@ -347,7 +347,7 @@ def test_sync_esphome_list_serial_ports_via_uri() -> None:
     """Test listing ESPHome serial ports synchronously via a URI."""
     assert list_serial_ports(Platform.ESPHOME) == []
 
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
 
@@ -360,7 +360,7 @@ async def test_sync_esphome_list_serial_ports_external_api() -> None:
     """Test sync listing of ESPHome serial ports with an externally-passed API."""
     test_loop = asyncio.get_running_loop()
 
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
             api = APIClient(
@@ -383,7 +383,7 @@ async def test_sync_esphome_list_serial_ports_external_api() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_cross_loop_async_api() -> None:
     """Async API works with the `APIClient` on a separate loop."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, right):
             async with async_serial_for_url(url=right, baudrate=115200) as ser_right:
                 async with cross_loop_async_serial(left) as ser_left:
@@ -408,7 +408,7 @@ async def test_cross_loop_async_api() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_cross_loop_sync_modem_pins_on_loop_thread() -> None:
     """Sync modem-pin access from `self._loop`'s thread must not deadlock."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             async with cross_loop_async_serial(left) as serial:
                 esphome_serial = serial.transport.serial
@@ -427,7 +427,7 @@ async def test_cross_loop_sync_modem_pins_on_loop_thread() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_sync_api_with_external_api_on_different_loop() -> None:
     """Sync API works when the `APIClient` lives on a different loop."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, right):
             async with async_serial_for_url(url=right, baudrate=115200) as peer:
                 with api_client_on_thread_loop(left) as (api, api_loop):
@@ -461,7 +461,7 @@ async def test_sync_api_with_external_api_on_different_loop() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_single_api_multiple_async_ports() -> None:
     """Two async transports sharing one APIClient operate independently."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
             api = APIClient(
@@ -511,7 +511,7 @@ async def test_single_api_multiple_async_ports() -> None:
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_single_api_multiple_sync_ports() -> None:
     """Two sync ESPHomeSerials sharing one APIClient operate independently."""
-    with create_socat_pair() as (socat_left, socat_right):
+    with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             with api_client_on_thread_loop(left) as (api, _api_loop):
                 with (
