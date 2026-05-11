@@ -722,6 +722,16 @@ class Win32SerialTransport(BaseSerialTransport):
         finally:
             self._internal_transport._reset_empty_waiter()  # type:ignore[attr-defined]
 
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        assert self._serial is not None
+        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
+        assert self._serial is not None
+        await self._loop.run_in_executor(None, self._serial.set_modem_pins, modem_pins)
+
 
 def win32_list_serial_ports() -> list[SerialPortInfo]:
     """List available serial ports on Windows."""

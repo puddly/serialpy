@@ -539,6 +539,16 @@ class PosixSerialTransport(DescriptorTransport):
         finally:
             self._reset_empty_waiter()
 
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        assert self._serial is not None
+        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
+        assert self._serial is not None
+        await self._loop.run_in_executor(None, self._serial._set_modem_pins, modem_pins)
+
 
 register_uri_handler(
     scheme="device://",

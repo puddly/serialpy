@@ -282,8 +282,8 @@ class PyodideSerialTransport(BaseSerialTransport):
             assert self._protocol is not None
             self._protocol.data_received(bytes(result.value))
 
-    async def get_modem_pins(self) -> ModemPins:
-        """Get modem control bits."""
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
         assert self._js_port is not None
         result = await self._js_port.getSignals()
 

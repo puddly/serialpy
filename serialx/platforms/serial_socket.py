@@ -343,6 +343,13 @@ class SocketSerialTransport(BaseSerialTransport):
     async def flush(self) -> None:
         """Flush write buffers (no-op, TCP transport handles buffering)."""
 
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        return ModemPins()
+
+    async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Set modem control bits, internal."""
+
     def get_write_buffer_size(self) -> int:
         """Get the number of bytes currently in the write buffer."""
         if self._tcp_transport is not None:

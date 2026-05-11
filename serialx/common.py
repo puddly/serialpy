@@ -1008,20 +1008,17 @@ class BaseSerialTransport(asyncio.Transport):
     async def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
         self._check_broken()
-        assert self._serial is not None
-        return await self._loop.run_in_executor(None, self._serial.get_modem_pins)
+        return await self._get_modem_pins()
 
+    @abstractmethod
+    async def _get_modem_pins(self) -> ModemPins:
+        """Get modem control bits, internal."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits, internal."""
-        self._check_broken()
-        await self._loop.run_in_executor(
-            None,
-            lambda: (
-                self._serial._set_modem_pins(modem_pins)
-                if self._serial is not None
-                else None
-            ),
-        )
+        raise NotImplementedError
 
     async def set_modem_pins(
         self,

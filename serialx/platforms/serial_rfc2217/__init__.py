@@ -909,12 +909,13 @@ class RFC2217SerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial port, escaping IAC bytes."""
-        assert self._tcp_transport is not None
+        if self._tcp_transport is None:
+            return
         escaped = iac_escape(bytes(data))
         LOGGER.debug("TX data: %d bytes (%d on wire)", len(data), len(escaped))
         self._tcp_transport.write(escaped)
 
-    async def get_modem_pins(self) -> ModemPins:
+    async def _get_modem_pins(self) -> ModemPins:
         """Return modem pin state from the last NOTIFY-MODEMSTATE."""
         assert self._serial is not None
         return self._serial._engine.get_modem_pins()
