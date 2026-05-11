@@ -315,8 +315,8 @@ class PyodideSerialTransport(BaseSerialTransport):
         """Return the number of bytes currently queued for writing."""
         return self._write_buffer_size
 
-    async def flush(self) -> None:
-        """Flush write buffers, waiting until all data is written."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         await self._write_queue.join()
 
     def abort(self) -> None:

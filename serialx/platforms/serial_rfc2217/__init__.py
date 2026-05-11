@@ -1024,8 +1024,8 @@ class RFC2217SerialTransport(BaseSerialTransport):
         else:
             self._tcp_connection_lost(None)
 
-    async def flush(self) -> None:
-        """Wait for the server to acknowledge all preceding writes."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         assert self._serial is not None
         if not self._serial._engine.negotiated:
             return

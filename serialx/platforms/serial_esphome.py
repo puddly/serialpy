@@ -691,8 +691,8 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         finally:
             self._call_protocol_connection_lost(None)
 
-    async def flush(self) -> None:
-        """Flush write buffers."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         assert self._serial is not None
         await self._serial._async_flush()
 

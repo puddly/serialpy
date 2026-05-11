@@ -525,8 +525,8 @@ class PosixSerialTransport(DescriptorTransport):
 
         self._protocol.connection_made(self)
 
-    async def flush(self) -> None:
-        """Flush write buffers, waiting until all data is written."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         assert self._serial is not None
 
         try:

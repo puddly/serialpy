@@ -340,8 +340,8 @@ class SocketSerialTransport(BaseSerialTransport):
         else:
             self._connection_lost(None)
 
-    async def flush(self) -> None:
-        """Flush write buffers (no-op, TCP transport handles buffering)."""
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
 
     async def _get_modem_pins(self) -> ModemPins:
         """Get modem control bits, internal."""

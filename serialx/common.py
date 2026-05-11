@@ -1054,6 +1054,12 @@ class BaseSerialTransport(asyncio.Transport):
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""
+        self._check_broken()
+        await self._flush()
+
+    @abstractmethod
+    async def _flush(self) -> None:
+        """Flush write buffers, waiting until all data is written, internal."""
         raise NotImplementedError
 
     async def wait_closed(self) -> None:
