@@ -209,8 +209,10 @@ class SerialPair(UnresolvedSerialPair):
 def _snapshot_fds() -> set[int]:
     """Return the set of open fd numbers for this process."""
     if sys.platform == "linux":
-        with contextlib.suppress(FileNotFoundError):
-            return {int(e) for e in os.listdir(f"/proc/{os.getpid()}/fd")}
+        return {int(e) for e in os.listdir(f"/proc/{os.getpid()}/fd")}
+
+    if sys.platform == "emscripten":
+        return set()
 
     proc = psutil.Process()
     fds: set[int] = {f.fd for f in proc.open_files() if f.fd >= 0}
