@@ -283,7 +283,9 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
 
             case SerialBackend.SER2NET:
                 assert left is not None and right is not None
-                left, right = stack.enter_context(create_ser2net_pair(left, right))
+                left, right, unplug_left, unplug_right = stack.enter_context(
+                    create_ser2net_pair(left, right)
+                )
 
             case SerialBackend.HUB4COM:
                 assert left is not None and right is not None

@@ -125,7 +125,6 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_PAUSE_WRITING_CALLBACKS,
             SerialQuirk.NO_EXCLUSIVITY,
-            SerialQuirk.NO_UNPLUG,
         }
     ),
     SerialBackend.SER2NET: frozenset({}),
@@ -483,7 +482,7 @@ async def async_create_socat_pair() -> AsyncIterator[tuple[str, str]]:
 @contextlib.contextmanager
 def create_ser2net_pair(
     left_adapter: str, right_adapter: str
-) -> Iterator[tuple[str, str]]:
+) -> Iterator[tuple[str, str, Callable[[], None], Callable[[], None]]]:
     """Create a pair of independent RFC2217 sockets using ser2net."""
 
     # fmt: off
@@ -513,6 +512,10 @@ def create_ser2net_pair(
     )
     # fmt: on
 
+    def _kill() -> None:
+        proc.kill()
+        proc.wait()
+
     try:
         _wait_for_ready(
             proc,
@@ -523,14 +526,21 @@ def create_ser2net_pair(
 
         left, right = _get_listening_ports(proc.pid)
 
+        # ser2net serves both adapters from one process
         yield (
             f"rfc2217://127.0.0.1:{left}",
             f"rfc2217://127.0.0.1:{right}",
+            _kill,
+            _kill,
         )
     finally:
         if proc.returncode is None:
             proc.terminate()
             proc.wait()
+        if proc.stdout is not None:
+            proc.stdout.close()
+        if proc.stderr is not None:
+            proc.stderr.close()
 
 
 @contextlib.contextmanager

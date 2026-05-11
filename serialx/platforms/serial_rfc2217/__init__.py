@@ -637,7 +637,10 @@ class RFC2217Serial(SocketSerial):
                 timeout -= get_elapsed()
 
             if n == 0:
-                return 0
+                self._mark_broken(
+                    OSError(errno.EIO, "RFC 2217 connection closed by server")
+                )
+                self._check_broken()
 
             raw = bytes(buf[:n])
             LOGGER.debug("RX raw (readinto): %d bytes  [%s]", n, raw.hex(" "))
