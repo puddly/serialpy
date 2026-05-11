@@ -268,7 +268,9 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
 
             case SerialBackend.SOCKET:
                 assert left is None and right is None
-                left, right = stack.enter_context(create_socket_pair())
+                left, right, unplug_left, unplug_right = stack.enter_context(
+                    create_socket_pair()
+                )
 
             case SerialBackend.PYODIDE:
                 assert left is None and right is None

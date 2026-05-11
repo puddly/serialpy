@@ -383,9 +383,9 @@ class BaseSerial(io.RawIOBase):
         self._wrap_exceptions = _wrap_exceptions
 
         # Enter a "broken" state so that an error condition can persist
-        self._broken: OSError | None = None
+        self._broken: Exception | None = None
 
-    def _mark_broken(self, exc: OSError) -> None:
+    def _mark_broken(self, exc: Exception) -> None:
         if self._broken is None:
             self._broken = exc
 
@@ -897,7 +897,7 @@ class BaseSerialTransport(asyncio.Transport):
         self._closing: bool = False
         self._closed_waiter: asyncio.Future[None] = loop.create_future()
 
-    def _mark_broken(self, exc: OSError) -> None:
+    def _mark_broken(self, exc: Exception) -> None:
         if self._serial is not None:
             self._serial._mark_broken(exc)
 

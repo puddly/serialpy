@@ -968,19 +968,19 @@ class RFC2217SerialTransport(BaseSerialTransport):
         self._closing = True
         self._tcp_transport = None
 
-        self._mark_broken(OSError(errno.EIO, "RFC 2217 connection closed by server"))
+        if exc is None:
+            exc = OSError(errno.EIO, "RFC 2217 connection closed by server")
+        self._mark_broken(exc)
 
         # Fail any pending waiters
-        waiter_exc = exc or SerialException("RFC 2217 connection closed by server")
-
         for _expected, telnet_waiter in self._telnet_waiters:
             if not telnet_waiter.done():
-                telnet_waiter.set_exception(waiter_exc)
+                telnet_waiter.set_exception(exc)
         self._telnet_waiters.clear()
 
         for rfc2217_waiter in self._rfc2217_waiters.values():
             if not rfc2217_waiter.done():
-                rfc2217_waiter.set_exception(waiter_exc)
+                rfc2217_waiter.set_exception(exc)
         self._rfc2217_waiters.clear()
 
         if self._serial is not None:

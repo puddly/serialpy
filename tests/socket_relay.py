@@ -2,7 +2,7 @@
 
 # Async imports
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
 import logging
 import queue
@@ -188,6 +188,13 @@ class _SocketPairRelay:
         for relay_thread in self.relay_threads:
             relay_thread.start()
 
+    def disconnect_side(self, side: str) -> None:
+        with self.active_lock:
+            conn = self.active_connections[side]
+            self.active_connections[side] = None
+        if conn is not None:
+            self._close_socket(conn)
+
     def close(self) -> None:
         self.stop_event.set()
         self._close_socket(self.left_server)
@@ -237,12 +244,55 @@ def create_silent_server() -> Iterator[str]:
 
 
 @contextlib.contextmanager
-def create_socket_pair() -> Iterator[tuple[str, str]]:
+def create_accept_then_close_server() -> Iterator[str]:
+    """Create a TCP server that accepts and immediately closes each connection."""
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    server.settimeout(0.1)
+
+    stop = threading.Event()
+
+    def accept_loop() -> None:
+        while not stop.is_set():
+            try:
+                client, _ = server.accept()
+            except (TimeoutError, OSError):
+                continue
+            # Drain so close() produces FIN; with unread data macOS sends RST,
+            # which surfaces as ECONNRESET rather than the 0-byte recv we want.
+            client.settimeout(0.1)
+            with contextlib.suppress(OSError):
+                while client.recv(4096):
+                    pass
+            client.close()
+
+    thread = threading.Thread(target=accept_loop, daemon=True)
+    thread.start()
+
+    try:
+        yield f"127.0.0.1:{server.getsockname()[1]}"
+    finally:
+        stop.set()
+        server.close()
+        thread.join(timeout=1)
+
+
+@contextlib.contextmanager
+def create_socket_pair() -> Iterator[
+    tuple[str, str, Callable[[], None], Callable[[], None]]
+]:
     """Create two socket:// endpoints backed by a bidirectional relay."""
     relay = _SocketPairRelay()
     relay.start()
     try:
-        yield (relay.left_url, relay.right_url)
+        yield (
+            relay.left_url,
+            relay.right_url,
+            lambda: relay.disconnect_side("left"),
+            lambda: relay.disconnect_side("right"),
+        )
     finally:
         relay.close()
 

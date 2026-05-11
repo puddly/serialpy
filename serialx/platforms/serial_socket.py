@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Generator
 from contextlib import contextmanager
+import errno
 import logging
 import socket
 import sys
@@ -169,9 +170,15 @@ class SocketSerial(BaseSerial):
         m = memoryview(b).cast("B")
         try:
             with self._socket_timeout(timeout):
-                return self._socket.recv_into(m)
+                n = self._socket.recv_into(m)
         except TimeoutError:
             return 0
+
+        if n == 0:
+            self._mark_broken(OSError(errno.EIO, "socket closed by peer"))
+            self._check_broken()
+
+        return n
 
     def _close(self) -> None:
         """Close the socket."""
@@ -278,6 +285,9 @@ class SocketSerialTransport(BaseSerialTransport):
         self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
+        if exc is None:
+            exc = OSError(errno.EIO, "socket closed by peer")
+        self._mark_broken(exc)
         self._call_protocol_connection_lost(exc)
 
     def _tcp_connection_lost(self) -> None:
@@ -290,7 +300,8 @@ class SocketSerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the socket."""
-        assert self._tcp_transport is not None
+        if self._tcp_transport is None:
+            return
         self._tcp_transport.write(data)
 
     def pause_reading(self) -> None:
