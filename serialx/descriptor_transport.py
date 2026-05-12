@@ -252,6 +252,8 @@ class DescriptorTransport(BaseSerialTransport):
         assert isinstance(data, (bytes, bytearray, memoryview)), repr(data)
         LOGGER.debug("Immediately writing %r", data)
 
+        self._check_broken()
+
         if isinstance(data, bytearray):
             data = memoryview(data)
         if not data:

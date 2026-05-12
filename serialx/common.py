@@ -522,6 +522,7 @@ class BaseSerial(io.RawIOBase):
 
     def flush(self) -> None:
         """Flush write buffers."""
+        self._check_broken()
         self._flush()
 
     @abstractmethod

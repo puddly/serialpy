@@ -300,8 +300,8 @@ class SocketSerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the socket."""
-        if self._tcp_transport is None:
-            return
+        self._check_broken()
+        assert self._tcp_transport is not None
         self._tcp_transport.write(data)
 
     def pause_reading(self) -> None:
