@@ -1113,6 +1113,9 @@ def test_sync_unplug_raises(serial_pair: SerialPair) -> None:
             left.write(b"x")
 
         with pytest.raises(OSError):
+            left.flush()
+
+        with pytest.raises(OSError):
             left.get_modem_pins()
 
         with pytest.raises(OSError):

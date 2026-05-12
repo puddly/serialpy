@@ -1314,6 +1314,8 @@ async def test_async_unplug_raises(serial_pair: SerialPair) -> None:
 
         with pytest.raises(OSError):
             left.write(b"x")
+
+        with pytest.raises(OSError):
             await left.drain()
 
         with pytest.raises(OSError):
