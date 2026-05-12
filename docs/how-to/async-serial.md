@@ -11,7 +11,7 @@ import serialx
 async with serialx.async_serial_for_url(
     "/dev/serial/by-id/port", baudrate=115200,
 ) as serial:
-    serial.write(b"ping")
+    await serial.write(b"ping")
     data = await serial.readexactly(4)
 ```
 
@@ -27,8 +27,7 @@ async with serialx.async_serial_for_url(
     async with asyncio.TaskGroup() as tg:
         async def ping() -> None:
             while True:
-                serial.write(b"ping")
-                await serial.flush()
+                await serial.write(b"ping")
                 await asyncio.sleep(1)
 
         tg.create_task(ping())
@@ -55,8 +54,8 @@ finally:
 ```
 
 ### Reading and writing
-Reads are coroutines, writes are synchronous (data is buffered and drained on
-demand):
+Reads and writes are coroutines. `write()` queues the data and waits until it
+has been handed to the OS, so write errors surface at the call site:
 
 ```python
 data = await serial.read(64)              # up to 64 bytes
@@ -64,9 +63,16 @@ chunk = await serial.readexactly(32)      # exactly 32 bytes
 line = await serial.readline()            # through the next \n
 header = await serial.readuntil(b"\r\n")  # through a custom delimiter
 
-serial.write(b"hello ")
-serial.write(b"world\n")
-await serial.flush()                      # wait until the data has been written
+await serial.write(b"hello ")
+await serial.write(b"world\n")
+```
+
+To batch several writes before yielding, use the `_nowait` variants and `drain()`:
+
+```python
+serial.write_nowait(b"hello ")
+serial.write_nowait(b"world\n")
+await serial.drain()
 ```
 
 ### Modem pins

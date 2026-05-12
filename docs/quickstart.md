@@ -23,7 +23,7 @@ import serialx
 async with serialx.async_serial_for_url(
     "/dev/serial/by-id/port", baudrate=115200,
 ) as serial:
-    serial.write(b"ping")
+    await serial.write(b"ping")
     data = await serial.readexactly(4)
 ```
 

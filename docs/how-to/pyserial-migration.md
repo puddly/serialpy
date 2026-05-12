@@ -154,6 +154,6 @@ If you have existing sync code using `serial_for_url` and want to make it async,
 -    serial.write(b"ping")
 -    data = serial.readexactly(4)
 +async with serialx.async_serial_for_url("/dev/ttyUSB0", baudrate=115200) as serial:
-+    serial.write(b"ping")
++    await serial.write(b"ping")
 +    data = await serial.readexactly(4)
 ```

@@ -79,7 +79,7 @@ async def test_abort(serial_pair: SerialPair) -> None:
     """abort() drops pending writes and triggers close immediately."""
     serial = async_serial_for_url(serial_pair.left, baudrate=115200)
     await serial.open()
-    serial.write(b"this may be dropped")
+    serial.write_nowait(b"this may be dropped")
     serial.abort()
     await serial.wait_closed()
     assert serial.is_open is False
@@ -92,4 +92,7 @@ async def test_read_when_unopened_raises() -> None:
         await serial.read(1)
 
     with pytest.raises(SerialException, match="not open"):
-        serial.write(b"x")
+        await serial.write(b"x")
+
+    with pytest.raises(SerialException, match="not open"):
+        serial.write_nowait(b"x")
