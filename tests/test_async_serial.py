@@ -3,7 +3,7 @@
 import pytest
 
 from serialx import SerialException, async_serial_for_url
-from tests.common import SerialPair
+from tests.common import SerialPair, async_create_serial_pair
 
 
 async def test_unopened_state() -> None:
@@ -96,3 +96,29 @@ async def test_read_when_unopened_raises() -> None:
 
     with pytest.raises(SerialException, match="not open"):
         serial.write_nowait(b"x")
+
+    with pytest.raises(SerialException, match="not open"):
+        await serial.writelines([b"x"])
+
+    with pytest.raises(SerialException, match="not open"):
+        serial.writelines_nowait([b"x"])
+
+
+async def test_write_then_close_preserves_data(serial_pair: SerialPair) -> None:
+    """`await write` drains before returning so close() doesn't lose bytes."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        await left.write(b"hello world")
+        await left.close()
+        assert await right.readexactly(11) == b"hello world"
+
+
+async def test_writelines_then_close_preserves_data(serial_pair: SerialPair) -> None:
+    """`await writelines` drains before returning so close() doesn't lose bytes."""
+    async with async_create_serial_pair(
+        serial_pair.left, serial_pair.right, baudrate=115200
+    ) as (left, right):
+        await left.writelines([b"foo", b"bar", b"baz"])
+        await left.close()
+        assert await right.readexactly(9) == b"foobarbaz"
