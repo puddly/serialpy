@@ -121,7 +121,7 @@ async def test_externally_passed_api() -> None:
                     port_name="Serial Proxy Left",
                     baudrate=115200,
                 ) as serial:
-                    serial.write(b"test")
+                    serial.write_nowait(b"test")
                     await serial.drain()
 
             # The API is still connected
@@ -167,7 +167,7 @@ async def test_connect_by_instance_id() -> None:
             url = f"esphome://{parsed.hostname}:{parsed.port}/0?password=unused"
 
             async with async_serial_for_url(url=url, baudrate=115200) as serial:
-                serial.write(b"test")
+                serial.write_nowait(b"test")
                 await serial.drain()
 
 
@@ -392,11 +392,11 @@ async def test_cross_loop_async_api() -> None:
                     assert serial._client_loop is not asyncio.get_running_loop()
                     assert serial._loop is asyncio.get_running_loop()
 
-                    ser_left.write(b"left to right")
+                    ser_left.write_nowait(b"left to right")
                     data = await ser_right.readexactly(len(b"left to right"))
                     assert data == b"left to right"
 
-                    ser_right.write(b"right to left")
+                    ser_right.write_nowait(b"right to left")
                     data = await ser_left.readexactly(len(b"right to left"))
                     assert data == b"right to left"
 
@@ -449,7 +449,7 @@ async def test_sync_api_with_external_api_on_different_loop() -> None:
                         assert serial._loop is not None
                         assert serial._loop is not api_loop
 
-                        peer.write(b"peer-data")
+                        peer.write_nowait(b"peer-data")
                         await peer.drain()
 
                         data = await asyncio.to_thread(serial.read, len(b"peer-data"))
@@ -488,14 +488,14 @@ async def test_single_api_multiple_async_ports() -> None:
                         baudrate=115200,
                     ) as ser_right,
                 ):
-                    ser_left.write(b"left to right")
+                    ser_left.write_nowait(b"left to right")
                     await ser_left.drain()
                     data = await asyncio.wait_for(
                         ser_right.readexactly(len(b"left to right")), timeout=5
                     )
                     assert data == b"left to right"
 
-                    ser_right.write(b"right to left")
+                    ser_right.write_nowait(b"right to left")
                     await ser_right.drain()
                     data = await asyncio.wait_for(
                         ser_left.readexactly(len(b"right to left")), timeout=5
