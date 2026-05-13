@@ -460,7 +460,7 @@ def create_socat_pair() -> Iterator[
 @contextlib.contextmanager
 def create_pyodide_pair() -> Iterator[tuple[str, str]]:
     """Create a fake Web Serial pair and register each side at a unique URL."""
-    import js  # noqa: PLC0415
+    import js  # type: ignore[import-not-found]  # noqa: PLC0415
 
     from serialx.platforms.serial_pyodide import (  # noqa: PLC0415
         register_js_port,

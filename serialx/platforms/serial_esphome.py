@@ -33,14 +33,14 @@ from typing import Any, ParamSpec, TypeVar, cast
 import urllib.parse
 import warnings
 
-import aioesphomeapi
-from aioesphomeapi import APIClient, SerialProxyDataReceived, SerialProxyParity
-from aioesphomeapi.core import (
+from aioesphomeapi.client import APIClient
+from aioesphomeapi.core import (  # type: ignore[attr-defined]
     APIConnectionError,
     PingRequest,
     PingResponse,
     TimeoutAPIError,
 )
+from aioesphomeapi.model import SerialProxyDataReceived, SerialProxyParity
 from typing_extensions import Buffer, Unpack
 
 from serialx import SerialException, UnsupportedSetting
@@ -221,7 +221,10 @@ class ESPHomeSerial(BaseSerial):
         )
 
     def _schedule_on_client_loop(
-        self, fn: Callable[..., Any], *args: Any, **kwargs: Any
+        self,
+        fn: Callable[_P, Any],
+        *args: _P.args,
+        **kwargs: _P.kwargs,
     ) -> None:
         """Invoke a synchronous `APIClient` method on the client's loop."""
         client_loop = self._client_loop
@@ -302,7 +305,10 @@ class ESPHomeSerial(BaseSerial):
             elif "key" in params:
                 self._noise_psk = params["key"][0]
 
-            self._api = aioesphomeapi.APIClient(
+            if parsed.hostname is None:
+                raise InvalidSettingsError(f"URI {self._path!r} is missing a hostname")
+
+            self._api = APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
                 password=self._password,
@@ -424,6 +430,7 @@ class ESPHomeSerial(BaseSerial):
         if self._api is None or not self._instance_subscribed:
             return
 
+        assert self._instance_id is not None
         with suppress(APIConnectionError):
             self._schedule_on_client_loop(
                 self._api.serial_proxy_unsubscribe, self._instance_id
@@ -434,6 +441,7 @@ class ESPHomeSerial(BaseSerial):
     def _configure_port(self) -> None:
         """Configure the serial port settings."""
         assert self._api is not None
+        assert self._instance_id is not None
         self._schedule_on_client_loop(
             self._api.serial_proxy_configure,
             instance=self._instance_id,
@@ -447,6 +455,7 @@ class ESPHomeSerial(BaseSerial):
     def _send_set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Send a signal to set modem control bits, without waiting for a response."""
         assert self._api is not None
+        assert self._instance_id is not None
         line_states = self._last_line_state
 
         if modem_pins.rts is PinState.HIGH:
@@ -496,14 +505,15 @@ class ESPHomeSerial(BaseSerial):
     @translate_esphome_errors
     async def _async_get_modem_pins(self) -> ModemPins:
         assert self._api is not None
+        assert self._instance_id is not None
         rsp = await self._call_on_client_loop(
             self._api.serial_proxy_get_modem_pins(instance=self._instance_id)
         )
-        self._last_line_state = rsp.line_states
+        self._last_line_state = LineStateFlag(rsp.line_states)
 
         return ModemPins(
-            dtr=PinState.convert(rsp.line_states & LineStateFlag.DTR),
-            rts=PinState.convert(rsp.line_states & LineStateFlag.RTS),
+            dtr=PinState.convert(bool(rsp.line_states & LineStateFlag.DTR)),
+            rts=PinState.convert(bool(rsp.line_states & LineStateFlag.RTS)),
         )
 
     def num_unread_bytes(self) -> int:
@@ -525,6 +535,7 @@ class ESPHomeSerial(BaseSerial):
     async def _async_flush(self) -> None:
         """Flush write buffers."""
         assert self._api is not None
+        assert self._instance_id is not None
         await self._call_on_client_loop(
             self._api.serial_proxy_flush(instance=self._instance_id)
         )
@@ -536,6 +547,7 @@ class ESPHomeSerial(BaseSerial):
     def _write(self, b: Buffer, *, timeout: float | None) -> int:
         """Write bytes to serial port."""
         assert self._api is not None
+        assert self._instance_id is not None
         data = bytes(b)
         self._schedule_on_client_loop(
             self._api.serial_proxy_write, instance=self._instance_id, data=data
@@ -605,10 +617,10 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
         assert self._serial is not None
         await self._serial._async_open()
-        self._serial.configure_port()
 
         assert self._serial._api is not None
         await self._serial._subscribe_instance()
+        self._serial.configure_port()
         self._unsub = await self._serial._call_on_client_loop(
             self._register_transport_data_handler()
         )

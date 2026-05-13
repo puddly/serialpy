@@ -24,12 +24,17 @@ documentation = "https://puddly.github.io/serialx/"
 esphome = ["aioesphomeapi>=44.17.0; python_version >= '3.11'"]
 dev = [
   "ruff",
+  "mypy",
   "pytest",
   "prek",
   "pytest-asyncio",
   "pytest-timeout",
   "pytest-xdist",
   "psutil",
+  "async-timeout",
+  "types-psutil",
+  "types-pywin32",
+  "types-setuptools",
   "aioesphomeapi>=44.17.0 ; python_version >= '3.11'",
 ]
 docs = [
@@ -164,6 +169,7 @@ disable_error_code = [
   "unreachable",
   "untyped-decorator",
 ]
+
 
 [tool.coverage.run]
 source = ["serialx"]

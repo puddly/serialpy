@@ -25,7 +25,7 @@ import contextlib
 import logging
 from typing import Any, final
 
-import js
+import js  # type: ignore[import-not-found]
 from typing_extensions import Buffer
 
 from ...common import (
