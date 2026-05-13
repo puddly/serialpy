@@ -58,7 +58,7 @@ repo = "local"
 [[repos.hooks]]
 id = "mypy"
 name = "mypy"
-entry = "mypy"
+entry = "uv run --frozen mypy"
 language = "system"
 types_or = ["python", "pyi"]
 exclude = '^tests/esphome/external_components/'
