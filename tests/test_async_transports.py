@@ -44,7 +44,7 @@ async def test_async_all_bytes(serial_pair: SerialPair) -> None:
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
         data = bytes(range(256))
-        left.write(data)
+        left.write_nowait(data)
         result = await right.readexactly(len(data))
         assert result == data
 
@@ -59,7 +59,7 @@ async def test_async_segmented_binary_data(serial_pair: SerialPair) -> None:
 
         for i in range(0, 256, segment_size):
             segment = data[i : i + segment_size]
-            left.write(segment)
+            left.write_nowait(segment)
             result = await right.readexactly(len(segment))
             assert result == segment
 
@@ -71,7 +71,7 @@ async def test_async_binary_payload_sizes(serial_pair: SerialPair, size: int) ->
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
         data = bytes([i % 256 for i in range(size)])
-        left.write(data)
+        left.write_nowait(data)
         result = await right.readexactly(len(data))
         assert result == data
 
@@ -82,7 +82,7 @@ async def test_async_null_bytes(serial_pair: SerialPair) -> None:
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
         null_data = b"\x00" * 64
-        left.write(null_data)
+        left.write_nowait(null_data)
         result = await right.readexactly(len(null_data))
         assert result == null_data
 
@@ -92,7 +92,7 @@ async def test_async_readuntil(serial_pair: SerialPair) -> None:
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.write(b"hello\nworld\n")
+        left.write_nowait(b"hello\nworld\n")
         assert await right.readuntil() == b"hello\n"
         assert await right.readuntil(b"\n") == b"world\n"
 
@@ -102,7 +102,7 @@ async def test_async_readuntil_custom_separator(serial_pair: SerialPair) -> None
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.write(b"first||second||tail")
+        left.write_nowait(b"first||second||tail")
         assert await right.readuntil(b"||") == b"first||"
         assert await right.readuntil(b"||") == b"second||"
 
@@ -112,7 +112,7 @@ async def test_async_readuntil_repeated_separator(serial_pair: SerialPair) -> No
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.write(b"foo|||||bar||tail||")
+        left.write_nowait(b"foo|||||bar||tail||")
         assert await right.readuntil(b"||") == b"foo||"
         assert await right.readuntil(b"||") == b"||"
         assert await right.readuntil(b"||") == b"|bar||"
@@ -124,7 +124,7 @@ async def test_async_readline(serial_pair: SerialPair) -> None:
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.write(b"alpha\nbeta\ngamma\n")
+        left.write_nowait(b"alpha\nbeta\ngamma\n")
         assert await right.readline() == b"alpha\n"
         assert await right.readline() == b"beta\n"
         assert await right.readline() == b"gamma\n"
@@ -135,7 +135,7 @@ async def test_async_writelines(serial_pair: SerialPair) -> None:
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.writelines([b"foo", b"bar", b"baz"])
+        left.writelines_nowait([b"foo", b"bar", b"baz"])
         assert await right.readexactly(9) == b"foobarbaz"
 
 
@@ -147,11 +147,11 @@ async def test_async_overlapping_read_write(serial_pair: SerialPair) -> None:
         data = bytes(range(256))
         read = b""
 
-        left.write(data[:100])
+        left.write_nowait(data[:100])
         read += await right.readexactly(10)
-        left.write(data[100:150])
+        left.write_nowait(data[100:150])
         read += await right.readexactly(10)
-        left.write(data[150:])
+        left.write_nowait(data[150:])
         read += await right.readexactly(10)
         read += await right.readexactly(256 - 30)
 
@@ -190,7 +190,7 @@ async def test_async_random_large(
         serial_pair.left, serial_pair.right, baudrate=baudrate
     ) as (left, right):
         data = os.urandom(chunk_size)
-        left.write(data)
+        left.write_nowait(data)
         read_data = await right.readexactly(chunk_size)
         assert read_data == data
 
@@ -206,7 +206,7 @@ async def test_async_repeated_write_read_cycles(
         data = bytes(range(256))
 
         for _ in range(iterations):
-            left.write(data)
+            left.write_nowait(data)
             result = await right.readexactly(len(data))
             assert result == data
 
@@ -220,7 +220,7 @@ async def test_async_buffered_writes_then_read(serial_pair: SerialPair) -> None:
         iterations = 4
 
         for _ in range(iterations):
-            left.write(chunk)
+            left.write_nowait(chunk)
 
         total_size = len(chunk) * iterations
         result = await right.readexactly(total_size)
@@ -241,7 +241,7 @@ async def test_async_large_payload(serial_pair: SerialPair, payload_size: int) -
         serial_pair.left, serial_pair.right, baudrate=921600
     ) as (left, right):
         data = bytes([i % 256 for i in range(payload_size)])
-        left.write(data)
+        left.write_nowait(data)
         result = await right.readexactly(len(data))
         assert result == data
 
@@ -256,7 +256,7 @@ async def test_async_rapid_small_writes(serial_pair: SerialPair) -> None:
 
         for i in range(iterations):
             data = bytes([i % 256])
-            left.write(data)
+            left.write_nowait(data)
             result = await right.readexactly(1)
             received.extend(result)
 
@@ -284,7 +284,7 @@ async def test_async_sustained_throughput(
     ) as (left, right):
         chunk = os.urandom(1024)
         for _ in range(iterations):
-            left.write(chunk)
+            left.write_nowait(chunk)
             result = await right.readexactly(len(chunk))
             assert result == chunk
 
@@ -311,7 +311,7 @@ async def test_async_valid_baudrates(serial_pair: SerialPair, baudrate: int) -> 
         serial_pair.left, baudrate=baudrate
     ) as left:
         assert left.baudrate == baudrate
-        left.write(b"test")
+        left.write_nowait(b"test")
 
 
 async def test_async_nonstandard_baudrate(serial_pair: SerialPair) -> None:
@@ -326,7 +326,7 @@ async def test_async_nonstandard_baudrate(serial_pair: SerialPair) -> None:
         serial_pair.left, serial_pair.right, baudrate=200000
     ) as (left, right):
         assert left.baudrate == 200000
-        left.write(b"test")
+        left.write_nowait(b"test")
         assert await right.readexactly(4) == b"test"
 
 
@@ -354,7 +354,7 @@ async def test_async_valid_parity(serial_pair: SerialPair, parity: Parity) -> No
         serial_pair.left, baudrate=115200, parity=parity
     ) as left:
         assert left.parity == parity
-        left.write(b"test")
+        left.write_nowait(b"test")
 
 
 @pytest.mark.parametrize(
@@ -390,7 +390,7 @@ async def test_async_valid_stopbits(
         serial_pair.left, baudrate=115200, stopbits=stopbits
     ) as left:
         assert left.stopbits == expected
-        left.write(b"test")
+        left.write_nowait(b"test")
 
 
 @pytest.mark.parametrize("byte_size", [5, 6, 7, 8])
@@ -403,7 +403,7 @@ async def test_async_valid_byte_size(serial_pair: SerialPair, byte_size: int) ->
         serial_pair.left, baudrate=115200, byte_size=byte_size
     ) as left:
         assert left.byte_size == byte_size
-        left.write(b"test")
+        left.write_nowait(b"test")
 
 
 async def test_async_invalid_byte_size(serial_pair: SerialPair) -> None:
@@ -424,7 +424,7 @@ async def test_async_xonxoff_setting(serial_pair: SerialPair, xonxoff: bool) -> 
     async with serialx.async_serial_for_url(
         serial_pair.left, baudrate=115200, xonxoff=xonxoff
     ) as left:
-        left.write(b"test")
+        left.write_nowait(b"test")
 
 
 @pytest.mark.parametrize("rtscts", [True, False])
@@ -437,7 +437,7 @@ async def test_async_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> No
         async with serialx.async_serial_for_url(
             serial_pair.left, baudrate=115200, rtscts=rtscts
         ) as left:
-            left.write(b"test")
+            left.write_nowait(b"test")
 
 
 # --- Lifecycle ---
@@ -450,7 +450,7 @@ async def test_async_concurrent_writes(serial_pair: SerialPair) -> None:
     ) as (left, right):
 
         async def write_data(data: bytes) -> None:
-            left.write(data)
+            left.write_nowait(data)
 
         data1 = b"A" * 100
         data2 = b"B" * 100
@@ -471,7 +471,7 @@ async def test_async_read_with_timeout(serial_pair: SerialPair) -> None:
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.write(b"test")
+        left.write_nowait(b"test")
 
         result = await asyncio.wait_for(right.readexactly(4), timeout=1.0)
         assert result == b"test"
@@ -499,7 +499,7 @@ async def test_async_pause_resume(serial_pair: SerialPair) -> None:
     ) as (left, right):
         left.transport.pause_reading()
 
-        right.write(b"A long message")
+        right.write_nowait(b"A long message")
         await right.drain()
 
         # Nothing can be read
@@ -592,7 +592,7 @@ async def test_async_write_bytearray(serial_pair: SerialPair) -> None:
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
         data = bytearray(b"hello bytearray")
-        left.write(data)
+        left.write_nowait(data)
         result = await right.readexactly(len(data))
         assert result == b"hello bytearray"
 
@@ -602,8 +602,8 @@ async def test_async_write_empty(serial_pair: SerialPair) -> None:
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.write(b"")
-        left.write(b"after_empty")
+        left.write_nowait(b"")
+        left.write_nowait(b"after_empty")
         result = await right.readexactly(len(b"after_empty"))
         assert result == b"after_empty"
 
@@ -644,7 +644,7 @@ async def test_async_flush(serial_pair: SerialPair) -> None:
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        left.write(b"flush test data")
+        left.write_nowait(b"flush test data")
         await left.flush()
 
         result = await right.readexactly(len(b"flush test data"))
@@ -1153,8 +1153,8 @@ async def test_async_exclusive_disabled(serial_pair: SerialPair) -> None:
         ) as left2:
             assert left2.exclusive is False
 
-            left1.write(b"hello")
-            left2.write(b"world")
+            left1.write_nowait(b"hello")
+            left2.write_nowait(b"world")
 
 
 async def test_async_connect_nonexistent_port() -> None:
@@ -1303,7 +1303,7 @@ async def test_async_unplug_raises(serial_pair: SerialPair) -> None:
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
     ) as (left, right):
-        right.write(b"ping\n")
+        right.write_nowait(b"ping\n")
         await right.drain()
         assert await left.readline() == b"ping\n"
 
@@ -1313,7 +1313,7 @@ async def test_async_unplug_raises(serial_pair: SerialPair) -> None:
             await left.read(1)
 
         with pytest.raises(OSError):
-            left.write(b"x")
+            left.write_nowait(b"x")
 
         with pytest.raises(OSError):
             await left.drain()
@@ -1337,7 +1337,7 @@ async def test_async_unplug_raises_on_streamreader_readline(
         async with serialx.async_serial_for_url(
             serial_pair.right, baudrate=115200
         ) as right:
-            right.write(b"ping\n")
+            right.write_nowait(b"ping\n")
             await right.drain()
             assert await reader.readline() == b"ping\n"
 

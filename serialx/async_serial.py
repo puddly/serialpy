@@ -153,12 +153,24 @@ class AsyncSerial:
 
     # ---- Writes ----
 
-    def write(self, data: bytes | bytearray | memoryview) -> None:
-        """Queue data for writing."""
+    async def write(self, data: bytes | bytearray | memoryview) -> None:
+        """Queue data for writing and wait for the application buffer to drain."""
+        writer = self._require_writer()
+        writer.write(data)
+        await writer.drain()
+
+    async def writelines(self, data: Iterable[bytes | bytearray | memoryview]) -> None:
+        """Queue buffers for writing and wait for the application buffer to drain."""
+        writer = self._require_writer()
+        writer.writelines(data)
+        await writer.drain()
+
+    def write_nowait(self, data: bytes | bytearray | memoryview) -> None:
+        """Queue data for writing without waiting; pair with `drain()` to batch."""
         self._require_writer().write(data)
 
-    def writelines(self, data: Iterable[bytes | bytearray | memoryview]) -> None:
-        """Queue an iterable of buffers for writing."""
+    def writelines_nowait(self, data: Iterable[bytes | bytearray | memoryview]) -> None:
+        """Queue buffers for writing without waiting; pair with `drain()` to batch."""
         self._require_writer().writelines(data)
 
     async def drain(self) -> None:

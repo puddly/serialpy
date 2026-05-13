@@ -43,8 +43,7 @@ async def main():
         "/dev/serial/by-id/port", baudrate=115200,
     ) as serial:
         data = await serial.readexactly(5)
-        serial.write(b"test")
-        await serial.flush()
+        await serial.write(b"test")
 
         await serial.set_modem_pins(rts=True, dtr=True)
         pins = await serial.get_modem_pins()

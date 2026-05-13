@@ -23,8 +23,7 @@ import serialx
 
 async with serialx.async_serial_for_url("/dev/serial/by-id/port", baudrate=115200) as serial:
     data = await serial.readexactly(5)
-    serial.write(b"test")
-    await serial.flush()
+    await serial.write(b"test")
 ```
 
 All functions, including `open` and `close`, are async and work exactly as they do with
