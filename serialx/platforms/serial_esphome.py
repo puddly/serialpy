@@ -617,10 +617,10 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
         assert self._serial is not None
         await self._serial._async_open()
-        self._serial.configure_port()
 
         assert self._serial._api is not None
         await self._serial._subscribe_instance()
+        self._serial.configure_port()
         self._unsub = await self._serial._call_on_client_loop(
             self._register_transport_data_handler()
         )
