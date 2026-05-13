@@ -265,7 +265,7 @@ class ESPHomeSerial(BaseSerial):
 
         self._read_event = asyncio.Event()
         self._call_on_loop(self._async_open())
-        self._call_on_loop(self._async_subscribe())
+        self._call_on_loop(self._async_register_data_handler())
 
     @property
     def is_open(self) -> bool:
@@ -362,16 +362,17 @@ class ESPHomeSerial(BaseSerial):
         return self._call_on_loop(self._async_list_serial_ports())
 
     @translate_esphome_errors
-    async def _async_subscribe(self) -> None:
+    async def _async_register_data_handler(self) -> None:
+        """Install the local data handler."""
         assert self._api is not None
-        await self._subscribe_instance()
+        if self._unsub is not None:
+            return
         self._unsub = await self._call_on_client_loop(self._register_data_handler())
 
     async def _register_data_handler(self) -> Callable[[], None]:
         """Register `_on_data` on the client's loop and return the unsub."""
         assert self._api is not None
-        unsub: Callable[[], None] = self._api.subscribe_serial_proxy_data(self._on_data)
-        return unsub
+        return self._api.subscribe_serial_proxy_data(self._on_data)
 
     @translate_esphome_errors
     async def _ping(self, *, timeout: float) -> None:
@@ -392,29 +393,35 @@ class ESPHomeSerial(BaseSerial):
             timeout=timeout,
         )
 
+    async def _resolve_instance_id(self) -> None:
+        """Resolve `_instance_id` from `_port_name` against the device."""
+        if self._api is None or self._instance_id is not None:
+            return
+
+        assert self._port_name is not None
+        info = await self._call_on_client_loop(self._api.device_info())
+
+        name_to_info_mapping = {
+            proxy_info.name: (index, proxy_info)
+            for index, proxy_info in enumerate(info.serial_proxies)
+        }
+
+        if self._port_name not in name_to_info_mapping:
+            raise ValueError(
+                f"Serial proxy with name {self._port_name!r}"
+                f" does not exist in {name_to_info_mapping!r}"
+            )
+
+        instance_id, _proxy_info = name_to_info_mapping[self._port_name]
+        self._instance_id = instance_id
+
     async def _subscribe_instance(self) -> None:
         """Subscribe serial proxy streaming for this instance if supported."""
         if self._api is None or self._instance_subscribed:
             return
 
-        info = await self._call_on_client_loop(self._api.device_info())
-
-        if self._instance_id is None:
-            assert self._port_name is not None
-
-            name_to_info_mapping = {
-                proxy_info.name: (index, proxy_info)
-                for index, proxy_info in enumerate(info.serial_proxies)
-            }
-
-            if self._port_name not in name_to_info_mapping:
-                raise ValueError(
-                    f"Serial proxy with name {self._port_name!r}"
-                    f" does not exist in {name_to_info_mapping!r}"
-                )
-
-            instance_id, _proxy_info = name_to_info_mapping[self._port_name]
-            self._instance_id = instance_id
+        await self._resolve_instance_id()
+        assert self._instance_id is not None
 
         self._schedule_on_client_loop(
             self._api.serial_proxy_subscribe, self._instance_id
@@ -440,7 +447,13 @@ class ESPHomeSerial(BaseSerial):
 
     def _configure_port(self) -> None:
         """Configure the serial port settings."""
+        self._call_on_loop(self._async_configure_port())
+
+    @translate_esphome_errors
+    async def _async_configure_port(self) -> None:
+        """Configure the serial port settings."""
         assert self._api is not None
+        await self._resolve_instance_id()
         assert self._instance_id is not None
         self._schedule_on_client_loop(
             self._api.serial_proxy_configure,
@@ -451,6 +464,13 @@ class ESPHomeSerial(BaseSerial):
             stop_bits=STOP_BITS_MAP[self._stopbits],
             data_size=self._byte_size,
         )
+
+        # Ping to ensure the daemon has processed the configure
+        await self._ping(timeout=self._connect_timeout)
+
+        # Subscribe after configure has landed so we don't stream bytes
+        # under stale UART settings. Idempotent on reconfigure.
+        await self._subscribe_instance()
 
     def _send_set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Send a signal to set modem control bits, without waiting for a response."""
@@ -619,8 +639,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         await self._serial._async_open()
 
         assert self._serial._api is not None
-        await self._serial._subscribe_instance()
-        self._serial.configure_port()
+        await self._serial._async_configure_port()
         self._unsub = await self._serial._call_on_client_loop(
             self._register_transport_data_handler()
         )
