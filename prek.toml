@@ -10,24 +10,30 @@ id = "no-commit-to-branch"
 args = ["--branch", "dev"]
 
 [[repos]]
-repo = "https://github.com/codespell-project/codespell"
-rev = "v2.4.2"
+repo = "local"
 
 [[repos.hooks]]
 id = "codespell"
-additional_dependencies = ["tomli"]
-args = ["--toml", "pyproject.toml"]
-
-[[repos]]
-repo = "https://github.com/astral-sh/ruff-pre-commit"
-rev = "v0.15.12"
+name = "codespell"
+entry = "uv run --frozen codespell --toml pyproject.toml"
+language = "system"
+types = ["text"]
 
 [[repos.hooks]]
 id = "ruff-check"
-args = ["--fix"]
+name = "ruff check"
+entry = "uv run --frozen ruff check --force-exclude --fix"
+language = "system"
+types_or = ["python", "pyi"]
+require_serial = true
 
 [[repos.hooks]]
 id = "ruff-format"
+name = "ruff format"
+entry = "uv run --frozen ruff format --force-exclude"
+language = "system"
+types_or = ["python", "pyi"]
+require_serial = true
 
 [[repos]]
 repo = "https://github.com/rbubley/mirrors-prettier"
