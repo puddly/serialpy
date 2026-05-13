@@ -174,7 +174,7 @@ def test_compat_constants() -> None:
 
     assert STOPBITS_ONE == 1  # type: ignore[comparison-overlap]
     assert STOPBITS_ONE_POINT_FIVE == 1.5
-    assert STOPBITS_TWO == 2
+    assert STOPBITS_TWO == 2  # type: ignore[comparison-overlap]
 
 
 def test_compat_tools_module() -> None:

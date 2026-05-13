@@ -3,7 +3,7 @@
 import pytest
 
 try:
-    from aioesphomeapi import APIClient
+    from aioesphomeapi.client import APIClient
 except ImportError:
     pytest.skip(
         "aioesphomeapi is required to run esphome transport tests",
@@ -43,6 +43,9 @@ def api_client_on_thread_loop(
 ) -> Iterator[tuple[APIClient, asyncio.AbstractEventLoop]]:
     """Yield an APIClient connected on a dedicated background thread's loop."""
     parsed = urllib.parse.urlparse(url)
+    assert parsed.hostname is not None
+    hostname = parsed.hostname
+    port = parsed.port or ESPHOME_DEFAULT_PORT
 
     thread_loop = asyncio.new_event_loop()
     ready = threading.Event()
@@ -58,8 +61,8 @@ def api_client_on_thread_loop(
 
     async def _connect() -> APIClient:
         api = APIClient(
-            address=parsed.hostname,
-            port=parsed.port or ESPHOME_DEFAULT_PORT,
+            address=hostname,
+            port=port,
             password=None,
         )
         await api.connect(login=True)
@@ -106,6 +109,8 @@ async def test_externally_passed_api() -> None:
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             # Connect to the ESPHome API externally
             parsed = urllib.parse.urlparse(left)
+            assert parsed.hostname is not None
+
             api = APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
@@ -134,6 +139,8 @@ async def test_externally_passed_api_close_after_disconnect() -> None:
     with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
+            assert parsed.hostname is not None
+
             api = APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
@@ -320,6 +327,8 @@ async def test_esphome_list_serial_ports() -> None:
     with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
+            assert parsed.hostname is not None
+
             api = APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
@@ -363,6 +372,8 @@ async def test_sync_esphome_list_serial_ports_external_api() -> None:
     with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
+            assert parsed.hostname is not None
+
             api = APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
@@ -464,6 +475,8 @@ async def test_single_api_multiple_async_ports() -> None:
     with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(socat_left, socat_right) as (left, _right):
             parsed = urllib.parse.urlparse(left)
+            assert parsed.hostname is not None
+
             api = APIClient(
                 address=parsed.hostname,
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
