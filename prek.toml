@@ -19,14 +19,6 @@ additional_dependencies = ["tomli"]
 args = ["--toml", "pyproject.toml"]
 
 [[repos]]
-repo = "https://github.com/pre-commit/mirrors-mypy"
-rev = "v1.20.2"
-
-[[repos.hooks]]
-id = "mypy"
-additional_dependencies = ["types-pywin32"]
-
-[[repos]]
 repo = "https://github.com/astral-sh/ruff-pre-commit"
 rev = "v0.15.12"
 
@@ -62,6 +54,15 @@ id = "taplo-format"
 
 [[repos]]
 repo = "local"
+
+[[repos.hooks]]
+id = "mypy"
+name = "mypy"
+entry = "mypy"
+language = "system"
+types_or = ["python", "pyi"]
+exclude = '^tests/esphome/external_components/'
+require_serial = true
 
 [[repos.hooks]]
 id = "cargo-fmt"
