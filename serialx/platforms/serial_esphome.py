@@ -440,6 +440,11 @@ class ESPHomeSerial(BaseSerial):
 
     def _configure_port(self) -> None:
         """Configure the serial port settings."""
+        self._call_on_loop(self._async_configure_port())
+
+    @translate_esphome_errors
+    async def _async_configure_port(self) -> None:
+        """Configure the serial port settings."""
         assert self._api is not None
         assert self._instance_id is not None
         self._schedule_on_client_loop(
@@ -451,6 +456,9 @@ class ESPHomeSerial(BaseSerial):
             stop_bits=STOP_BITS_MAP[self._stopbits],
             data_size=self._byte_size,
         )
+
+        # Ping to ensure the daemon has processed the configure
+        await self._ping(timeout=self._connect_timeout)
 
     def _send_set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Send a signal to set modem control bits, without waiting for a response."""
@@ -620,7 +628,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
         assert self._serial._api is not None
         await self._serial._subscribe_instance()
-        self._serial.configure_port()
+        await self._serial._async_configure_port()
         self._unsub = await self._serial._call_on_client_loop(
             self._register_transport_data_handler()
         )
