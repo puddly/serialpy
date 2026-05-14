@@ -219,7 +219,6 @@ class SocketSerialTransport(BaseSerialTransport):
         super().__init__(loop, protocol)
         self._tcp_transport: asyncio.Transport | None = None
         self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
-        self._connection_lost_called = False
 
     async def _connect(  # type: ignore[override]
         self,
@@ -264,7 +263,7 @@ class SocketSerialTransport(BaseSerialTransport):
             self._tcp_transport = None
             return
 
-        self._protocol.connection_made(self)
+        self._call_protocol_connection_made()
 
     def _data_received(self, data: bytes) -> None:
         """Handle data received from the TCP transport."""
@@ -282,7 +281,6 @@ class SocketSerialTransport(BaseSerialTransport):
         """Handle connection lost from the TCP transport."""
         if self._connection_lost_called:
             return
-        self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
         if exc is None:

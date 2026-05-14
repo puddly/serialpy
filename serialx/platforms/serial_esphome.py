@@ -644,7 +644,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._register_transport_data_handler()
         )
 
-        self._protocol.connection_made(self)
+        self._call_protocol_connection_made()
 
     async def _register_transport_data_handler(self) -> Callable[[], None]:
         """Register `_on_data` on the client's loop and return the unsub."""

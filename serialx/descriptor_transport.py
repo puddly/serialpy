@@ -69,7 +69,6 @@ class DescriptorTransport(BaseSerialTransport):
 
         self._close_task: asyncio.Task[None] | None = None
         self._open_fut: asyncio.Future[int] | None = None
-        self._connection_made: bool = False
 
     async def _open(self, path: str | os.PathLike[str]) -> None:
         if self._open_fut is not None:
@@ -122,7 +121,6 @@ class DescriptorTransport(BaseSerialTransport):
     ) -> None:
         assert self._fileno is not None
         self._loop.add_reader(self._fileno, self._read_ready)
-        self._connection_made = True
 
     def _read_ready(self) -> None:
         LOGGER.debug("Event loop woke up reader")
@@ -468,20 +466,4 @@ class DescriptorTransport(BaseSerialTransport):
                 LOGGER.debug("Closing file descriptor %s", fileno)
                 await self._loop.run_in_executor(None, _safe_close, fileno)
         finally:
-            if self._connection_made:
-                LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
-                try:
-                    self._protocol.connection_lost(exc)
-                except (SystemExit, KeyboardInterrupt):
-                    raise
-                except BaseException as protocol_exc:
-                    self._loop.call_exception_handler(
-                        {
-                            "message": "protocol.connection_lost() failed",
-                            "exception": protocol_exc,
-                            "transport": self,
-                            "protocol": self._protocol,
-                        }
-                    )
-
-            self._resolve_closed_waiter()
+            self._call_protocol_connection_lost(exc)
