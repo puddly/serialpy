@@ -283,9 +283,10 @@ class SocketSerialTransport(BaseSerialTransport):
             return
         self._closing = True
         self._tcp_transport = None
-        if exc is None:
-            exc = OSError(errno.EIO, "socket closed by peer")
-        self._mark_broken(exc)
+        if not self._user_initiated_close:
+            if exc is None:
+                exc = OSError(errno.EIO, "socket closed by peer")
+            self._mark_broken(exc)
         self._call_protocol_connection_lost(exc)
 
     def _tcp_connection_lost(self) -> None:
@@ -321,6 +322,7 @@ class SocketSerialTransport(BaseSerialTransport):
         if self._connection_lost_called:
             return
         self._closing = True
+        self._mark_user_closed()
 
         if self._tcp_transport is not None:
             self._tcp_transport.abort()
@@ -332,6 +334,7 @@ class SocketSerialTransport(BaseSerialTransport):
         if self._connection_lost_called:
             return
         self._closing = True
+        self._mark_user_closed()
 
         if self._tcp_transport is not None:
             self._tcp_transport.close()

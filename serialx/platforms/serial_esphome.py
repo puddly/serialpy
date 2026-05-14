@@ -682,6 +682,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         if self._closing:
             return
         self._closing = True
+        self._mark_user_closed()
 
         serial = self._serial
         if self._unsub is not None:

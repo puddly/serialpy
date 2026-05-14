@@ -354,6 +354,7 @@ class DescriptorTransport(BaseSerialTransport):
     def close(self) -> None:
         """Close the transport."""
         LOGGER.debug("Closing at the request of the application")
+        self._mark_user_closed()
         if self._closing:
             if (
                 self._fileno is None
@@ -405,6 +406,7 @@ class DescriptorTransport(BaseSerialTransport):
 
     def abort(self) -> None:
         """Abort the transport immediately."""
+        self._mark_user_closed()
         self._close(None)
 
     def _close(self, exc: Exception | None = None) -> None:

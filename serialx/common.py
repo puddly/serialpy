@@ -898,6 +898,11 @@ class BaseSerialTransport(asyncio.Transport):
         self._closed_waiter: asyncio.Future[None] = loop.create_future()
         self._connection_made_called: bool = False
         self._connection_lost_called: bool = False
+        self._user_initiated_close: bool = False
+
+    def _mark_user_closed(self) -> None:
+        """Record that the application requested close/abort."""
+        self._user_initiated_close = True
 
     def _mark_broken(self, exc: Exception) -> None:
         if self._serial is not None:

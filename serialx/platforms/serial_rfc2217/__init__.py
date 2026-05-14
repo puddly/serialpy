@@ -968,19 +968,24 @@ class RFC2217SerialTransport(BaseSerialTransport):
         self._closing = True
         self._tcp_transport = None
 
-        if exc is None:
-            exc = OSError(errno.EIO, "RFC 2217 connection closed by server")
-        self._mark_broken(exc)
+        if not self._user_initiated_close:
+            if exc is None:
+                exc = OSError(errno.EIO, "RFC 2217 connection closed by server")
+            self._mark_broken(exc)
 
-        # Fail any pending waiters
+        # Pending in-protocol waiters can't resolve cleanly mid-handshake, so
+        # always fail them with *some* exception even on a user-initiated close.
+        waiter_exc = (
+            exc if exc is not None else OSError(errno.EIO, "RFC 2217 transport closed")
+        )
         for _expected, telnet_waiter in self._telnet_waiters:
             if not telnet_waiter.done():
-                telnet_waiter.set_exception(exc)
+                telnet_waiter.set_exception(waiter_exc)
         self._telnet_waiters.clear()
 
         for rfc2217_waiter in self._rfc2217_waiters.values():
             if not rfc2217_waiter.done():
-                rfc2217_waiter.set_exception(exc)
+                rfc2217_waiter.set_exception(waiter_exc)
         self._rfc2217_waiters.clear()
 
         if self._serial is not None:
@@ -1003,6 +1008,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
         if self._connection_lost_called:
             return
         self._closing = True
+        self._mark_user_closed()
 
         if self._tcp_transport is not None:
             self._tcp_transport.close()
@@ -1014,6 +1020,7 @@ class RFC2217SerialTransport(BaseSerialTransport):
         if self._connection_lost_called:
             return
         self._closing = True
+        self._mark_user_closed()
 
         if self._tcp_transport is not None:
             self._tcp_transport.abort()
