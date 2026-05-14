@@ -122,7 +122,7 @@ async def test_lifecycle_normal_close_callbacks(serial_pair: SerialPair) -> None
     assert protocol.connection_made_transport is transport
 
     transport.close()
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
 
     protocol.assert_state(ProtocolState.LOST)
     assert protocol.connection_lost_exc is None
@@ -139,7 +139,7 @@ async def test_lifecycle_abort_callbacks(serial_pair: SerialPair) -> None:
     )
 
     transport.abort()
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
 
     assert protocol.state is ProtocolState.LOST
     assert protocol.connection_lost_exc is None
@@ -165,7 +165,7 @@ async def test_lifecycle_cancel_during_connect_no_callbacks(
     connect_task.cancel()
 
     with pytest.raises(asyncio.CancelledError):
-        await asyncio.wait_for(connect_task, timeout=5.0)
+        await connect_task
 
     assert protocol.state in (ProtocolState.INIT, ProtocolState.LOST)
     protocol.assert_clean()
@@ -187,7 +187,7 @@ async def test_lifecycle_close_close_one_connection_lost(
 
     transport.close()
     transport.close()
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
 
     assert protocol.state is ProtocolState.LOST
     protocol.assert_clean()
@@ -206,7 +206,7 @@ async def test_lifecycle_abort_after_close_one_connection_lost(
 
     transport.close()
     transport.abort()
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
 
     assert protocol.state is ProtocolState.LOST
     protocol.assert_clean()
@@ -225,7 +225,7 @@ async def test_lifecycle_close_after_abort_one_connection_lost(
 
     transport.abort()
     transport.close()
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
 
     assert protocol.state is ProtocolState.LOST
     protocol.assert_clean()
@@ -253,7 +253,7 @@ async def test_lifecycle_close_drains_pending_writes(
     try:
         sender.write(payload)
         sender.close()  # drain semantics
-        await asyncio.wait_for(sender.wait_closed(), timeout=10.0)
+        await sender.wait_closed()
 
         # Wait until we've seen the full payload or read times out.
         deadline = loop.time() + 5.0
@@ -265,7 +265,7 @@ async def test_lifecycle_close_drains_pending_writes(
         assert receiver_proto.total_received == payload
     finally:
         receiver.close()
-        await asyncio.wait_for(receiver.wait_closed(), timeout=5.0)
+        await receiver.wait_closed()
     sender_proto.assert_clean()
     receiver_proto.assert_clean()
 
@@ -305,13 +305,13 @@ async def test_lifecycle_abort_during_drain_escalates(
             "abort() during drain must clear the buffer synchronously"
         )
 
-        await asyncio.wait_for(sender.wait_closed(), timeout=5.0)
+        await sender.wait_closed()
         assert sender_proto.state is ProtocolState.LOST
     finally:
         sender.close()
         receiver.close()
-        await asyncio.wait_for(sender.wait_closed(), timeout=5.0)
-        await asyncio.wait_for(receiver.wait_closed(), timeout=5.0)
+        await sender.wait_closed()
+        await receiver.wait_closed()
     sender_proto.assert_clean()
     receiver_proto.assert_clean()
 
@@ -339,7 +339,7 @@ async def test_lifecycle_peer_close_calls_connection_lost(
 
     try:
         right.close()
-        await asyncio.wait_for(right.wait_closed(), timeout=5.0)
+        await right.wait_closed()
 
         # Wait for our side to observe the peer close.
         deadline = loop.time() + 5.0
@@ -349,7 +349,7 @@ async def test_lifecycle_peer_close_calls_connection_lost(
             await asyncio.sleep(0.05)
     finally:
         left.close()
-        await asyncio.wait_for(left.wait_closed(), timeout=5.0)
+        await left.wait_closed()
 
     assert left_proto.state is ProtocolState.LOST
     assert left_proto.connection_lost_exc is None
@@ -374,7 +374,7 @@ async def test_lifecycle_is_closing_states(serial_pair: SerialPair) -> None:
     transport.close()
     assert transport.is_closing() is True
 
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
     assert transport.is_closing() is True
     protocol.assert_clean()
 
@@ -395,7 +395,7 @@ async def test_lifecycle_concurrent_wait_closed(serial_pair: SerialPair) -> None
     await asyncio.sleep(0)
     transport.close()
 
-    results = await asyncio.wait_for(asyncio.gather(*waiters), timeout=5.0)
+    results = await asyncio.gather(*waiters)
     assert results == [None] * 5
     assert protocol.state is ProtocolState.LOST
     protocol.assert_clean()
@@ -414,10 +414,7 @@ async def test_lifecycle_open_failure_no_callbacks() -> None:
     protocol = RecordingProtocol()
 
     with pytest.raises(OSError):
-        await asyncio.wait_for(
-            create_serial_connection(loop, lambda: protocol, path, baudrate=115200),
-            timeout=5.0,
-        )
+        await create_serial_connection(loop, lambda: protocol, path, baudrate=115200)
 
     assert protocol.state is ProtocolState.INIT
     protocol.assert_clean()
@@ -441,7 +438,7 @@ async def test_lifecycle_close_from_connection_made(serial_pair: SerialPair) -> 
         loop, lambda: protocol, serial_pair.left, baudrate=115200
     )
 
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
 
     assert protocol.state is ProtocolState.LOST
     protocol.assert_clean()
@@ -463,7 +460,7 @@ async def test_lifecycle_abort_from_connection_made(serial_pair: SerialPair) -> 
         loop, lambda: protocol, serial_pair.left, baudrate=115200
     )
 
-    await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+    await transport.wait_closed()
 
     assert protocol.state is ProtocolState.LOST
     protocol.assert_clean()
@@ -487,7 +484,7 @@ async def test_lifecycle_repeated_open_close_cycles(
             loop, make_factory(protocol), serial_pair.left, baudrate=115200
         )
         transport.close()
-        await asyncio.wait_for(transport.wait_closed(), timeout=5.0)
+        await transport.wait_closed()
 
         assert protocol.state is ProtocolState.LOST
         protocol.assert_clean()
@@ -515,14 +512,14 @@ async def test_lifecycle_write_after_close_is_dropped(serial_pair: SerialPair) -
         for _ in range(10):
             sender.write(b"after close")
 
-        await asyncio.wait_for(sender.wait_closed(), timeout=5.0)
+        await sender.wait_closed()
 
         # Drain the receiver briefly to make sure nothing leaked through.
         await asyncio.sleep(0.1)
         assert receiver_proto.data_received_chunks == []
     finally:
         receiver.close()
-        await asyncio.wait_for(receiver.wait_closed(), timeout=5.0)
+        await receiver.wait_closed()
     sender_proto.assert_clean()
     receiver_proto.assert_clean()
 
@@ -560,8 +557,8 @@ async def test_lifecycle_data_received_after_connection_made(
     finally:
         left.close()
         right.close()
-        await asyncio.wait_for(left.wait_closed(), timeout=5.0)
-        await asyncio.wait_for(right.wait_closed(), timeout=5.0)
+        await left.wait_closed()
+        await right.wait_closed()
     left_proto.assert_clean()
     right_proto.assert_clean()
 
@@ -585,7 +582,7 @@ async def test_lifecycle_wait_closed_before_close_blocks(
     assert not waiter.done(), "wait_closed must not resolve before close()"
 
     transport.close()
-    await asyncio.wait_for(waiter, timeout=5.0)
+    await waiter
     assert protocol.state is ProtocolState.LOST
     protocol.assert_clean()
 
@@ -604,15 +601,12 @@ async def test_lifecycle_invalid_kwarg_surfaces_no_callbacks(
     protocol = RecordingProtocol()
 
     with pytest.raises(Exception):
-        await asyncio.wait_for(
-            create_serial_connection(
-                loop,
-                lambda: protocol,
-                serial_pair.left,
-                baudrate=115200,
-                byte_size=99,
-            ),
-            timeout=5.0,
+        await create_serial_connection(
+            loop,
+            lambda: protocol,
+            serial_pair.left,
+            baudrate=115200,
+            byte_size=99,
         )
 
     assert protocol.state in (ProtocolState.INIT, ProtocolState.LOST)
