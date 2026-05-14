@@ -488,11 +488,11 @@ class Win32SerialTransport(BaseSerialTransport):
         """Forward connection_made to the protocol."""
 
         # Ignore `transport` and pass self instead
-        self._protocol.connection_made(self)
+        self._call_protocol_connection_made()
 
     def protocol_connection_lost(self, exc: Exception | None) -> None:
         """Forward connection_lost to the protocol."""
-        self._resolve_closed_waiter()
+        self._call_protocol_connection_lost(exc)
 
     def protocol_pause_writing(self) -> None:
         """Forward pause_writing to the protocol."""

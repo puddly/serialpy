@@ -251,7 +251,7 @@ class PyodideSerialTransport(BaseSerialTransport):
         self._reader_task = self._loop.create_task(self._reader_loop())
         self._writer_task = self._loop.create_task(self._writer_loop())
 
-        self._protocol.connection_made(self)
+        self._call_protocol_connection_made()
 
     async def _writer_loop(self) -> None:
         while True:
@@ -308,6 +308,8 @@ class PyodideSerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the transport."""
+        if self._closing:
+            return
         self._write_buffer_size += len(data)
         self._write_queue.put_nowait(bytes(data))
 
@@ -323,6 +325,12 @@ class PyodideSerialTransport(BaseSerialTransport):
         """Close the transport immediately, discarding pending writes."""
         if self._writer_task is not None and not self._writer_task.done():
             self._writer_task.cancel()
+
+        while not self._write_queue.empty():
+            self._write_queue.get_nowait()
+            self._write_queue.task_done()
+        self._write_buffer_size = 0
+
         self._cleanup(None)
 
     def __del__(self) -> None:
