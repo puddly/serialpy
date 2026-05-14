@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 import contextlib
 import enum
 import gc
-import os
+import importlib
 import sys
 import threading
 from typing import Any
@@ -620,50 +620,75 @@ async def test_lifecycle_invalid_kwarg_surfaces_no_callbacks(
 # --- Cancellation race: fd must not leak when os.open is mid-syscall ---
 
 
+@contextlib.contextmanager
+def patch_slow(*targets: str) -> Iterator[tuple[threading.Event, threading.Event]]:
+    """Patch each target callable to block on `proceed` after signaling `started`."""
+    started = threading.Event()
+    proceed = threading.Event()
+
+    def make_slow(real_fn: Callable[..., Any]) -> Callable[..., Any]:
+        def slow(*args: Any, **kwargs: Any) -> Any:
+            started.set()
+            if not proceed.wait(timeout=5.0):
+                raise TimeoutError("test setup: proceed never released")
+            return real_fn(*args, **kwargs)
+
+        return slow
+
+    with contextlib.ExitStack() as stack:
+        for target in targets:
+            module_path, _, attr_name = target.rpartition(".")
+            module = importlib.import_module(module_path)
+            real = getattr(module, attr_name)
+            stack.enter_context(patch(target, new=make_slow(real)))
+
+        try:
+            yield started, proceed
+        finally:
+            proceed.set()
+
+
 async def test_lifecycle_no_fd_leak_when_internal_task_cancelled_during_open(
     serial_pair: SerialPair,
 ) -> None:
     """Cancelling internal tasks during connect must not leak resources."""
-    real_open = os.open
-    started = threading.Event()
-    proceed = threading.Event()
-
-    def slow_open(path: Any, flags: int, *args: Any, **kwargs: Any) -> int:
-        started.set()
-        if not proceed.wait(timeout=5.0):
-            raise TimeoutError("test setup: proceed never released")
-        return real_open(path, flags, *args, **kwargs)
-
     loop = asyncio.get_running_loop()
     protocol = RecordingProtocol()
 
-    with patch("os.open", new=slow_open):
-        try:
-            connect_task = asyncio.create_task(
-                create_serial_connection(
-                    loop, lambda: protocol, serial_pair.left, baudrate=115200
-                )
+    slow_targets = ["os.open"]
+
+    if sys.platform == "win32":
+        slow_targets.append("serialx.platforms.serial_win32.CreateFile")
+
+    with patch_slow(*slow_targets) as (started, proceed):
+        existing_tasks = asyncio.all_tasks(loop)
+
+        async def connect() -> None:
+            transport, _ = await create_serial_connection(
+                loop, lambda: protocol, serial_pair.left, baudrate=115200
             )
+            transport.close()
+            await transport.wait_closed()
 
-            # POSIX: wait briefly for slow_open to fire. Other backends: no-op.
-            await loop.run_in_executor(None, started.wait, 1.0)
+        connect_task = asyncio.create_task(connect())
 
-            # Cancel every transport-internal in-flight task. On POSIX this hits
-            # the os.open mid-syscall window.
-            for task in asyncio.all_tasks(loop):
-                if task is asyncio.current_task() or task.done():
-                    continue
-                task.cancel()
+        # Wait briefly for a patched syscall to fire. Network backends never
+        # hit one; for those this just gives the connect a head start.
+        await loop.run_in_executor(None, started.wait, 1.0)
 
-            # Release `slow_open`. The real os.open returns a fd, and the
-            # executor tries to deliver to a (possibly cancelled) future.
-            proceed.set()
+        # Cancel every transport-internal in-flight task. When a patched
+        # syscall is mid-flight this hits the cancel window.
+        for task in asyncio.all_tasks(loop) - existing_tasks:
+            if task is asyncio.current_task() or task.done():
+                continue
+            task.cancel()
 
-            with contextlib.suppress(BaseException):
-                await asyncio.wait_for(connect_task, timeout=2.0)
-            await asyncio.sleep(0.2)
-        finally:
-            proceed.set()
+        # Release any blocked syscall. The real call returns its handle/fd,
+        # and the executor tries to deliver to a (possibly cancelled) future.
+        proceed.set()
+
+        with contextlib.suppress(asyncio.CancelledError):
+            await connect_task
 
 
 def test_lifecycle_close_without_wait_closed_no_warnings(

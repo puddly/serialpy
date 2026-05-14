@@ -253,6 +253,7 @@ class SocketSerialTransport(BaseSerialTransport):
                 host=self._serial._host,
                 port=self._serial._port,
             )
+
         self._tcp_transport = tcp_transport
 
         if self._connection_lost_called:
