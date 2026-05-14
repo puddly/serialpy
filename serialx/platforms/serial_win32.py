@@ -454,6 +454,7 @@ class Win32SerialTransport(BaseSerialTransport):
         self._close_future: asyncio.Future[None] | None = None
         self._closing: bool = False
         self._connect_in_progress: bool = False
+        self._connection_made_waiter: asyncio.Future[None] | None = None
 
     def serial_close(self) -> None:
         """Close the serial port."""
@@ -489,6 +490,12 @@ class Win32SerialTransport(BaseSerialTransport):
 
         # Ignore `transport` and pass self instead
         self._call_protocol_connection_made()
+
+        if (
+            self._connection_made_waiter is not None
+            and not self._connection_made_waiter.done()
+        ):
+            self._connection_made_waiter.set_result(None)
 
     def protocol_connection_lost(self, exc: Exception | None) -> None:
         """Forward connection_lost to the protocol."""
@@ -611,6 +618,7 @@ class Win32SerialTransport(BaseSerialTransport):
             # Use the internal _make_duplex_pipe_transport to create a true overlapping
             # bidirectional transport on the single handle.
             assert hasattr(self._loop, "_make_duplex_pipe_transport")
+            self._connection_made_waiter = self._loop.create_future()
             self._internal_transport = self._loop._make_duplex_pipe_transport(
                 # Proxy access to serial and protocol attributes through this instance
                 sock=_MethodProxy(
@@ -635,6 +643,11 @@ class Win32SerialTransport(BaseSerialTransport):
             )
             if self._closing:
                 self._internal_transport.close()  # type: ignore[unreachable]
+                return
+
+            # The internal duplex pipe transport schedules connection_made via
+            # call_soon. Wait for it so callers can assume MADE upon return.
+            await self._connection_made_waiter
         except BaseException:
             if self._handle is not None:
                 await self._loop.run_in_executor(None, _safe_close_handle, self._handle)

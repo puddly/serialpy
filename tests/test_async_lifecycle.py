@@ -308,7 +308,9 @@ async def test_lifecycle_abort_during_drain_escalates(
         await asyncio.wait_for(sender.wait_closed(), timeout=5.0)
         assert sender_proto.state is ProtocolState.LOST
     finally:
+        sender.close()
         receiver.close()
+        await asyncio.wait_for(sender.wait_closed(), timeout=5.0)
         await asyncio.wait_for(receiver.wait_closed(), timeout=5.0)
     sender_proto.assert_clean()
     receiver_proto.assert_clean()
