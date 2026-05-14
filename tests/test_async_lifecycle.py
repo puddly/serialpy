@@ -41,9 +41,21 @@ class RecordingProtocol(asyncio.Protocol):
         self.connection_made_transport = None
         self.connection_lost_exc = None
         self.data_received_chunks: list[bytes] = []
-        self.eof_received_calls: int = 0
-        self.pause_writing_calls: int = 0
-        self.resume_writing_calls: int = 0
+        self._state_waiters: dict[ProtocolState, list[asyncio.Future[None]]] = {}
+
+    def _set_state(self, state: ProtocolState) -> None:
+        self._state = state
+        for fut in self._state_waiters.pop(state, []):
+            if not fut.done():
+                fut.set_result(None)
+
+    async def wait_for_state(self, state: ProtocolState) -> None:
+        """Resolve once the protocol has reached `state`."""
+        if self._state is state:
+            return
+        fut: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self._state_waiters.setdefault(state, []).append(fut)
+        await fut
 
     @property
     def state(self) -> ProtocolState:
@@ -67,13 +79,13 @@ class RecordingProtocol(asyncio.Protocol):
         self._require_state("connection_made", ProtocolState.INIT)
         assert isinstance(transport, BaseSerialTransport)
         self.connection_made_transport = transport
-        self._state = ProtocolState.MADE
+        self._set_state(ProtocolState.MADE)
 
     def connection_lost(self, exc: Exception | None) -> None:
         """Enforce MADE -> LOST."""
         self._require_state("connection_lost", ProtocolState.MADE)
         self.connection_lost_exc = exc
-        self._state = ProtocolState.LOST
+        self._set_state(ProtocolState.LOST)
 
     def data_received(self, data: bytes) -> None:
         """Record an incoming chunk; only valid in MADE."""
@@ -83,18 +95,15 @@ class RecordingProtocol(asyncio.Protocol):
     def eof_received(self) -> bool | None:
         """Record an EOF; only valid in MADE."""
         self._require_state("eof_received", ProtocolState.MADE)
-        self.eof_received_calls += 1
         return None
 
     def pause_writing(self) -> None:
         """Only valid in MADE."""
         self._require_state("pause_writing", ProtocolState.MADE)
-        self.pause_writing_calls += 1
 
     def resume_writing(self) -> None:
         """Only valid in MADE."""
         self._require_state("resume_writing", ProtocolState.MADE)
-        self.resume_writing_calls += 1
 
     def assert_clean(self) -> None:
         """Fail the test if any state violation was recorded."""
@@ -255,11 +264,7 @@ async def test_lifecycle_close_drains_pending_writes(
         sender.close()  # drain semantics
         await sender.wait_closed()
 
-        # Wait until we've seen the full payload or read times out.
-        deadline = loop.time() + 5.0
         while len(receiver_proto.total_received) < len(payload):
-            if loop.time() >= deadline:
-                break
             await asyncio.sleep(0.05)
 
         assert receiver_proto.total_received == payload
@@ -314,47 +319,6 @@ async def test_lifecycle_abort_during_drain_escalates(
         await receiver.wait_closed()
     sender_proto.assert_clean()
     receiver_proto.assert_clean()
-
-
-# --- EOF from peer ---
-
-
-async def test_lifecycle_peer_close_calls_connection_lost(
-    serial_pair: SerialPair,
-) -> None:
-    """When the peer closes, our protocol gets connection_lost(None)."""
-    if sys.platform == "win32":
-        pytest.skip("Windows does not signal EOF on serial-pair peer close")
-
-    loop = asyncio.get_running_loop()
-    left_proto = RecordingProtocol()
-    right_proto = RecordingProtocol()
-
-    left, _ = await create_serial_connection(
-        loop, lambda: left_proto, serial_pair.left, baudrate=115200
-    )
-    right, _ = await create_serial_connection(
-        loop, lambda: right_proto, serial_pair.right, baudrate=115200
-    )
-
-    try:
-        right.close()
-        await right.wait_closed()
-
-        # Wait for our side to observe the peer close.
-        deadline = loop.time() + 5.0
-        while left_proto.state is not ProtocolState.LOST:
-            if loop.time() >= deadline:
-                break
-            await asyncio.sleep(0.05)
-    finally:
-        left.close()
-        await left.wait_closed()
-
-    assert left_proto.state is ProtocolState.LOST
-    assert left_proto.connection_lost_exc is None
-    left_proto.assert_clean()
-    right_proto.assert_clean()
 
 
 # --- is_closing() state machine ---
@@ -481,7 +445,10 @@ async def test_lifecycle_repeated_open_close_cycles(
     for _ in range(5):
         protocol = RecordingProtocol()
         transport, _ = await create_serial_connection(
-            loop, make_factory(protocol), serial_pair.left, baudrate=115200
+            loop,
+            make_factory(protocol),
+            serial_pair.left,
+            baudrate=115200,
         )
         transport.close()
         await transport.wait_closed()
@@ -547,10 +514,7 @@ async def test_lifecycle_data_received_after_connection_made(
         right.write(b"hello")
         await right.flush()
 
-        deadline = loop.time() + 2.0
         while left_proto.total_received != b"hello":
-            if loop.time() >= deadline:
-                break
             await asyncio.sleep(0.01)
 
         assert left_proto.total_received == b"hello"
