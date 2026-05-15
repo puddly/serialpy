@@ -588,7 +588,11 @@ class Win32SerialTransport(BaseSerialTransport):
         )
 
         try:
-            handle = await self._open_fut
+            # Shield so a cancellation of the awaiting task doesn't cancel the
+            # executor future. Otherwise, when `CreateFile` completes after the
+            # cancel, `wrap_future` drops the result silently and the HANDLE
+            # is leaked.
+            handle = await asyncio.shield(self._open_fut)
         except asyncio.CancelledError:
             self._open_fut.add_done_callback(self._on_cancelled_open_done)
             raise

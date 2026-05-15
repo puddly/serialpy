@@ -221,7 +221,7 @@ def _snapshot_open_resources() -> set[tuple[str, int]]:
         proc = psutil.Process()
         out.update(("fd", f.fd) for f in proc.open_files() if f.fd >= 0)
         out.update(("fd", c.fd) for c in proc.net_connections(kind="all") if c.fd >= 0)
-    elif win_handles is not None:
+    if win_handles is not None:
         out.update(("handle", h) for h in win_handles.snapshot_file_handles())
 
     return out
