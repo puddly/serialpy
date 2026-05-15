@@ -581,17 +581,29 @@ async def test_lifecycle_invalid_kwarg_surfaces_no_callbacks(
 
 
 @contextlib.contextmanager
-def patch_slow(*targets: str) -> Iterator[tuple[threading.Event, threading.Event]]:
-    """Patch each target callable to block on `proceed` after signaling `started`."""
+def patch_slow(
+    *targets: str,
+) -> Iterator[tuple[threading.Event, threading.Event, threading.Event]]:
+    """Patch each target callable to block on `proceed` after signaling `started`.
+
+    Yields `(started, proceed, completed)`. `completed` is set after the real
+    underlying call has returned in every patched call site — useful when the
+    test needs to wait for the executor thread to finish before checking for
+    leaked resources.
+    """
     started = threading.Event()
     proceed = threading.Event()
+    completed = threading.Event()
 
     def make_slow(real_fn: Callable[..., Any]) -> Callable[..., Any]:
         def slow(*args: Any, **kwargs: Any) -> Any:
             started.set()
             if not proceed.wait(timeout=5.0):
                 raise TimeoutError("test setup: proceed never released")
-            return real_fn(*args, **kwargs)
+            try:
+                return real_fn(*args, **kwargs)
+            finally:
+                completed.set()
 
         return slow
 
@@ -603,7 +615,7 @@ def patch_slow(*targets: str) -> Iterator[tuple[threading.Event, threading.Event
             stack.enter_context(patch(target, new=make_slow(real)))
 
         try:
-            yield started, proceed
+            yield started, proceed, completed
         finally:
             proceed.set()
 
@@ -620,7 +632,7 @@ async def test_lifecycle_no_fd_leak_when_internal_task_cancelled_during_open(
     if sys.platform == "win32":
         slow_targets.append("serialx.platforms.serial_win32.CreateFile")
 
-    with patch_slow(*slow_targets) as (started, proceed):
+    with patch_slow(*slow_targets) as (started, proceed, completed):
         existing_tasks = asyncio.all_tasks(loop)
 
         async def connect() -> None:
@@ -649,6 +661,11 @@ async def test_lifecycle_no_fd_leak_when_internal_task_cancelled_during_open(
 
         with contextlib.suppress(asyncio.CancelledError):
             await connect_task
+
+        # Make sure the executor thread fully returned from the real syscall
+        # so that any leaked fd/handle is visible to teardown's snapshot.
+        if started.is_set():
+            await loop.run_in_executor(None, completed.wait, 5.0)
 
 
 def test_lifecycle_close_without_wait_closed_no_warnings(
