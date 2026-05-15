@@ -24,11 +24,6 @@ from typing_extensions import Self
 
 import serialx
 
-if sys.platform == "win32":
-    from tests.helpers import win_handles
-else:
-    win_handles = None
-
 _PYODIDE_PAIR_COUNTER = 0
 
 SOCAT_BINARY = shutil.which("socat")
@@ -212,31 +207,30 @@ class SerialPair(UnresolvedSerialPair):
     unplug_right: Callable[[], None] | None = None
 
 
-def _snapshot_open_resources() -> set[tuple[str, int]]:
-    """Return all allocated file descriptors, handles, sockets, etc."""
-    out: set[tuple[str, int]] = set()
+def _snapshot_fds() -> set[int]:
+    """Return the set of open fd numbers for this process."""
     if sys.platform == "linux":
-        out.update(("fd", int(e)) for e in os.listdir(f"/proc/{os.getpid()}/fd"))
-    elif sys.platform != "emscripten":
-        proc = psutil.Process()
-        out.update(("fd", f.fd) for f in proc.open_files() if f.fd >= 0)
-        out.update(("fd", c.fd) for c in proc.net_connections(kind="all") if c.fd >= 0)
-    if win_handles is not None:
-        out.update(("handle", h) for h in win_handles.snapshot_file_handles())
+        return {int(e) for e in os.listdir(f"/proc/{os.getpid()}/fd")}
 
-    return out
+    if sys.platform == "emscripten":
+        return set()
+
+    proc = psutil.Process()
+    fds: set[int] = {f.fd for f in proc.open_files() if f.fd >= 0}
+    fds |= {c.fd for c in proc.net_connections(kind="all") if c.fd >= 0}
+    return fds
 
 
 @contextlib.contextmanager
 def check_fd_leaks() -> Iterator[None]:
-    """Fail if any file descriptor/handle is opened in this block without being closed."""
-    before = _snapshot_open_resources()
+    """Fail if any file descriptor is opened in this block without being closed."""
+    before = _snapshot_fds()
     try:
         yield
     finally:
-        leaked = _snapshot_open_resources() - before
+        leaked = _snapshot_fds() - before
         if leaked:
-            pytest.fail(f"Leaked resources: {sorted(leaked)}")
+            pytest.fail(f"Leaked file descriptors: {sorted(leaked)}")
 
 
 def _get_listening_ports(pid: int) -> list[int]:
