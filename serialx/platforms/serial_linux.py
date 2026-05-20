@@ -180,6 +180,14 @@ def iterdir_safe(path: Path) -> Iterator[Path]:
         yield from path.iterdir()
 
 
+def _read_optional_sysfs(path: Path) -> str | None:
+    """Read a sysfs string file, returning None if it does not exist."""
+    try:
+        return path.read_text()[:-1]
+    except OSError:
+        return None
+
+
 def linux_list_serial_ports() -> list[SerialPortInfo]:
     """List serial ports on Linux."""
     by_id_symlinks = {}
@@ -214,60 +222,60 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
             # USB-serial chips
             usb_interface = resolved.parent
             usb_device = usb_interface.parent
-            interface_file = usb_interface / "interface"
 
             try:
-                info = SerialPortInfo(
-                    device=str(unique_device),
-                    resolved_device=str(device),
-                    vid=int((usb_device / "idVendor").read_text(), 16),
-                    pid=int((usb_device / "idProduct").read_text(), 16),
-                    serial_number=(usb_device / "serial").read_text()[:-1],
-                    manufacturer=(usb_device / "manufacturer").read_text()[:-1],
-                    product=(usb_device / "product").read_text()[:-1],
-                    bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                    interface_description=(
-                        interface_file.read_text()[:-1]
-                        if interface_file.exists()
-                        else None
-                    ),
-                    interface_num=int(
-                        (usb_interface / "bInterfaceNumber").read_text(), 16
-                    ),
+                vid = int((usb_device / "idVendor").read_text(), 16)
+                pid = int((usb_device / "idProduct").read_text(), 16)
+                bcd_device = int((usb_device / "bcdDevice").read_text(), 16)
+                interface_num = int(
+                    (usb_interface / "bInterfaceNumber").read_text(), 16
                 )
             except OSError:
                 LOGGER.debug(
                     "Serial device %r disappeared during iteration", usb_device
                 )
                 continue
+
+            info = SerialPortInfo(
+                device=str(unique_device),
+                resolved_device=str(device),
+                vid=vid,
+                pid=pid,
+                serial_number=_read_optional_sysfs(usb_device / "serial"),
+                manufacturer=_read_optional_sysfs(usb_device / "manufacturer"),
+                product=_read_optional_sysfs(usb_device / "product"),
+                bcd_device=bcd_device,
+                interface_description=_read_optional_sysfs(usb_interface / "interface"),
+                interface_num=interface_num,
+            )
         elif subsystem == "usb":
             # CDC ACM devices
             usb_interface = resolved
             usb_device = usb_interface.parent
-            interface_file = usb_interface / "interface"
 
             try:
-                info = SerialPortInfo(
-                    device=str(unique_device),
-                    resolved_device=str(device),
-                    vid=int((usb_device / "idVendor").read_text(), 16),
-                    pid=int((usb_device / "idProduct").read_text(), 16),
-                    serial_number=(usb_device / "serial").read_text()[:-1],
-                    manufacturer=(usb_device / "manufacturer").read_text()[:-1],
-                    product=(usb_device / "product").read_text()[:-1],
-                    bcd_device=int((usb_device / "bcdDevice").read_text(), 16),
-                    interface_description=(
-                        interface_file.read_text()[:-1]
-                        if interface_file.exists()
-                        else None
-                    ),
-                    interface_num=int(
-                        (usb_interface / "bInterfaceNumber").read_text(), 16
-                    ),
+                vid = int((usb_device / "idVendor").read_text(), 16)
+                pid = int((usb_device / "idProduct").read_text(), 16)
+                bcd_device = int((usb_device / "bcdDevice").read_text(), 16)
+                interface_num = int(
+                    (usb_interface / "bInterfaceNumber").read_text(), 16
                 )
             except OSError:
                 LOGGER.debug("USB device %r disappeared during iteration", usb_device)
                 continue
+
+            info = SerialPortInfo(
+                device=str(unique_device),
+                resolved_device=str(device),
+                vid=vid,
+                pid=pid,
+                serial_number=_read_optional_sysfs(usb_device / "serial"),
+                manufacturer=_read_optional_sysfs(usb_device / "manufacturer"),
+                product=_read_optional_sysfs(usb_device / "product"),
+                bcd_device=bcd_device,
+                interface_description=_read_optional_sysfs(usb_interface / "interface"),
+                interface_num=interface_num,
+            )
         elif subsystem in ("serial-base", "platform", "pnp", "amba"):
             # `serial-base` is the per-port subsystem introduced in Linux 6.10.
             # Older kernels expose native ports through their bus directly:
