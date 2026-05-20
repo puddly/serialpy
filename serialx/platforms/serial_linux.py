@@ -222,7 +222,6 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
             # USB-serial chips
             usb_interface = resolved.parent
             usb_device = usb_interface.parent
-            interface_file = usb_interface / "interface"
 
             try:
                 vid = int((usb_device / "idVendor").read_text(), 16)
@@ -246,18 +245,13 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
                 manufacturer=_read_optional_sysfs(usb_device / "manufacturer"),
                 product=_read_optional_sysfs(usb_device / "product"),
                 bcd_device=bcd_device,
-                interface_description=(
-                    interface_file.read_text()[:-1]
-                    if interface_file.exists()
-                    else None
-                ),
+                interface_description=_read_optional_sysfs(usb_interface / "interface"),
                 interface_num=interface_num,
             )
         elif subsystem == "usb":
             # CDC ACM devices
             usb_interface = resolved
             usb_device = usb_interface.parent
-            interface_file = usb_interface / "interface"
 
             try:
                 vid = int((usb_device / "idVendor").read_text(), 16)
@@ -279,11 +273,7 @@ def linux_list_serial_ports() -> list[SerialPortInfo]:
                 manufacturer=_read_optional_sysfs(usb_device / "manufacturer"),
                 product=_read_optional_sysfs(usb_device / "product"),
                 bcd_device=bcd_device,
-                interface_description=(
-                    interface_file.read_text()[:-1]
-                    if interface_file.exists()
-                    else None
-                ),
+                interface_description=_read_optional_sysfs(usb_interface / "interface"),
                 interface_num=interface_num,
             )
         elif subsystem in ("serial-base", "platform", "pnp", "amba"):
