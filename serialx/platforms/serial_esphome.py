@@ -644,7 +644,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._register_transport_data_handler()
         )
 
-        self._protocol.connection_made(self)
+        self._call_protocol_connection_made()
 
     async def _register_transport_data_handler(self) -> Callable[[], None]:
         """Register `_on_data` on the client's loop and return the unsub."""
@@ -670,6 +670,8 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial proxy."""
+        if self._closing:
+            return
         assert self._serial is not None
         self._serial.write(data)
 
@@ -682,6 +684,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         if self._closing:
             return
         self._closing = True
+        self._mark_user_closed()
 
         serial = self._serial
         if self._unsub is not None:
@@ -708,6 +711,9 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._call_protocol_connection_lost(None)
             return
 
+        # TODO: clean shutdown without `wait_closed()` needs a public sync
+        # force-disconnect on APIClient (aioesphomeapi); today only the
+        # private `api._connection.force_disconnect()` is sync.
         self._close_task = self._loop.create_task(self._async_close(api))
 
     def abort(self) -> None:

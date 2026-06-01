@@ -69,7 +69,6 @@ class DescriptorTransport(BaseSerialTransport):
 
         self._close_task: asyncio.Task[None] | None = None
         self._open_fut: asyncio.Future[int] | None = None
-        self._connection_made: bool = False
 
     async def _open(self, path: str | os.PathLike[str]) -> None:
         if self._open_fut is not None:
@@ -80,10 +79,15 @@ class DescriptorTransport(BaseSerialTransport):
         )
 
         try:
-            self._fileno = await self._open_fut
+            # Shield so that a cancellation of the awaiting task does NOT cancel
+            # the executor future. Otherwise, when `os.open` completes after the
+            # cancel, `future.set_result(fd)` is rejected (future already
+            # cancelled) and the fd is silently leaked.
+            self._fileno = await asyncio.shield(self._open_fut)
         except asyncio.CancelledError:
-            # `os.open` may still finish in the executor after cancellation. If that
-            # happens, close the resulting fd to avoid leaks.
+            # `os.open` may still finish in the executor after cancellation. The
+            # shield kept the underlying future alive, so the done-callback will
+            # see the fd and arrange to close it.
             self._open_fut.add_done_callback(self._on_cancelled_open_done)
             raise
         except BaseException:
@@ -117,7 +121,6 @@ class DescriptorTransport(BaseSerialTransport):
     ) -> None:
         assert self._fileno is not None
         self._loop.add_reader(self._fileno, self._read_ready)
-        self._connection_made = True
 
     def _read_ready(self) -> None:
         LOGGER.debug("Event loop woke up reader")
@@ -351,6 +354,7 @@ class DescriptorTransport(BaseSerialTransport):
     def close(self) -> None:
         """Close the transport."""
         LOGGER.debug("Closing at the request of the application")
+        self._mark_user_closed()
         if self._closing:
             if (
                 self._fileno is None
@@ -402,6 +406,7 @@ class DescriptorTransport(BaseSerialTransport):
 
     def abort(self) -> None:
         """Abort the transport immediately."""
+        self._mark_user_closed()
         self._close(None)
 
     def _close(self, exc: Exception | None = None) -> None:
@@ -463,20 +468,4 @@ class DescriptorTransport(BaseSerialTransport):
                 LOGGER.debug("Closing file descriptor %s", fileno)
                 await self._loop.run_in_executor(None, _safe_close, fileno)
         finally:
-            if self._connection_made:
-                LOGGER.debug("Calling protocol `connection_lost` with exc=%r", exc)
-                try:
-                    self._protocol.connection_lost(exc)
-                except (SystemExit, KeyboardInterrupt):
-                    raise
-                except BaseException as protocol_exc:
-                    self._loop.call_exception_handler(
-                        {
-                            "message": "protocol.connection_lost() failed",
-                            "exception": protocol_exc,
-                            "transport": self,
-                            "protocol": self._protocol,
-                        }
-                    )
-
-            self._resolve_closed_waiter()
+            self._call_protocol_connection_lost(exc)

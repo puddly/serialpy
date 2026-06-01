@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import IO, Any
 
@@ -224,7 +225,6 @@ def _snapshot_fds() -> set[int]:
 def check_fd_leaks() -> Iterator[None]:
     """Fail if any file descriptor is opened in this block without being closed."""
     before = _snapshot_fds()
-
     try:
         yield
     finally:
@@ -321,7 +321,10 @@ def create_adapter_pair(left: str, right: str) -> Iterator[tuple[str, str]]:
                                         f.fd,
                                         proc.info["cmdline"],
                                     )
-                        except (psutil.NoSuchProcess, psutil.AccessDenied):  # noqa: PERF203
+                        except (  # noqa: PERF203
+                            psutil.NoSuchProcess,
+                            psutil.AccessDenied,
+                        ):
                             pass
 
                     # Check our own process
@@ -593,6 +596,7 @@ def create_hub4com_pair(
     ]
 
     procs = []
+    drain_threads: list[threading.Thread] = []
 
     try:
         for adapter in (left_adapter, right_adapter):
@@ -618,6 +622,16 @@ def create_hub4com_pair(
                 name="hub4com",
             )
 
+        # Drain hub4com's stdout/stderr. Otherwise the OS pipe buffers fill after a
+        # handful of sessions and hub4com blocks.
+        for proc in procs:
+            for stream in (proc.stdout, proc.stderr):
+                t = threading.Thread(
+                    target=lambda s=stream: list(iter(s.readline, b"")),
+                )
+                t.start()
+                drain_threads.append(t)
+
         left, right = [_get_listening_ports(proc.pid)[0] for proc in procs]
 
         yield (
@@ -629,6 +643,9 @@ def create_hub4com_pair(
             if proc.returncode is None:
                 proc.terminate()
                 proc.wait()
+
+        for t in drain_threads:
+            t.join()
 
 
 @contextlib.asynccontextmanager

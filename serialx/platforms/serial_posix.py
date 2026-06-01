@@ -523,7 +523,7 @@ class PosixSerialTransport(DescriptorTransport):
 
         await super()._connect()
 
-        self._protocol.connection_made(self)
+        self._call_protocol_connection_made()
 
     async def _flush(self) -> None:
         """Flush write buffers, waiting until all data is written, internal."""

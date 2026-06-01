@@ -896,6 +896,13 @@ class BaseSerialTransport(asyncio.Transport):
         self._serial: BaseSerial | None = None
         self._closing: bool = False
         self._closed_waiter: asyncio.Future[None] = loop.create_future()
+        self._connection_made_called: bool = False
+        self._connection_lost_called: bool = False
+        self._user_initiated_close: bool = False
+
+    def _mark_user_closed(self) -> None:
+        """Record that the application requested close/abort."""
+        self._user_initiated_close = True
 
     def _mark_broken(self, exc: Exception) -> None:
         if self._serial is not None:
@@ -913,9 +920,23 @@ class BaseSerialTransport(asyncio.Transport):
         if not self._closed_waiter.done():
             self._closed_waiter.set_result(None)
 
+    def _call_protocol_connection_made(self) -> None:
+        """Mark connection_made and dispatch to the protocol exactly once."""
+        assert not self._connection_made_called
+
+        self._connection_made_called = True
+        self._protocol.connection_made(self)
+
     def _call_protocol_connection_lost(self, exc: Exception | None) -> None:
+        """Idempotent dispatch of connection_lost."""
+        if self._connection_lost_called:
+            return
+
+        self._connection_lost_called = True
+
         try:
-            self._protocol.connection_lost(exc)
+            if self._connection_made_called:
+                self._protocol.connection_lost(exc)
         except (SystemExit, KeyboardInterrupt):
             raise
         except BaseException as protocol_exc:

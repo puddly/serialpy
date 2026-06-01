@@ -219,7 +219,6 @@ class SocketSerialTransport(BaseSerialTransport):
         super().__init__(loop, protocol)
         self._tcp_transport: asyncio.Transport | None = None
         self._tcp_connection_lost_waiter: asyncio.Future[None] | None = None
-        self._connection_lost_called = False
 
     async def _connect(  # type: ignore[override]
         self,
@@ -254,6 +253,7 @@ class SocketSerialTransport(BaseSerialTransport):
                 host=self._serial._host,
                 port=self._serial._port,
             )
+
         self._tcp_transport = tcp_transport
 
         if self._connection_lost_called:
@@ -264,7 +264,7 @@ class SocketSerialTransport(BaseSerialTransport):
             self._tcp_transport = None
             return
 
-        self._protocol.connection_made(self)
+        self._call_protocol_connection_made()
 
     def _data_received(self, data: bytes) -> None:
         """Handle data received from the TCP transport."""
@@ -282,12 +282,12 @@ class SocketSerialTransport(BaseSerialTransport):
         """Handle connection lost from the TCP transport."""
         if self._connection_lost_called:
             return
-        self._connection_lost_called = True
         self._closing = True
         self._tcp_transport = None
-        if exc is None:
-            exc = OSError(errno.EIO, "socket closed by peer")
-        self._mark_broken(exc)
+        if not self._user_initiated_close:
+            if exc is None:
+                exc = OSError(errno.EIO, "socket closed by peer")
+            self._mark_broken(exc)
         self._call_protocol_connection_lost(exc)
 
     def _tcp_connection_lost(self) -> None:
@@ -323,6 +323,7 @@ class SocketSerialTransport(BaseSerialTransport):
         if self._connection_lost_called:
             return
         self._closing = True
+        self._mark_user_closed()
 
         if self._tcp_transport is not None:
             self._tcp_transport.abort()
@@ -334,6 +335,7 @@ class SocketSerialTransport(BaseSerialTransport):
         if self._connection_lost_called:
             return
         self._closing = True
+        self._mark_user_closed()
 
         if self._tcp_transport is not None:
             self._tcp_transport.close()
