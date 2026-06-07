@@ -453,10 +453,6 @@ class _MethodProxy:
 
     def eof_received(self) -> bool:
         """Handle EOF by signalling the transport to close."""
-        # PATCH: asyncio proactor calls this on pipe EOF; _MethodProxy doesn't
-        # implement it, causing a fatal AttributeError. Return False to signal
-        # the transport should close normally.
-        # See: asyncio/proactor_events.py _eof_received()
         return False
 
     def __getattr__(self, name: str) -> Any:
