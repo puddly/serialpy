@@ -284,9 +284,7 @@ class SocketSerialTransport(BaseSerialTransport):
             return
         self._closing = True
         self._tcp_transport = None
-        if not self._user_initiated_close:
-            if exc is None:
-                exc = OSError(errno.EIO, "socket closed by peer")
+        if not self._user_initiated_close and exc is not None:
             self._mark_broken(exc)
         self._call_protocol_connection_lost(exc)
 

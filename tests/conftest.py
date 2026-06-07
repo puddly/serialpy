@@ -254,22 +254,22 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
     stack = contextlib.ExitStack()
     left = spec.left
     right = spec.right
-    unplug_left: Callable[[], None] | None = None
-    unplug_right: Callable[[], None] | None = None
+    unplug_left_graceful: Callable[[], None] | None = None
+    unplug_left_abrupt: Callable[[], None] | None = None
 
     for backend in spec.backends[::-1]:
         match backend:
             # Synthetic backends don't have an underlying serial port
             case SerialBackend.SOCAT:
                 assert left is None and right is None
-                left, right, unplug_left, unplug_right = stack.enter_context(
-                    create_socat_pair()
+                left, right, unplug_left_graceful, unplug_left_abrupt = (
+                    stack.enter_context(create_socat_pair())
                 )
 
             case SerialBackend.SOCKET:
                 assert left is None and right is None
-                left, right, unplug_left, unplug_right = stack.enter_context(
-                    create_socket_pair()
+                left, right, unplug_left_graceful, unplug_left_abrupt = (
+                    stack.enter_context(create_socket_pair())
                 )
 
             case SerialBackend.PYODIDE:
@@ -280,11 +280,15 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             case SerialBackend.ESPHOME_HOST:
                 assert left is not None and right is not None
                 left, right = stack.enter_context(create_esphome_pair(left, right))
+                # The esphome daemon sits between the client and the inner PTY,
+                # so an inner unplug doesn't surface as a client disconnect.
+                unplug_left_graceful = None
+                unplug_left_abrupt = None
 
             case SerialBackend.SER2NET:
                 assert left is not None and right is not None
-                left, right, unplug_left, unplug_right = stack.enter_context(
-                    create_ser2net_pair(left, right)
+                left, right, unplug_left_graceful, unplug_left_abrupt = (
+                    stack.enter_context(create_ser2net_pair(left, right))
                 )
 
             case SerialBackend.HUB4COM:
@@ -333,8 +337,8 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             backends=spec.backends,
             quirks=spec.quirks,
             uri_scheme=effective_scheme,
-            unplug_left=unplug_left,
-            unplug_right=unplug_right,
+            unplug_left_graceful=unplug_left_graceful,
+            unplug_left_abrupt=unplug_left_abrupt,
         )
     finally:
         stack.close()

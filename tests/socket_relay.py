@@ -7,6 +7,7 @@ import contextlib
 import logging
 import queue
 import socket
+import struct
 import threading
 import time
 
@@ -35,6 +36,22 @@ class _SocketPairRelay:
             return
         with contextlib.suppress(OSError):
             sock.shutdown(socket.SHUT_RDWR)
+        with contextlib.suppress(OSError):
+            sock.close()
+
+    @staticmethod
+    def _reset_socket(sock: socket.socket | None) -> None:
+        """Abruptly drop a connection with a RST, simulating a yanked link."""
+        if sock is None:
+            return
+
+        with contextlib.suppress(OSError):
+            sock.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_LINGER,
+                struct.pack("ii", 1, 0),
+            )
+
         with contextlib.suppress(OSError):
             sock.close()
 
@@ -188,11 +205,16 @@ class _SocketPairRelay:
         for relay_thread in self.relay_threads:
             relay_thread.start()
 
-    def disconnect_side(self, side: str) -> None:
+    def disconnect_side(self, side: str, *, abrupt: bool) -> None:
         with self.active_lock:
             conn = self.active_connections[side]
             self.active_connections[side] = None
-        if conn is not None:
+        if conn is None:
+            return
+
+        if abrupt:
+            self._reset_socket(conn)
+        else:
             self._close_socket(conn)
 
     def close(self) -> None:
@@ -283,15 +305,19 @@ def create_accept_then_close_server() -> Iterator[str]:
 def create_socket_pair() -> Iterator[
     tuple[str, str, Callable[[], None], Callable[[], None]]
 ]:
-    """Create two socket:// endpoints backed by a bidirectional relay."""
+    """Create two socket:// endpoints backed by a bidirectional relay.
+
+    The relay can drop the left connection either gracefully (FIN) or abruptly
+    (RST), so both unplug flavors are available.
+    """
     relay = _SocketPairRelay()
     relay.start()
     try:
         yield (
             relay.left_url,
             relay.right_url,
-            lambda: relay.disconnect_side("left"),
-            lambda: relay.disconnect_side("right"),
+            lambda: relay.disconnect_side("left", abrupt=False),
+            lambda: relay.disconnect_side("left", abrupt=True),
         )
     finally:
         relay.close()
