@@ -451,6 +451,13 @@ class _MethodProxy:
         self._name = name
         self._mapping = mapping
 
+    def eof_received(self):
+        # PATCH: asyncio proactor calls this on pipe EOF; _MethodProxy doesn't
+        # implement it, causing a fatal AttributeError. Return False to signal
+        # the transport should close normally.
+        # See: asyncio/proactor_events.py _eof_received()
+        return False
+
     def __getattr__(self, name: str) -> Any:
         """Forward attribute access to the mapping."""
         try:
