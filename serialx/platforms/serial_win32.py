@@ -451,7 +451,8 @@ class _MethodProxy:
         self._name = name
         self._mapping = mapping
 
-    def eof_received(self):
+    def eof_received(self) -> bool:
+        """Handle EOF by signalling the transport to close."""
         # PATCH: asyncio proactor calls this on pipe EOF; _MethodProxy doesn't
         # implement it, causing a fatal AttributeError. Return False to signal
         # the transport should close normally.
