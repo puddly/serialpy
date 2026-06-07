@@ -464,9 +464,7 @@ class _MethodProxy:
         try:
             return self._mapping[name]
         except KeyError:
-            raise AttributeError(
-                f"{self._name!r} has no attribute {name!r}"
-            ) from None
+            raise AttributeError(f"{self._name!r} has no attribute {name!r}") from None
 
 
 class Win32SerialTransport(BaseSerialTransport):
