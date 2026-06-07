@@ -451,9 +451,16 @@ class _MethodProxy:
         self._name = name
         self._mapping = mapping
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str):
         """Forward attribute access to the mapping."""
-        return self._mapping[name]
+        try:
+            return self._mapping[name]
+        except KeyError:
+            # asyncio calls optional protocol methods (e.g. eof_received,
+            # pause_writing, resume_writing) that are not part of the
+            # serialx transport contract. Return a no-op so the proactor
+            # event loop does not log a fatal error on Windows shutdown.
+            return lambda *args, **kwargs: None
 
 
 class Win32SerialTransport(BaseSerialTransport):
