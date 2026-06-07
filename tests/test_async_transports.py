@@ -1354,7 +1354,7 @@ async def test_async_unplug_raises_on_streamreader_readline(
 async def test_async_graceful_peer_close_does_not_raise(
     serial_pair: SerialPair,
 ) -> None:
-    """A clean peer FIN must read as EOF and wait_closed() must not raise."""
+    """A clean peer FIN reads as EOF and wait_closed() must not raise."""
     if serial_pair.unplug_left_graceful is None:
         pytest.skip("backend cannot simulate a graceful peer close")
 
@@ -1363,6 +1363,9 @@ async def test_async_graceful_peer_close_does_not_raise(
     try:
         serial_pair.unplug_left_graceful()
         assert await reader.read() == b""
+
+        with pytest.raises(OSError):
+            writer.write(b"foo")
     finally:
         writer.close()
         await writer.wait_closed()

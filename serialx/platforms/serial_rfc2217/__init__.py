@@ -968,8 +968,12 @@ class RFC2217SerialTransport(BaseSerialTransport):
         self._closing = True
         self._tcp_transport = None
 
-        if not self._user_initiated_close and exc is not None:
-            self._mark_broken(exc)
+        if not self._user_initiated_close:
+            self._mark_broken(
+                exc
+                if exc is not None
+                else OSError(errno.EIO, "RFC 2217 connection closed by server")
+            )
 
         # Pending in-protocol waiters can't resolve cleanly mid-handshake, so
         # always fail them with *some* exception even on a user-initiated close.
