@@ -212,6 +212,7 @@ class DescriptorTransport(BaseSerialTransport):
     def _set_write_buffer_limits(
         self, high: int | None = None, low: int | None = None
     ) -> None:
+        # pylint: disable=serialx-reassigned-parameter
         if high is None:
             if low is None:  # noqa: SIM108
                 high = 64 * 1024
@@ -257,9 +258,10 @@ class DescriptorTransport(BaseSerialTransport):
 
         self._check_broken()
 
-        if isinstance(data, bytearray):
-            data = memoryview(data)
-        if not data:
+        buf: bytes | memoryview = (
+            memoryview(data) if isinstance(data, bytearray) else data
+        )
+        if not buf:
             return
 
         if self._closing or self._conn_lost_count > 0:
@@ -273,7 +275,7 @@ class DescriptorTransport(BaseSerialTransport):
         if not self._buffer:
             # Attempt to send it right away first.
             try:
-                n = os.write(self._fileno, data)
+                n = os.write(self._fileno, buf)
             except (BlockingIOError, InterruptedError):
                 n = 0
             except (SystemExit, KeyboardInterrupt):
@@ -288,17 +290,17 @@ class DescriptorTransport(BaseSerialTransport):
                 )
                 return
 
-            len_data = len(data)
+            len_data = len(buf)
             LOGGER.debug("Sent %d of %d bytes", n, len_data)
 
             if n == len_data:
                 return
             elif n > 0:
-                data = memoryview(data)[n:]
+                buf = memoryview(buf)[n:]
             self._loop.add_writer(self._fileno, self._write_ready)
 
-        LOGGER.debug("Buffering %r", data)
-        self._buffer += data
+        LOGGER.debug("Buffering %r", buf)
+        self._buffer += buf
         self._maybe_pause_protocol()
 
     def _write_ready(self) -> None:
