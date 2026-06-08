@@ -87,10 +87,10 @@ class _SocketPairRelay:
         outbound_queue: queue.Queue[bytes],
         peer_side: str,
     ) -> None:
-        # Ensure we don't deadlock
-        conn.settimeout(0.5)
-
         try:
+            # Bounded recv so we don't deadlock or pin the FD
+            conn.settimeout(0.5)
+
             while not self.stop_event.is_set():
                 try:
                     data = conn.recv(4096)
@@ -213,11 +213,19 @@ class _SocketPairRelay:
             relay_thread.start()
 
     def disconnect_side(self, side: str, *, abrupt: bool) -> None:
-        with self.active_lock:
-            conn = self.active_connections[side]
-            self.active_connections[side] = None
+        # The client's connect() returns once the kernel completes the
+        # handshake, which can be before the accept loop has handed us the
+        # socket. Wait for it rather than no-op: it is guaranteed to arrive.
+        deadline = time.monotonic() + 5.0
+        conn = self._get_active_connection(side)
+        while conn is None and time.monotonic() < deadline:
+            time.sleep(0.005)
+            conn = self._get_active_connection(side)
+
         if conn is None:
             return
+
+        self._clear_active_connection(side, conn)
 
         if abrupt:
             self._reset_socket(conn)
