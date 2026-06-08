@@ -17,7 +17,7 @@ import warnings
 import pytest
 
 from serialx import BaseSerialTransport, create_serial_connection
-from tests.common import SerialBackend, SerialPair
+from tests.common import SerialBackend, SerialPair, SerialQuirk
 
 
 class ProtocolState(enum.Enum):
@@ -243,6 +243,7 @@ async def test_lifecycle_close_after_abort_one_connection_lost(
 # --- Drain vs. abort semantics ---
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_PEER_DRAIN_ON_CLOSE)
 async def test_lifecycle_close_drains_pending_writes(
     serial_pair: SerialPair,
 ) -> None:

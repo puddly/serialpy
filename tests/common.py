@@ -75,6 +75,7 @@ class SerialQuirk(str, enum.Enum):
     NO_BUFFER_CONTROL = "no-buffer-control"
     NO_PAUSE_WRITING_CALLBACKS = "no-pause-writing-callbacks"
     NO_EXCLUSIVITY = "no-exclusivity"
+    NO_PEER_DRAIN_ON_CLOSE = "no-peer-drain-on-close"
 
 
 SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
@@ -127,7 +128,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_EXCLUSIVITY,
         }
     ),
-    SerialBackend.SER2NET: frozenset({}),
+    SerialBackend.SER2NET: frozenset({SerialQuirk.NO_PEER_DRAIN_ON_CLOSE}),
     SerialBackend.HUB4COM: frozenset({}),
     SerialBackend.ADAPTER: frozenset(),
     SerialBackend.PYODIDE: frozenset(
