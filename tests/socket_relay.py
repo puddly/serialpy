@@ -87,9 +87,16 @@ class _SocketPairRelay:
         outbound_queue: queue.Queue[bytes],
         peer_side: str,
     ) -> None:
+        # Ensure we don't deadlock
+        conn.settimeout(0.5)
+
         try:
             while not self.stop_event.is_set():
-                data = conn.recv(4096)
+                try:
+                    data = conn.recv(4096)
+                except TimeoutError:
+                    continue  # Ignore timeouts
+
                 if not data:
                     LOGGER.debug("%s client reached EOF", side)
                     return
