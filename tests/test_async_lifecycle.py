@@ -313,7 +313,8 @@ async def test_lifecycle_abort_during_drain_escalates(
         await sender.wait_closed()
         assert sender_proto.state is ProtocolState.LOST
     finally:
-        sender.close()
+        # `abort()` so we do not have to wait for the 4MB of data to actually be sent
+        sender.abort()
         receiver.close()
         await sender.wait_closed()
         await receiver.wait_closed()
