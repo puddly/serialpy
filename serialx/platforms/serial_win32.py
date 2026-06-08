@@ -451,9 +451,16 @@ class _MethodProxy:
         self._name = name
         self._mapping = mapping
 
+    def eof_received(self) -> bool:
+        """Handle EOF by signalling the transport to close."""
+        return False
+
     def __getattr__(self, name: str) -> Any:
         """Forward attribute access to the mapping."""
-        return self._mapping[name]
+        try:
+            return self._mapping[name]
+        except KeyError:
+            raise AttributeError(f"{self._name!r} has no attribute {name!r}") from None
 
 
 class Win32SerialTransport(BaseSerialTransport):
