@@ -71,6 +71,15 @@ exclude = '^tests/esphome/external_components/'
 require_serial = true
 
 [[repos.hooks]]
+id = "pylint"
+name = "pylint"
+entry = "uv run --frozen pylint serialx/"
+language = "system"
+types = ["python"]
+pass_filenames = false
+require_serial = true
+
+[[repos.hooks]]
 id = "cargo-fmt"
 name = "Cargo fmt"
 entry = "cargo fmt --all"
