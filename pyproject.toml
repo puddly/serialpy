@@ -30,6 +30,7 @@ dev = [
   "uv>=0.11.14",
   "ruff>=0.14.6",
   "mypy>=2.1.0",
+  "pylint>=3.3.0",
   "codespell>=2.4.2",
   "tomli>=2.3.0 ; python_version < '3.11'",
   "pytest>=9.0.1",
@@ -177,6 +178,10 @@ disable_error_code = [
   "untyped-decorator",
 ]
 
+[[tool.mypy.overrides]]
+module = ["astroid.*"]
+ignore_missing_imports = true
+
 
 [tool.coverage.run]
 source = ["serialx"]
@@ -184,6 +189,14 @@ relative_files = true
 
 [tool.coverage.paths]
 source = ["serialx/", "serialx\\"]
+
+[tool.pylint.MAIN]
+init-hook = "import sys; sys.path.append('pylint/plugins')"
+load-plugins = ["pylint_serialx"]
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = ["all"]
+enable = ["serialx-reassigned-parameter"]
 
 [tool.ruff]
 target-version = "py310"
@@ -323,6 +336,7 @@ max-complexity = 25
 
 [tool.codespell]
 skip = "tests/data/*"
+ignore-words-list = "astroid"
 
 [tool.coverage.report]
 show_missing = true

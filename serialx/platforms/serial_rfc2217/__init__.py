@@ -622,19 +622,20 @@ class RFC2217Serial(SocketSerial):
 
         # Individual RFC2217 socket reads may not always translate into real serial data
         # we need to loop until it actually produces some, or we hit the timeout limit
+        remaining_timeout = timeout
         while True:
-            if timeout is not None and timeout <= 0:
+            if remaining_timeout is not None and remaining_timeout <= 0:
                 return 0
 
             with measure_time() as get_elapsed:
                 try:
-                    with self._socket_timeout(timeout):
+                    with self._socket_timeout(remaining_timeout):
                         n = self._socket.recv_into(buf)
                 except TimeoutError:
                     return 0
 
-            if timeout is not None:
-                timeout -= get_elapsed()
+            if remaining_timeout is not None:
+                remaining_timeout -= get_elapsed()
 
             if n == 0:
                 self._mark_broken(
@@ -969,9 +970,11 @@ class RFC2217SerialTransport(BaseSerialTransport):
         self._tcp_transport = None
 
         if not self._user_initiated_close:
-            if exc is None:
-                exc = OSError(errno.EIO, "RFC 2217 connection closed by server")
-            self._mark_broken(exc)
+            self._mark_broken(
+                exc
+                if exc is not None
+                else OSError(errno.EIO, "RFC 2217 connection closed by server")
+            )
 
         # Pending in-protocol waiters can't resolve cleanly mid-handshake, so
         # always fail them with *some* exception even on a user-initiated close.

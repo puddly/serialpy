@@ -339,21 +339,24 @@ class BaseSerial(io.RawIOBase):
         """Initialize serial port configuration."""
         super().__init__()
 
-        if not isinstance(stopbits, StopBits):
-            stopbits = StopBits(stopbits)
+        normalized_stopbits = (
+            stopbits if isinstance(stopbits, StopBits) else StopBits(stopbits)
+        )
 
         if parity is None:
-            parity = Parity.NONE
-        elif not isinstance(parity, Parity):
-            parity = Parity(parity)
+            normalized_parity = Parity.NONE
+        elif isinstance(parity, Parity):
+            normalized_parity = parity
+        else:
+            normalized_parity = Parity(parity)
 
         self._path = path
         self._baudrate = baudrate
-        self._stopbits = stopbits
+        self._stopbits = normalized_stopbits
         self._xonxoff = xonxoff
         self._rtscts = rtscts
         self._dsrdtr = dsrdtr
-        self._parity = parity
+        self._parity = normalized_parity
         self._byte_size = byte_size
         self._exclusive = exclusive
         self._read_timeout = read_timeout
@@ -397,9 +400,12 @@ class BaseSerial(io.RawIOBase):
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
         """Create the appropriate serial port subclass for the given URL."""
         handler = get_uri_handler(url)
+        target = url
         if handler.strip_uri_scheme:
-            url = url.removeprefix(handler.scheme).removeprefix(handler.unique_scheme)
-        return handler.sync_cls(url, *args, **kwargs)
+            target = url.removeprefix(handler.scheme).removeprefix(
+                handler.unique_scheme
+            )
+        return handler.sync_cls(target, *args, **kwargs)
 
     @maybe_wrap_exceptions
     def open(self) -> None:
@@ -471,8 +477,9 @@ class BaseSerial(io.RawIOBase):
         """Set modem control bits."""
         self._check_broken()
 
-        if modem_pins is None:
-            modem_pins = ModemPins(
+        pins = modem_pins
+        if pins is None:
+            pins = ModemPins(
                 le=PinState.convert(le),
                 dtr=PinState.convert(dtr),
                 rts=PinState.convert(rts),
@@ -484,7 +491,7 @@ class BaseSerial(io.RawIOBase):
                 dsr=PinState.convert(dsr),
             )
 
-        return self._set_modem_pins(modem_pins)
+        return self._set_modem_pins(pins)
 
     @abstractmethod
     def _get_modem_pins(self) -> ModemPins:
@@ -500,8 +507,8 @@ class BaseSerial(io.RawIOBase):
     def readinto(self, b: Buffer, *, timeout: float | None = None) -> int:
         """Read bytes from serial port into buffer."""
         self._check_broken()
-        timeout = self._read_timeout if timeout is None else timeout
-        return self._readinto(b, timeout=timeout)
+        effective_timeout = self._read_timeout if timeout is None else timeout
+        return self._readinto(b, timeout=effective_timeout)
 
     @abstractmethod
     def _readinto(self, b: Buffer, *, timeout: float | None) -> int:
@@ -512,8 +519,8 @@ class BaseSerial(io.RawIOBase):
     def write(self, data: Buffer, *, timeout: float | None = None) -> int:
         """Write bytes to serial port."""
         self._check_broken()
-        timeout = self._write_timeout if timeout is None else timeout
-        return self._write(data, timeout=timeout)
+        effective_timeout = self._write_timeout if timeout is None else timeout
+        return self._write(data, timeout=effective_timeout)
 
     @abstractmethod
     def _write(self, data: Buffer, *, timeout: float | None) -> int:
@@ -581,14 +588,14 @@ class BaseSerial(io.RawIOBase):
         buffer = bytearray(n)
         view = memoryview(buffer)
         remaining = n
-        timeout = self.read_timeout if timeout is None else timeout
+        remaining_timeout = self.read_timeout if timeout is None else timeout
 
         while remaining > 0:
             with measure_time() as get_elapsed:
-                read = self.readinto(view, timeout=timeout)
+                read = self.readinto(view, timeout=remaining_timeout)
 
-            if timeout is not None:
-                timeout -= get_elapsed()
+            if remaining_timeout is not None:
+                remaining_timeout -= get_elapsed()
 
             view = view[read:]
             remaining -= read
@@ -611,14 +618,14 @@ class BaseSerial(io.RawIOBase):
         """Read until the expected sequence is found."""
         buffer = bytearray()
         expected_len = len(expected)
-        timeout = self.read_timeout if timeout is None else timeout
+        remaining_timeout = self.read_timeout if timeout is None else timeout
 
         while True:
             with measure_time() as get_elapsed:
-                byte = self.readexactly(1, timeout=timeout)
+                byte = self.readexactly(1, timeout=remaining_timeout)
 
-            if timeout is not None:
-                timeout -= get_elapsed()
+            if remaining_timeout is not None:
+                remaining_timeout -= get_elapsed()
 
             if not byte:
                 break
@@ -1009,15 +1016,16 @@ class BaseSerialTransport(asyncio.Transport):
         **kwargs: Unpack[ConnectKwargs],
     ) -> None:
         """Connect to serial port."""
-        if path is not None:
-            handler = get_uri_handler(path)
+        target = path
+        if target is not None:
+            handler = get_uri_handler(target)
             if handler.strip_uri_scheme:
-                path = path.removeprefix(handler.scheme).removeprefix(
+                target = target.removeprefix(handler.scheme).removeprefix(
                     handler.unique_scheme
                 )
 
         try:
-            await self._connect(path=path, **kwargs)
+            await self._connect(path=target, **kwargs)
         except BaseException:
             # Intentionally catch cancellation too: callers should only observe
             # connect failure/cancel after transport resources are released.
@@ -1058,8 +1066,9 @@ class BaseSerialTransport(asyncio.Transport):
         """Set modem control bits."""
         self._check_broken()
 
-        if modem_pins is None:
-            modem_pins = ModemPins(
+        pins = modem_pins
+        if pins is None:
+            pins = ModemPins(
                 le=PinState.convert(le),
                 dtr=PinState.convert(dtr),
                 rts=PinState.convert(rts),
@@ -1071,7 +1080,7 @@ class BaseSerialTransport(asyncio.Transport):
                 dsr=PinState.convert(dsr),
             )
 
-        return await self._set_modem_pins(modem_pins)
+        return await self._set_modem_pins(pins)
 
     async def flush(self) -> None:
         """Flush write buffers, waiting until all data is written."""

@@ -110,13 +110,13 @@ WIN32_STOPBITS_MAP = {
 
 def _normalize_windows_port_path(path: os.PathLike[str] | str) -> str:
     """Normalize a Windows serial device path for CreateFile."""
-    path = str(path)
+    normalized = str(path)
 
     # COM ports >= 10 require the \\.\  prefix for CreateFile
-    if not path.startswith("\\\\.\\"):
-        path = "\\\\.\\" + path
+    if not normalized.startswith("\\\\.\\"):
+        normalized = "\\\\.\\" + normalized
 
-    return path
+    return normalized
 
 
 def _safe_close_handle(handle: int) -> None:

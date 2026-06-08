@@ -214,16 +214,15 @@ class PyodideSerialTransport(BaseSerialTransport):
         else:
             raise UnsupportedSetting(f"Unsupported byte_size: {byte_size!r}")
 
-        if js_port is None:
-            js_port = _REGISTERED_JS_PORTS.get(path)
+        port = js_port if js_port is not None else _REGISTERED_JS_PORTS.get(path)
 
-        if js_port is None:
+        if port is None:
             raise SerialException(
                 f"No JS serial port registered for {path!r}; call "
                 f"`register_js_port(path, js_port)` or pass `js_port=` to `connect`"
             )
 
-        await js_port.open(
+        await port.open(
             baudRate=self._serial.baudrate,
             dataBits=data_bits,
             flowControl=flow_control,
@@ -231,7 +230,7 @@ class PyodideSerialTransport(BaseSerialTransport):
             stopBits=_STOPBITS_MAP[self._serial.stopbits],
         )
 
-        self._js_port = js_port
+        self._js_port = port
         assert self._js_port is not None
 
         if self._serial.rtsdtr_on_open is not PinState.UNDEFINED:

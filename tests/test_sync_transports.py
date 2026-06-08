@@ -1091,10 +1091,11 @@ def test_deassert_on_open_with_rtscts(
             assert left.get_modem_pins().cts is expected_state
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
 def test_sync_unplug_raises(serial_pair: SerialPair) -> None:
     """Each operation on an unplugged port raises rather than silently EOFing."""
-    assert serial_pair.unplug_left is not None
+    unplug_left = serial_pair.unplug_left_graceful or serial_pair.unplug_left_abrupt
+    if unplug_left is None:
+        pytest.skip("backend cannot simulate a disconnect")
 
     with (
         Serial.from_url(serial_pair.left, baudrate=115200, timeout=2.0) as left,
@@ -1104,7 +1105,7 @@ def test_sync_unplug_raises(serial_pair: SerialPair) -> None:
         right.flush()
         assert left.readline() == b"ping\n"
 
-        serial_pair.unplug_left()
+        unplug_left()
 
         with pytest.raises(OSError):
             left.read(1)

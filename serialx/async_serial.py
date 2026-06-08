@@ -273,18 +273,18 @@ async def create_serial_connection(
     **kwargs: Any,
 ) -> tuple[BaseSerialTransport, asyncio.Protocol]:
     """Create a serial port connection with asyncio."""
-    if transport_cls is None:
-        if url is None:
-            raise ValueError("One of `url` or `transport_cls` must be provided.")
-
+    if transport_cls is not None:
+        resolved_cls = transport_cls
+    elif url is None:
+        raise ValueError("One of `url` or `transport_cls` must be provided.")
+    else:
         handler = await asyncio.get_running_loop().run_in_executor(
             None, get_uri_handler, url
         )
-        transport_cls = handler.async_transport_cls
+        resolved_cls = handler.async_transport_cls
 
-    assert transport_cls is not None
     protocol = protocol_factory()
-    transport = transport_cls(loop=loop, protocol=protocol)
+    transport = resolved_cls(loop=loop, protocol=protocol)
 
     await transport.connect(
         path=url,

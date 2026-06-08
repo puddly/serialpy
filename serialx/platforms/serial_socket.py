@@ -285,9 +285,9 @@ class SocketSerialTransport(BaseSerialTransport):
         self._closing = True
         self._tcp_transport = None
         if not self._user_initiated_close:
-            if exc is None:
-                exc = OSError(errno.EIO, "socket closed by peer")
-            self._mark_broken(exc)
+            self._mark_broken(
+                exc if exc is not None else OSError(errno.EIO, "socket closed by peer")
+            )
         self._call_protocol_connection_lost(exc)
 
     def _tcp_connection_lost(self) -> None:

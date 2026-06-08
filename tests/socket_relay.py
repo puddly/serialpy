@@ -7,6 +7,7 @@ import contextlib
 import logging
 import queue
 import socket
+import struct
 import threading
 import time
 
@@ -35,6 +36,22 @@ class _SocketPairRelay:
             return
         with contextlib.suppress(OSError):
             sock.shutdown(socket.SHUT_RDWR)
+        with contextlib.suppress(OSError):
+            sock.close()
+
+    @staticmethod
+    def _reset_socket(sock: socket.socket | None) -> None:
+        """Abruptly drop a connection with a RST, simulating a yanked link."""
+        if sock is None:
+            return
+
+        with contextlib.suppress(OSError):
+            sock.setsockopt(
+                socket.SOL_SOCKET,
+                socket.SO_LINGER,
+                struct.pack("ii", 1, 0),
+            )
+
         with contextlib.suppress(OSError):
             sock.close()
 
@@ -71,8 +88,15 @@ class _SocketPairRelay:
         peer_side: str,
     ) -> None:
         try:
+            # Bounded recv so we don't deadlock or pin the FD
+            conn.settimeout(0.5)
+
             while not self.stop_event.is_set():
-                data = conn.recv(4096)
+                try:
+                    data = conn.recv(4096)
+                except TimeoutError:
+                    continue  # Ignore timeouts
+
                 if not data:
                     LOGGER.debug("%s client reached EOF", side)
                     return
@@ -188,11 +212,24 @@ class _SocketPairRelay:
         for relay_thread in self.relay_threads:
             relay_thread.start()
 
-    def disconnect_side(self, side: str) -> None:
-        with self.active_lock:
-            conn = self.active_connections[side]
-            self.active_connections[side] = None
-        if conn is not None:
+    def disconnect_side(self, side: str, *, abrupt: bool) -> None:
+        # The client's connect() returns once the kernel completes the
+        # handshake, which can be before the accept loop has handed us the
+        # socket. Wait for it rather than no-op: it is guaranteed to arrive.
+        deadline = time.monotonic() + 5.0
+        conn = self._get_active_connection(side)
+        while conn is None and time.monotonic() < deadline:
+            time.sleep(0.005)
+            conn = self._get_active_connection(side)
+
+        if conn is None:
+            return
+
+        self._clear_active_connection(side, conn)
+
+        if abrupt:
+            self._reset_socket(conn)
+        else:
             self._close_socket(conn)
 
     def close(self) -> None:
@@ -283,15 +320,19 @@ def create_accept_then_close_server() -> Iterator[str]:
 def create_socket_pair() -> Iterator[
     tuple[str, str, Callable[[], None], Callable[[], None]]
 ]:
-    """Create two socket:// endpoints backed by a bidirectional relay."""
+    """Create two socket:// endpoints backed by a bidirectional relay.
+
+    The relay can drop the left connection either gracefully (FIN) or abruptly
+    (RST), so both unplug flavors are available.
+    """
     relay = _SocketPairRelay()
     relay.start()
     try:
         yield (
             relay.left_url,
             relay.right_url,
-            lambda: relay.disconnect_side("left"),
-            lambda: relay.disconnect_side("right"),
+            lambda: relay.disconnect_side("left", abrupt=False),
+            lambda: relay.disconnect_side("left", abrupt=True),
         )
     finally:
         relay.close()

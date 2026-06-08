@@ -1295,10 +1295,10 @@ async def test_async_wait_closed_multiple_waiters_abort(
     assert transport.is_closing()
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
 async def test_async_unplug_raises(serial_pair: SerialPair) -> None:
-    """Each operation on an unplugged port raises rather than silently EOFing."""
-    assert serial_pair.unplug_left is not None
+    """Each operation on an abruptly-unplugged port raises rather than EOFing."""
+    if serial_pair.unplug_left_abrupt is None:
+        pytest.skip("backend cannot simulate an abrupt disconnect")
 
     async with async_create_serial_pair(
         serial_pair.left, serial_pair.right, baudrate=115200
@@ -1307,7 +1307,7 @@ async def test_async_unplug_raises(serial_pair: SerialPair) -> None:
         await right.drain()
         assert await left.readline() == b"ping\n"
 
-        serial_pair.unplug_left()
+        serial_pair.unplug_left_abrupt()
 
         with pytest.raises(OSError):
             await left.read(1)
@@ -1325,12 +1325,12 @@ async def test_async_unplug_raises(serial_pair: SerialPair) -> None:
             await left.set_modem_pins(rts=True)
 
 
-@pytest.mark.skip_quirks(SerialQuirk.NO_UNPLUG)
 async def test_async_unplug_raises_on_streamreader_readline(
     serial_pair: SerialPair,
 ) -> None:
-    """`reader.readline()` after unplug must raise, not silently return b''."""
-    assert serial_pair.unplug_left is not None
+    """`reader.readline()` after an abrupt unplug must raise, not return b''."""
+    if serial_pair.unplug_left_abrupt is None:
+        pytest.skip("backend cannot simulate an abrupt disconnect")
 
     reader, writer = await open_serial_connection(serial_pair.left, baudrate=115200)
     try:
@@ -1341,7 +1341,7 @@ async def test_async_unplug_raises_on_streamreader_readline(
             await right.drain()
             assert await reader.readline() == b"ping\n"
 
-            serial_pair.unplug_left()
+            serial_pair.unplug_left_abrupt()
 
             with pytest.raises(OSError):
                 await reader.readline()
@@ -1349,3 +1349,23 @@ async def test_async_unplug_raises_on_streamreader_readline(
         writer.close()
         with contextlib.suppress(OSError):
             await writer.wait_closed()
+
+
+async def test_async_graceful_peer_close_does_not_raise(
+    serial_pair: SerialPair,
+) -> None:
+    """A clean peer FIN reads as EOF and wait_closed() must not raise."""
+    if serial_pair.unplug_left_graceful is None:
+        pytest.skip("backend cannot simulate a graceful peer close")
+
+    reader, writer = await open_serial_connection(serial_pair.left, baudrate=115200)
+
+    try:
+        serial_pair.unplug_left_graceful()
+        assert await reader.read() == b""
+
+        with pytest.raises(OSError):
+            writer.write(b"foo")
+    finally:
+        writer.close()
+        await writer.wait_closed()
