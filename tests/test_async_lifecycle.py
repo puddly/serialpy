@@ -122,6 +122,8 @@ async def task_factory(request: pytest.FixtureRequest) -> None:
     if request.param == "eager_tasks":
         if sys.version_info < (3, 12):
             pytest.skip("Eager task factory requires Python 3.12+")
+        if sys.platform == "emscripten":
+            pytest.skip("Pyodide's WebLoop does not support custom task factories")
 
         asyncio.get_running_loop().set_task_factory(asyncio.eager_task_factory)
 
