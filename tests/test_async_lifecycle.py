@@ -153,24 +153,20 @@ async def test_lifecycle_port_released_before_connection_lost(
 ) -> None:
     """Test that the underlying port is released before connection_lost fires."""
     loop = asyncio.get_running_loop()
-    reopen_result: asyncio.Future[BaseSerialTransport] = loop.create_future()
 
     class ReopenOnLost(RecordingProtocol):
-        reopen_task: asyncio.Task[None] | None = None
+        reopen_task: asyncio.Task[BaseSerialTransport] | None = None
 
         def connection_lost(self, exc: Exception | None) -> None:
             super().connection_lost(exc)
 
-            async def _reopen() -> None:
-                try:
-                    reopened, _ = await create_serial_connection(
-                        loop, RecordingProtocol, serial_pair.left, baudrate=115200
-                    )
-                except Exception as err:
-                    reopen_result.set_exception(err)
-                else:
-                    reopen_result.set_result(reopened)
+            async def _reopen() -> BaseSerialTransport:
+                reopened, _ = await create_serial_connection(
+                    loop, RecordingProtocol, serial_pair.left, baudrate=115200
+                )
+                return reopened
 
+            # Reopen immediately, eager tasks speed this race up even more
             self.reopen_task = loop.create_task(_reopen())
 
     protocol = ReopenOnLost()
@@ -181,7 +177,8 @@ async def test_lifecycle_port_released_before_connection_lost(
     transport.close()
     await transport.wait_closed()
 
-    reopened = await reopen_result
+    assert protocol.reopen_task is not None
+    reopened = await protocol.reopen_task
     reopened.close()
     await reopened.wait_closed()
     protocol.assert_clean()
