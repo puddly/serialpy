@@ -153,36 +153,32 @@ async def test_lifecycle_normal_close_callbacks(serial_pair: SerialPair) -> None
 async def test_lifecycle_port_released_before_connection_lost(
     serial_pair: SerialPair,
 ) -> None:
-    """Test that the underlying port is released before connection_lost fires."""
+    """connection_lost must not fire until the port-releasing syscall returns."""
     loop = asyncio.get_running_loop()
+    protocol = RecordingProtocol()
 
-    class ReopenOnLost(RecordingProtocol):
-        reopen_task: asyncio.Task[BaseSerialTransport] | None = None
+    close_targets = ["os.close"]
+    if sys.platform == "win32":
+        close_targets.append("serialx.platforms.serial_win32.CloseHandle")
 
-        def connection_lost(self, exc: Exception | None) -> None:
-            super().connection_lost(exc)
-
-            async def _reopen() -> BaseSerialTransport:
-                reopened, _ = await create_serial_connection(
-                    loop, RecordingProtocol, serial_pair.left, baudrate=115200
-                )
-                return reopened
-
-            # Reopen immediately, eager tasks speed this race up even more
-            self.reopen_task = loop.create_task(_reopen())
-
-    protocol = ReopenOnLost()
     transport, _ = await create_serial_connection(
         loop, lambda: protocol, serial_pair.left, baudrate=115200
     )
 
-    transport.close()
-    await transport.wait_closed()
+    with patch_slow(*close_targets) as (started, proceed, _completed):
+        transport.close()
 
-    assert protocol.reopen_task is not None
-    reopened = await protocol.reopen_task
-    reopened.close()
-    await reopened.wait_closed()
+        if not await loop.run_in_executor(None, started.wait, 1.0):
+            pytest.skip("Backend close path does not go through a patched syscall")
+
+        # The releasing syscall is mid-flight, so the handle is still held. The
+        # protocol must not have been told the connection is lost.
+        assert protocol.state is ProtocolState.MADE
+
+        proceed.set()
+
+    await transport.wait_closed()
+    assert protocol.state is ProtocolState.LOST  # type:ignore[comparison-overlap]
     protocol.assert_clean()
 
 
