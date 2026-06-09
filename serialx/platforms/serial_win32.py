@@ -500,11 +500,21 @@ class Win32SerialTransport(BaseSerialTransport):
             return
 
         self._close_future = self._loop.run_in_executor(None, serial.close)
-        self._close_future.add_done_callback(
-            lambda _fut: self._call_protocol_connection_lost(
-                self._pending_connection_lost_exc
+        self._close_future.add_done_callback(self._on_serial_closed)
+
+    def _on_serial_closed(self, fut: asyncio.Future[None]) -> None:
+        # Consume the future's exception so it does not surface later as a noisy warning
+        if (exc := fut.exception()) is not None:
+            self._loop.call_exception_handler(
+                {
+                    "message": "Unhandled exception while closing the serial port",
+                    "exception": exc,
+                    "transport": self,
+                    "protocol": self._protocol,
+                }
             )
-        )
+
+        self._call_protocol_connection_lost(self._pending_connection_lost_exc)
 
     def serial_shutdown(self, how: int) -> None:
         """Shutdown the serial connection."""
