@@ -492,17 +492,18 @@ class Win32SerialTransport(BaseSerialTransport):
             return
 
         serial = self._serial
-        exc = self._pending_connection_lost_exc
         self._serial = None
         self._handle = None
 
         if serial is None:
-            self._call_protocol_connection_lost(exc)
+            self._call_protocol_connection_lost(self._pending_connection_lost_exc)
             return
 
         self._close_future = self._loop.run_in_executor(None, serial.close)
         self._close_future.add_done_callback(
-            lambda _fut: self._call_protocol_connection_lost(exc)
+            lambda _fut: self._call_protocol_connection_lost(
+                self._pending_connection_lost_exc
+            )
         )
 
     def serial_shutdown(self, how: int) -> None:
