@@ -484,22 +484,37 @@ class Win32SerialTransport(BaseSerialTransport):
         self._closing: bool = False
         self._connect_in_progress: bool = False
         self._connection_made_waiter: asyncio.Future[None] | None = None
+        self._pending_connection_lost_exc: Exception | None = None
 
     def serial_close(self) -> None:
-        """Close the serial port."""
+        """Release the handle off the event loop, then report connection lost."""
+        if self._close_future is not None:
+            return
 
-        def _close_then_notify() -> None:
-            assert self._serial is not None
-            exc = None
+        serial = self._serial
+        self._serial = None
+        self._handle = None
 
-            try:
-                self._serial.close()
-            except Exception as e:
-                exc = e
+        if serial is None:
+            self._call_protocol_connection_lost(self._pending_connection_lost_exc)
+            return
 
-            self._loop.call_soon_threadsafe(self._call_protocol_connection_lost, exc)
+        self._close_future = self._loop.run_in_executor(None, serial.close)
+        self._close_future.add_done_callback(self._on_serial_closed)
 
-        self._close_future = self._loop.run_in_executor(None, _close_then_notify)
+    def _on_serial_closed(self, fut: asyncio.Future[None]) -> None:
+        # Consume the future's exception so it does not surface later as a noisy warning
+        if (exc := fut.exception()) is not None:
+            self._loop.call_exception_handler(
+                {
+                    "message": "Unhandled exception while closing the serial port",
+                    "exception": exc,
+                    "transport": self,
+                    "protocol": self._protocol,
+                }
+            )
+
+        self._call_protocol_connection_lost(self._pending_connection_lost_exc)
 
     def serial_shutdown(self, how: int) -> None:
         """Shutdown the serial connection."""
@@ -527,8 +542,8 @@ class Win32SerialTransport(BaseSerialTransport):
             self._connection_made_waiter.set_result(None)
 
     def protocol_connection_lost(self, exc: Exception | None) -> None:
-        """Forward connection_lost to the protocol."""
-        self._call_protocol_connection_lost(exc)
+        """Stash the connection-lost reason, `serial_close` dispatches it."""
+        self._pending_connection_lost_exc = exc
 
     def protocol_pause_writing(self) -> None:
         """Forward pause_writing to the protocol."""

@@ -116,6 +116,18 @@ class RecordingProtocol(asyncio.Protocol):
         return b"".join(self.data_received_chunks)
 
 
+@pytest.fixture(autouse=True, params=["lazy_tasks", "eager_tasks"])
+async def task_factory(request: pytest.FixtureRequest) -> None:
+    """Run every lifecycle test under both the default and eager task factories."""
+    if request.param == "eager_tasks":
+        if sys.version_info < (3, 12):
+            pytest.skip("Eager task factory requires Python 3.12+")
+        if sys.platform == "emscripten":
+            pytest.skip("Pyodide's WebLoop does not support custom task factories")
+
+        asyncio.get_running_loop().set_task_factory(asyncio.eager_task_factory)
+
+
 # --- Successful lifecycle: callbacks fire exactly once ---
 
 
@@ -135,6 +147,38 @@ async def test_lifecycle_normal_close_callbacks(serial_pair: SerialPair) -> None
 
     protocol.assert_state(ProtocolState.LOST)
     assert protocol.connection_lost_exc is None
+    protocol.assert_clean()
+
+
+async def test_lifecycle_port_released_before_connection_lost(
+    serial_pair: SerialPair,
+) -> None:
+    """connection_lost must not fire until the port-releasing syscall returns."""
+    loop = asyncio.get_running_loop()
+    protocol = RecordingProtocol()
+
+    close_targets = ["os.close"]
+    if sys.platform == "win32":
+        close_targets.append("serialx.platforms.serial_win32.CloseHandle")
+
+    transport, _ = await create_serial_connection(
+        loop, lambda: protocol, serial_pair.left, baudrate=115200
+    )
+
+    with patch_slow(*close_targets) as (started, proceed, _completed):
+        transport.close()
+
+        if not await loop.run_in_executor(None, started.wait, 1.0):
+            pytest.skip("Backend close path does not go through a patched syscall")
+
+        # The releasing syscall is mid-flight, so the handle is still held. The
+        # protocol must not have been told the connection is lost.
+        assert protocol.state is ProtocolState.MADE
+
+        proceed.set()
+
+    await transport.wait_closed()
+    assert protocol.state is ProtocolState.LOST  # type:ignore[comparison-overlap]
     protocol.assert_clean()
 
 
