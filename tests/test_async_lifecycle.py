@@ -116,6 +116,16 @@ class RecordingProtocol(asyncio.Protocol):
         return b"".join(self.data_received_chunks)
 
 
+@pytest.fixture(autouse=True, params=["lazy_tasks", "eager_tasks"])
+async def task_factory(request: pytest.FixtureRequest) -> None:
+    """Run every lifecycle test under both the default and eager task factories."""
+    if request.param == "eager_tasks":
+        if sys.version_info < (3, 12):
+            pytest.skip("Eager task factory requires Python 3.12+")
+
+        asyncio.get_running_loop().set_task_factory(asyncio.eager_task_factory)
+
+
 # --- Successful lifecycle: callbacks fire exactly once ---
 
 
