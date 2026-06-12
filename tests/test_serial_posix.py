@@ -4,7 +4,7 @@ import sys
 
 import pytest
 
-if sys.platform == "win32":
+if sys.platform in ("win32", "emscripten"):
     pytest.skip("POSIX-only tests", allow_module_level=True)
 
 import array
