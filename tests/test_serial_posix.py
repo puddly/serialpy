@@ -78,7 +78,7 @@ def test_set_modem_pins_uses_native_int_ioctl_buffer() -> None:
 
     serial = PosixSerial(fileno=1)
     with patch("serialx.platforms.serial_posix.fcntl.ioctl", side_effect=ioctl):
-        serial._set_modem_pins(
+        serial.set_modem_pins(
             ModemPins(
                 le=PinState.LOW,
                 dtr=PinState.HIGH,
