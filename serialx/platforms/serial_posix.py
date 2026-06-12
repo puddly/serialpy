@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import array
+import asyncio
 import errno
 import fcntl
 import logging
@@ -353,9 +353,7 @@ class PosixSerial(BaseSerial):
             if all_pins_set:
                 value = modem_pins_as_int(modem_pins)
                 LOGGER.debug("Setting all with TIOCMSET: 0x%08X", value)
-                fcntl.ioctl(
-                    self._fileno, termios.TIOCMSET, array.array("i", [value])
-                )
+                fcntl.ioctl(self._fileno, termios.TIOCMSET, array.array("i", [value]))
             else:
                 to_set = modem_pins_mask_of_value(modem_pins, PinState.HIGH)
                 to_clear = modem_pins_mask_of_value(modem_pins, PinState.LOW)
