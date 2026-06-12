@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import array
 import asyncio
 import errno
 import fcntl
@@ -320,8 +321,7 @@ class PosixSerial(BaseSerial):
         """Get current modem control bits."""
         assert self._fileno is not None
 
-        # A `bytearray` is critical here: `bytes` will not be mutated
-        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+        buffer = array.array("i", [0x00000000])
 
         try:
             fcntl.ioctl(self._fileno, termios.TIOCMGET, buffer)
@@ -330,7 +330,7 @@ class PosixSerial(BaseSerial):
                 LOGGER.debug("Device is not a serial port, cannot get modem pins")
                 return ModemPins()
 
-        n = int.from_bytes(buffer, "little")
+        n = buffer[0]
         return ModemPins(
             **{
                 name: PinState.HIGH if n & bit else PinState.LOW
@@ -353,7 +353,7 @@ class PosixSerial(BaseSerial):
             if all_pins_set:
                 value = modem_pins_as_int(modem_pins)
                 LOGGER.debug("Setting all with TIOCMSET: 0x%08X", value)
-                fcntl.ioctl(self._fileno, termios.TIOCMSET, value.to_bytes(4, "little"))
+                fcntl.ioctl(self._fileno, termios.TIOCMSET, array.array("i", [value]))
             else:
                 to_set = modem_pins_mask_of_value(modem_pins, PinState.HIGH)
                 to_clear = modem_pins_mask_of_value(modem_pins, PinState.LOW)
@@ -361,13 +361,13 @@ class PosixSerial(BaseSerial):
                 if to_set:
                     LOGGER.debug("Setting TIOCMBIS: 0x%08X", to_set)
                     fcntl.ioctl(
-                        self._fileno, termios.TIOCMBIS, to_set.to_bytes(4, "little")
+                        self._fileno, termios.TIOCMBIS, array.array("i", [to_set])
                     )
 
                 if to_clear:
                     LOGGER.debug("TIOCMBIC: 0x%08X", to_clear)
                     fcntl.ioctl(
-                        self._fileno, termios.TIOCMBIC, to_clear.to_bytes(4, "little")
+                        self._fileno, termios.TIOCMBIC, array.array("i", [to_clear])
                     )
         except OSError as exc:
             if exc.errno == errno.ENOTTY:
@@ -461,20 +461,20 @@ class PosixSerial(BaseSerial):
     def num_unread_bytes(self) -> int:
         """Return the number of bytes waiting to be read."""
         assert self._fileno is not None
-        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+        buffer = array.array("i", [0x00000000])
 
         fcntl.ioctl(self._fileno, termios.FIONREAD, buffer)
 
-        return int.from_bytes(buffer, "little")
+        return buffer[0]
 
     def num_unwritten_bytes(self) -> int:
         """Return the number of bytes waiting to be written."""
         assert self._fileno is not None
-        buffer = bytearray((0x00000000).to_bytes(4, "little"))
+        buffer = array.array("i", [0x00000000])
 
         fcntl.ioctl(self._fileno, termios.TIOCOUTQ, buffer)
 
-        return int.from_bytes(buffer, "little")
+        return buffer[0]
 
     def _reset_read_buffer(self) -> None:
         """Reset the read buffer."""
