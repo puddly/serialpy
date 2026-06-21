@@ -13,6 +13,7 @@ import dataclasses
 from enum import Enum
 import functools
 import io
+import logging
 import os.path
 from pathlib import Path
 import time
@@ -22,6 +23,8 @@ import urllib.parse
 import warnings
 
 from typing_extensions import Buffer, Self, TypedDict, Unpack
+
+LOGGER = logging.getLogger(__name__)
 
 
 class Platform(str, Enum):
@@ -52,6 +55,7 @@ class RegisteredUriHandler:
     list_serial_ports_func: Callable[..., list[SerialPortInfo]]
     async_list_serial_ports_func: Callable[..., Awaitable[list[SerialPortInfo]]]
     strip_uri_scheme: bool
+    connect_kwargs: frozenset[str] = frozenset()
 
 
 class _RegistryEntry(NamedTuple):
@@ -87,6 +91,7 @@ def register_uri_handler(
     ] = async_empty_port_list,
     weight: int = 1,
     strip_uri_scheme: bool = False,
+    connect_kwargs: frozenset[str] = frozenset(),
 ) -> Callable[[], None]:
     """Register a URI handler.
 
@@ -110,6 +115,7 @@ def register_uri_handler(
         strip_uri_scheme: If ``True``, the leading ``scheme`` / ``unique_scheme``
             is removed before the URL is passed to the sync class. Set this when
             the underlying class expects a bare device path rather than a URL.
+        connect_kwargs: Names of backend-specific connect kwargs this handler accepts.
 
     Returns:
         A callable that unregisters the handler.
@@ -140,6 +146,7 @@ def register_uri_handler(
             list_serial_ports_func=list_serial_ports_func,
             async_list_serial_ports_func=async_list_serial_ports_func,
             strip_uri_scheme=strip_uri_scheme,
+            connect_kwargs=connect_kwargs,
         ),
     )
     bisect.insort_right(_REGISTERED_URI_HANDLERS[scheme], item)
@@ -163,6 +170,36 @@ def get_uri_handler(uri: str) -> RegisteredUriHandler:
     if not handlers:
         raise UnknownUriScheme(f"No handler registered for URI scheme {scheme!r}")
     return handlers[-1].handler
+
+
+def route_backend_kwargs(
+    handler: RegisteredUriHandler, kwargs: dict[str, Any]
+) -> dict[str, Any]:
+    """Drop kwargs that belong to a different backend before dispatch."""
+    all_backend_specific_kwargs: set[str] = set()
+
+    for extras in BACKEND_CONNECT_KWARGS.values():
+        all_backend_specific_kwargs |= extras
+
+    for entries in _REGISTERED_URI_HANDLERS.values():
+        for entry in entries:
+            all_backend_specific_kwargs |= entry.handler.connect_kwargs
+
+    backend_specific_kwargs = (
+        BACKEND_CONNECT_KWARGS.get(handler.unique_scheme, set())
+        | handler.connect_kwargs
+    )
+
+    other_kwargs = all_backend_specific_kwargs - backend_specific_kwargs
+    dropped = other_kwargs & kwargs.keys()
+
+    if not dropped:
+        return dict(kwargs)
+
+    LOGGER.debug(
+        "Ignoring kwarg not accepted by %r backend: %s", handler.unique_scheme, dropped
+    )
+    return {key: value for key, value in kwargs.items() if key not in dropped}
 
 
 class SerialException(Exception):
@@ -195,18 +232,78 @@ class Parity(str, Enum):
     SPACE = "S"
 
 
-class ConnectKwargs(  # type: ignore[call-arg]  # PEP 728 not in mypy yet
-    TypedDict, total=False, extra_items=Any
-):
-    """Kwargs forwarded to BaseSerialTransport.connect / _connect."""
+class _CommonConnectKwargs(TypedDict, total=False):
+    """Connect kwargs accepted by every backend (see `BaseSerial.__init__`)."""
 
     baudrate: int
-    parity: Parity
-    stopbits: StopBits
+    parity: Parity | str | None
+    stopbits: StopBits | int | float
     xonxoff: bool
     rtscts: bool
-    exclusive: bool
+    dsrdtr: bool
     byte_size: int
+    read_timeout: float | None
+    write_timeout: float | None
+    rtsdtr_on_open: PinState
+    rtsdtr_on_close: PinState
+    exclusive: bool
+
+    # pyserial compatibility kwargs
+    port: str | None
+    timeout: float | None
+    bytesize: int | None
+    writeTimeout: float | None
+    do_not_open: bool | None
+
+
+class ConnectKwargs(  # type: ignore[call-arg]  # PEP 728 not in mypy yet
+    _CommonConnectKwargs, total=False, extra_items=Any
+):
+    """Connect kwargs plumbed internally to `BaseSerialTransport.connect`."""
+
+
+class AllConnectKwargs(_CommonConnectKwargs, total=False):
+    """Every connect kwarg any built-in backend accepts, for typing."""
+
+    # linux://
+    low_latency: bool
+
+    # socket:// + tcp:// + rfc2217:// + esphome://
+    connect_timeout: float | None
+
+    # rfc2217://
+    receive_buffer_size: int
+
+    # windows://
+    read_buffer_size: int
+    write_buffer_size: int
+
+    # esphome://
+    port_name: str | None
+    port_instance: int | None
+    key: str | None
+    password: str | None
+    noise_psk: str | None
+
+
+# Backend-specific connect kwargs per unique URI scheme
+BACKEND_CONNECT_KWARGS: dict[str, frozenset[str]] = {
+    "linux://": frozenset({"low_latency"}),
+    "windows://": frozenset({"read_buffer_size", "write_buffer_size"}),
+    "socket://": frozenset({"connect_timeout"}),
+    "tcp://": frozenset({"connect_timeout"}),
+    "rfc2217://": frozenset({"connect_timeout", "receive_buffer_size"}),
+    "esphome://": frozenset(
+        {
+            "connect_timeout",
+            "port_name",
+            "port_instance",
+            "key",
+            "password",
+            "noise_psk",
+        }
+    ),
+}
 
 
 class PinState(Enum):
@@ -397,7 +494,9 @@ class BaseSerial(io.RawIOBase):
             raise self._broken
 
     @classmethod
-    def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
+    def from_url(
+        cls, url: str, *args: Any, **kwargs: Unpack[AllConnectKwargs]
+    ) -> BaseSerial:
         """Create the appropriate serial port subclass for the given URL."""
         handler = get_uri_handler(url)
         target = url
@@ -405,7 +504,8 @@ class BaseSerial(io.RawIOBase):
             target = url.removeprefix(handler.scheme).removeprefix(
                 handler.unique_scheme
             )
-        return handler.sync_cls(target, *args, **kwargs)
+        routed = route_backend_kwargs(handler, dict(kwargs))
+        return handler.sync_cls(target, *args, **routed)
 
     @maybe_wrap_exceptions
     def open(self) -> None:
@@ -1165,6 +1265,8 @@ async def async_list_serial_ports(
     return await handler.async_list_serial_ports_func(**kwargs)
 
 
-def serial_for_url(url: str, *args: Any, **kwargs: Any) -> BaseSerial:
+def serial_for_url(
+    url: str, *args: Any, **kwargs: Unpack[AllConnectKwargs]
+) -> BaseSerial:
     """Create the appropriate serial port subclass for the given URL."""
     return BaseSerial.from_url(url, *args, **kwargs)
