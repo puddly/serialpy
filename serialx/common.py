@@ -977,21 +977,31 @@ class BaseSerial(io.RawIOBase):
     @property
     def dtr(self) -> bool | None:
         """Get DTR modem bit."""
+        if not self.is_open:
+            return self._dtr_on_open.to_bool()
         return self.get_modem_pins().dtr.to_bool()
 
     @dtr.setter
     def dtr(self, value: bool) -> None:
         """Set DTR modem bit."""
+        if not self.is_open:
+            self._dtr_on_open = PinState.convert(value)
+            return
         self.set_modem_pins(dtr=bool(value))
 
     @property
     def rts(self) -> bool | None:
         """Get RTS modem bit."""
+        if not self.is_open:
+            return self._rts_on_open.to_bool()
         return self.get_modem_pins().rts.to_bool()
 
     @rts.setter
     def rts(self, value: bool) -> None:
         """Set RTS modem bit."""
+        if not self.is_open:
+            self._rts_on_open = PinState.convert(value)
+            return
         self.set_modem_pins(rts=bool(value))
 
     @property

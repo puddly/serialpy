@@ -25,6 +25,7 @@ from serialx import (
     STOPBITS_ONE_POINT_FIVE,
     STOPBITS_TWO,
     Parity,
+    PinState,
     Serial,
     SerialPortInfo,
 )
@@ -148,6 +149,24 @@ def test_compat_no_arg_construction() -> None:
     assert s.path is None
     assert s.baudrate == 9600
     assert s.port is None
+
+
+def test_compat_set_dtr_rts_before_open() -> None:
+    """Test the pyserial configure-then-open pattern for DTR/RTS."""
+    s = Serial()
+
+    # Defaults reflect the on-open state (dtr_on_open=rts_on_open=HIGH)
+    assert s.dtr is True
+    assert s.rts is True
+
+    # Setting before open seeds the state applied on open instead of raising
+    s.dtr = False
+    s.rts = True
+
+    assert s.dtr is False
+    assert s.rts is True
+    assert s.dtr_on_open is PinState.LOW
+    assert s.rts_on_open is PinState.HIGH
 
 
 def test_compat_do_not_open(serial_pair: SerialPair) -> None:
