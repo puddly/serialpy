@@ -425,8 +425,10 @@ class BaseSerial(io.RawIOBase):
         byte_size: int = 8,
         read_timeout: float | None = None,
         write_timeout: float | None = None,
-        rtsdtr_on_open: PinState = PinState.HIGH,
-        rtsdtr_on_close: PinState = PinState.LOW,
+        dtr_on_open: PinState = PinState.HIGH,
+        rts_on_open: PinState = PinState.HIGH,
+        dtr_on_close: PinState = PinState.LOW,
+        rts_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
         # pyserial compatibility kwargs
         port: str | None = None,
@@ -464,8 +466,10 @@ class BaseSerial(io.RawIOBase):
         self._read_timeout = read_timeout
         self._write_timeout = write_timeout
 
-        self._rtsdtr_on_open = rtsdtr_on_open
-        self._rtsdtr_on_close = rtsdtr_on_close
+        self._dtr_on_open = dtr_on_open
+        self._rts_on_open = rts_on_open
+        self._dtr_on_close = dtr_on_close
+        self._rts_on_close = rts_on_close
 
         self._auto_close = False
 
@@ -674,14 +678,24 @@ class BaseSerial(io.RawIOBase):
         return self._stopbits
 
     @property
-    def rtsdtr_on_open(self) -> PinState:
-        """Get the RTS/DTR pin state (on open) setting."""
-        return self._rtsdtr_on_open
+    def dtr_on_open(self) -> PinState:
+        """Get the DTR pin state (on open) setting."""
+        return self._dtr_on_open
 
     @property
-    def rtsdtr_on_close(self) -> PinState:
-        """Get the RTS/DTR pin state (on close) setting."""
-        return self._rtsdtr_on_close
+    def rts_on_open(self) -> PinState:
+        """Get the RTS pin state (on open) setting."""
+        return self._rts_on_open
+
+    @property
+    def dtr_on_close(self) -> PinState:
+        """Get the DTR pin state (on close) setting."""
+        return self._dtr_on_close
+
+    @property
+    def rts_on_close(self) -> PinState:
+        """Get the RTS pin state (on close) setting."""
+        return self._rts_on_close
 
     @property
     def exclusive(self) -> bool:

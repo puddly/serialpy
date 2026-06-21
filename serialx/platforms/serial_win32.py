@@ -277,12 +277,11 @@ class Win32Serial(BaseSerial):
 
             SetCommState(self._handle, dcb)
 
-            # RTS cannot be manually set when hardware flow control is enabled
-            if not self._rtscts:
-                self.set_modem_pins(
-                    dtr=self._rtsdtr_on_open,
-                    rts=self._rtsdtr_on_open,
-                )
+            # RTS is owned by the driver when rtscts is set, DTR when dsrdtr is set
+            self.set_modem_pins(
+                dtr=self._dtr_on_open if not self._dsrdtr else PinState.UNDEFINED,
+                rts=self._rts_on_open if not self._rtscts else PinState.UNDEFINED,
+            )
 
             # Clear any errors
             ClearCommError(self._handle)
@@ -298,16 +297,20 @@ class Win32Serial(BaseSerial):
     def _close(self) -> None:
         """Close the serial port and release all handles."""
         if self._handle is not None:
-            # Windows has no way to automatically do this on close, we do it manually
-            if not self._rtscts:
-                # RTS cannot be manually set when hardware flow control is enabled
-                try:
-                    self.set_modem_pins(
-                        dtr=self._rtsdtr_on_close,
-                        rts=self._rtsdtr_on_close,
-                    )
-                except OSError:
-                    LOGGER.debug("Failed to set modem pins on close", exc_info=True)
+            # Windows has no way to automatically do this on close, we do it manually. A
+            # driver-owned line (RTS under rtscts, DTR under dsrdtr) cannot be adjusted
+            # via EscapeCommFunction, so skip those.
+            try:
+                self.set_modem_pins(
+                    dtr=(
+                        self._dtr_on_close if not self._dsrdtr else PinState.UNDEFINED
+                    ),
+                    rts=(
+                        self._rts_on_close if not self._rtscts else PinState.UNDEFINED
+                    ),
+                )
+            except OSError:
+                LOGGER.debug("Failed to set modem pins on close", exc_info=True)
 
             try:
                 CancelIo(self._handle)

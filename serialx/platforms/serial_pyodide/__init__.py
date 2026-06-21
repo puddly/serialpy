@@ -233,11 +233,10 @@ class PyodideSerialTransport(BaseSerialTransport):
         self._js_port = port
         assert self._js_port is not None
 
-        if self._serial.rtsdtr_on_open is not PinState.UNDEFINED:
-            await self.set_modem_pins(
-                rts=self._serial.rtsdtr_on_open,
-                dtr=self._serial.rtsdtr_on_open,
-            )
+        await self.set_modem_pins(
+            rts=self._serial.rts_on_open,
+            dtr=self._serial.dtr_on_open,
+        )
 
         readable = self._js_port.readable
         assert readable is not None
@@ -356,12 +355,11 @@ class PyodideSerialTransport(BaseSerialTransport):
             self._js_writer = None
 
         if self._js_port is not None:
-            if self._serial.rtsdtr_on_close is not PinState.UNDEFINED:
-                with contextlib.suppress(Exception):
-                    await self.set_modem_pins(
-                        rts=self._serial.rtsdtr_on_close,
-                        dtr=self._serial.rtsdtr_on_close,
-                    )
+            with contextlib.suppress(Exception):
+                await self.set_modem_pins(
+                    rts=self._serial.rts_on_close,
+                    dtr=self._serial.dtr_on_close,
+                )
             await self._js_port.close()
             self._js_port = None
 

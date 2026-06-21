@@ -962,29 +962,29 @@ def test_deassert_on_open(serial_pair: SerialPair) -> None:
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_open=PinState.HIGH,
-            rtsdtr_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
         ) as right:
             right.set_modem_pins(rts=True)
             time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
 
-        # rtsdtr_on_close=HIGH keeps RTS asserted
+        # rts_on_close=HIGH keeps RTS asserted
         time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_open=PinState.LOW,
-            rtsdtr_on_close=PinState.HIGH,
+            rts_on_open=PinState.LOW,
+            rts_on_close=PinState.HIGH,
         ) as right:
-            # rtsdtr_on_open=LOW deasserts RTS
+            # rts_on_open=LOW deasserts RTS
             time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.LOW
             right.set_modem_pins(rts=True)
 
-        # rtsdtr_on_close=HIGH keeps RTS asserted
+        # rts_on_close=HIGH keeps RTS asserted
         time.sleep(serial_pair.modem_line_propagation_delay)
         assert left.get_modem_pins().cts is PinState.HIGH
 
@@ -1005,8 +1005,8 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_close=PinState.HIGH,
-            rtsdtr_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
         ) as right:
             right.set_modem_pins(rts=True)
             time.sleep(serial_pair.modem_line_propagation_delay)
@@ -1018,8 +1018,8 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_close=PinState.HIGH,
-            rtsdtr_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
         ) as right:
             time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
@@ -1030,8 +1030,8 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
         with Serial.from_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_close=PinState.LOW,
-            rtsdtr_on_open=PinState.HIGH,
+            rts_on_close=PinState.LOW,
+            rts_on_open=PinState.HIGH,
         ) as right:
             time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is PinState.HIGH
@@ -1043,7 +1043,7 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 @pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 @pytest.mark.parametrize(
-    ("rtscts", "rtsdtr_on_open", "expected_state"),
+    ("rtscts", "rts_on_open", "expected_state"),
     [
         (False, PinState.HIGH, PinState.HIGH),
         (False, PinState.LOW, PinState.LOW),
@@ -1054,10 +1054,10 @@ def test_hang_up_on_close(serial_pair: SerialPair) -> None:
 def test_deassert_on_open_with_rtscts(
     serial_pair: SerialPair,
     rtscts: bool,
-    rtsdtr_on_open: PinState,
+    rts_on_open: PinState,
     expected_state: PinState,
 ) -> None:
-    """Test interaction of rtsdtr_on_open with rtscts."""
+    """Test interaction of rts_on_open with rtscts."""
     if serial_pair.uri_scheme in (
         "linux://",
         "darwin://",
@@ -1071,8 +1071,8 @@ def test_deassert_on_open_with_rtscts(
             serial_pair.right,
             baudrate=115200,
             rtscts=False,
-            rtsdtr_on_open=PinState.HIGH,
-            rtsdtr_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
         ) as right:
             right.set_modem_pins(rts=True)
             time.sleep(serial_pair.modem_line_propagation_delay)
@@ -1085,7 +1085,7 @@ def test_deassert_on_open_with_rtscts(
             serial_pair.right,
             baudrate=115200,
             rtscts=rtscts,
-            rtsdtr_on_open=rtsdtr_on_open,
+            rts_on_open=rts_on_open,
         ):
             time.sleep(serial_pair.modem_line_propagation_delay)
             assert left.get_modem_pins().cts is expected_state
