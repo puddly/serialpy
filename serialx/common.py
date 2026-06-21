@@ -471,6 +471,11 @@ class BaseSerial(io.RawIOBase):
         self._dtr_on_close = dtr_on_close
         self._rts_on_close = rts_on_close
 
+        # Last-written DTR/RTS output state, for readback on backends that can't
+        # report output lines from hardware
+        self._dtr_state = PinState.UNDEFINED
+        self._rts_state = PinState.UNDEFINED
+
         self._auto_close = False
 
         # Compatibility kwargs
@@ -566,7 +571,26 @@ class BaseSerial(io.RawIOBase):
     def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
         self._check_broken()
-        return self._get_modem_pins()
+        pins = self._get_modem_pins()
+        return dataclasses.replace(
+            pins,
+            dtr=pins.dtr if pins.dtr is not PinState.UNDEFINED else self._dtr_state,
+            rts=pins.rts if pins.rts is not PinState.UNDEFINED else self._rts_state,
+        )
+
+    def _modem_pins_on_open(self) -> ModemPins:
+        """DTR/RTS to apply on open."""
+        return ModemPins(
+            dtr=self._dtr_on_open if not self._dsrdtr else PinState.UNDEFINED,
+            rts=self._rts_on_open if not self._rtscts else PinState.UNDEFINED,
+        )
+
+    def _modem_pins_on_close(self) -> ModemPins:
+        """DTR/RTS to apply on close."""
+        return ModemPins(
+            dtr=self._dtr_on_close if not self._dsrdtr else PinState.UNDEFINED,
+            rts=self._rts_on_close if not self._rtscts else PinState.UNDEFINED,
+        )
 
     @maybe_wrap_exceptions
     def set_modem_pins(
@@ -600,7 +624,13 @@ class BaseSerial(io.RawIOBase):
                 dsr=PinState.convert(dsr),
             )
 
-        return self._set_modem_pins(pins)
+        self._set_modem_pins(pins)
+
+        if pins.dtr is not PinState.UNDEFINED:
+            self._dtr_state = pins.dtr
+
+        if pins.rts is not PinState.UNDEFINED:
+            self._rts_state = pins.rts
 
     @abstractmethod
     def _get_modem_pins(self) -> ModemPins:

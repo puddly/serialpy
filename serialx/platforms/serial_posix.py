@@ -318,7 +318,7 @@ class PosixSerial(BaseSerial):
 
         self._after_configure_port()
 
-        self.set_modem_pins(dtr=self._dtr_on_open, rts=self._rts_on_open)
+        self.set_modem_pins(self._modem_pins_on_open())
 
         # Flush input and output buffers to discard stale data
         termios.tcflush(self._fileno, termios.TCIOFLUSH)
@@ -553,7 +553,7 @@ class PosixSerialTransport(DescriptorTransport):
     async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits, internal."""
         assert self._serial is not None
-        await self._loop.run_in_executor(None, self._serial._set_modem_pins, modem_pins)
+        await self._loop.run_in_executor(None, self._serial.set_modem_pins, modem_pins)
 
 
 register_uri_handler(

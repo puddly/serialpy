@@ -277,11 +277,8 @@ class Win32Serial(BaseSerial):
 
             SetCommState(self._handle, dcb)
 
-            # RTS is owned by the driver when rtscts is set, DTR when dsrdtr is set
-            self.set_modem_pins(
-                dtr=self._dtr_on_open if not self._dsrdtr else PinState.UNDEFINED,
-                rts=self._rts_on_open if not self._rtscts else PinState.UNDEFINED,
-            )
+            # Driver-owned lines (RTS under rtscts, DTR under dsrdtr) are skipped
+            self.set_modem_pins(self._modem_pins_on_open())
 
             # Clear any errors
             ClearCommError(self._handle)
@@ -299,16 +296,9 @@ class Win32Serial(BaseSerial):
         if self._handle is not None:
             # Windows has no way to automatically do this on close, we do it manually. A
             # driver-owned line (RTS under rtscts, DTR under dsrdtr) cannot be adjusted
-            # via EscapeCommFunction, so skip those.
+            # via EscapeCommFunction, so those are skipped.
             try:
-                self.set_modem_pins(
-                    dtr=(
-                        self._dtr_on_close if not self._dsrdtr else PinState.UNDEFINED
-                    ),
-                    rts=(
-                        self._rts_on_close if not self._rtscts else PinState.UNDEFINED
-                    ),
-                )
+                self.set_modem_pins(self._modem_pins_on_close())
             except OSError:
                 LOGGER.debug("Failed to set modem pins on close", exc_info=True)
 
