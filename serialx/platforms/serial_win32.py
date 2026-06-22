@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pywintypes
 from typing_extensions import Buffer, Unpack
 from win32con import (
+    DTR_CONTROL_DISABLE,
     DTR_CONTROL_ENABLE,
     DTR_CONTROL_HANDSHAKE,
     EVENPARITY,
@@ -26,6 +27,7 @@ from win32con import (
     ONE5STOPBITS,
     ONESTOPBIT,
     OPEN_EXISTING,
+    RTS_CONTROL_DISABLE,
     RTS_CONTROL_ENABLE,
     RTS_CONTROL_HANDSHAKE,
     SPACEPARITY,
@@ -252,6 +254,9 @@ class Win32Serial(BaseSerial):
             if self._rtscts:
                 dcb.fRtsControl = RTS_CONTROL_HANDSHAKE
                 dcb.fOutxCtsFlow = 1
+            elif self._rts_on_open is PinState.LOW:
+                dcb.fRtsControl = RTS_CONTROL_DISABLE
+                dcb.fOutxCtsFlow = 0
             else:
                 dcb.fRtsControl = RTS_CONTROL_ENABLE
                 dcb.fOutxCtsFlow = 0
@@ -266,6 +271,9 @@ class Win32Serial(BaseSerial):
             if self._dsrdtr:
                 dcb.fDtrControl = DTR_CONTROL_HANDSHAKE
                 dcb.fOutxDsrFlow = 1
+            elif self._dtr_on_open is PinState.LOW:
+                dcb.fDtrControl = DTR_CONTROL_DISABLE
+                dcb.fOutxDsrFlow = 0
             else:
                 dcb.fDtrControl = DTR_CONTROL_ENABLE
                 dcb.fOutxDsrFlow = 0
