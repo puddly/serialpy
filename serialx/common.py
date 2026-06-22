@@ -22,6 +22,7 @@ from typing import Any, Concatenate, NamedTuple, ParamSpec, TypeVar, cast
 import urllib.parse
 import warnings
 
+from aioesphomeapi.client import APIClient
 from typing_extensions import Buffer, Self, TypedDict, Unpack
 
 LOGGER = logging.getLogger(__name__)
@@ -279,6 +280,7 @@ class AllConnectKwargs(_CommonConnectKwargs, total=False):
     write_buffer_size: int
 
     # esphome://
+    api: APIClient | None
     port_name: str | None
     port_instance: int | None
     key: str | None
@@ -295,6 +297,7 @@ BACKEND_CONNECT_KWARGS: dict[str, frozenset[str]] = {
     "rfc2217://": frozenset({"connect_timeout", "receive_buffer_size"}),
     "esphome://": frozenset(
         {
+            "api",
             "connect_timeout",
             "port_name",
             "port_instance",

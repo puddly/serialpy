@@ -90,7 +90,7 @@ class CompatSerial(SerialxSerial):
     @classmethod
     def from_url(cls, url: str, *args: Any, **kwargs: Any) -> BaseSerial:
         """Create the appropriate serial port subclass for the given URL."""
-        return super().from_url(url, *args, _wrap_exceptions=True, **kwargs)
+        return super().from_url(url, *args, _wrap_exceptions=True, **kwargs)  # type:ignore[call-arg]
 
 
 Serial = CompatSerial
