@@ -68,6 +68,8 @@ are listed in the [main API documentation](../api.md). The most common ones are 
 | `Serial(writeTimeout=...)`  | `write_timeout=...`        | Constructor kwarg                            |
 | `Serial(bytesize=...)`      | `byte_size=...`            | Constructor kwarg                            |
 | `Serial(do_not_open=False)` | —                          | Not supported; open explicitly via `open()`  |
+| `Serial(rtsdtr_on_open=X)`  | `dtr_on_open=X, rts_on_open=X`   | Now controlled per-pin                  |
+| `Serial(rtsdtr_on_close=X)` | `dtr_on_close=X, rts_on_close=X` | Now controlled per-pin                  |
 | `SerialPortInfo[i]`         | attribute access           | Slicing `SerialPortInfo` is deprecated       |
 | `SerialPortInfo.description`| `SerialPortInfo.product`   |                                              |
 

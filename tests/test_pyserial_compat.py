@@ -169,6 +169,39 @@ def test_compat_set_dtr_rts_before_open() -> None:
     assert s.rts_on_open is PinState.HIGH
 
 
+def test_compat_legacy_rtsdtr_kwargs() -> None:
+    """The legacy `rtsdtr_on_*` kwargs map to both pins and warn."""
+    with pytest.warns(DeprecationWarning, match="rtsdtr_on_open"):
+        s = Serial(rtsdtr_on_open=PinState.LOW, rtsdtr_on_close=PinState.HIGH)
+
+    # A single legacy value drives both DTR and RTS
+    assert s.dtr_on_open is PinState.LOW
+    assert s.rts_on_open is PinState.LOW
+    assert s.dtr_on_close is PinState.HIGH
+    assert s.rts_on_close is PinState.HIGH
+
+
+def test_compat_legacy_rtsdtr_one_sided() -> None:
+    """Only the legacy kwarg that is passed overrides; the other keeps defaults."""
+    with pytest.warns(DeprecationWarning, match="rtsdtr_on_open"):
+        s = Serial(rtsdtr_on_open=PinState.LOW)
+
+    assert s.dtr_on_open is PinState.LOW
+    assert s.rts_on_open is PinState.LOW
+    # close side untouched -> defaults
+    assert s.dtr_on_close is PinState.LOW
+    assert s.rts_on_close is PinState.LOW
+
+
+def test_compat_no_legacy_kwargs_does_not_warn(
+    recwarn: pytest.WarningsRecorder,
+) -> None:
+    """Constructing without the legacy kwargs emits no deprecation warning."""
+    Serial(dtr_on_open=PinState.LOW, rts_on_open=PinState.HIGH)
+
+    assert [w for w in recwarn.list if issubclass(w.category, DeprecationWarning)] == []
+
+
 def test_compat_do_not_open(serial_pair: SerialPair) -> None:
     """Test `do_not_open` backwards compatibility."""
     with pytest.raises(RuntimeError, match="do_not_open=False is not supported"):

@@ -410,7 +410,13 @@ def maybe_wrap_exceptions(
 
 
 class BaseSerial(io.RawIOBase):
-    """Base class for serial port communication."""
+    """Base class for serial port communication.
+
+    .. deprecated:: 1.9.0
+        The ``rtsdtr_on_open`` and ``rtsdtr_on_close`` constructor kwargs are
+        deprecated; use the per-pin ``dtr_on_open``, ``rts_on_open``,
+        ``dtr_on_close``, and ``rts_on_close`` instead.
+    """
 
     def __init__(
         self,
@@ -468,6 +474,17 @@ class BaseSerial(io.RawIOBase):
         self._exclusive = exclusive
         self._read_timeout = read_timeout
         self._write_timeout = write_timeout
+
+        if (
+            rtsdtr_on_open is not PinState.UNDEFINED
+            or rtsdtr_on_close is not PinState.UNDEFINED
+        ):
+            warnings.warn(
+                "`rtsdtr_on_open`/`rtsdtr_on_close` are deprecated; use the per-pin"
+                " `dtr_on_open`/`rts_on_open`/`dtr_on_close`/`rts_on_close` instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         self._rts_on_open: PinState = (
             rts_on_open if rtsdtr_on_open is PinState.UNDEFINED else rtsdtr_on_open
