@@ -18,12 +18,14 @@ import os.path
 from pathlib import Path
 import time
 from types import TracebackType
-from typing import Any, Concatenate, NamedTuple, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Concatenate, NamedTuple, ParamSpec, TypeVar, cast
 import urllib.parse
 import warnings
 
-from aioesphomeapi.client import APIClient
 from typing_extensions import Buffer, Self, TypedDict, Unpack
+
+if TYPE_CHECKING:
+    from aioesphomeapi.client import APIClient
 
 LOGGER = logging.getLogger(__name__)
 
