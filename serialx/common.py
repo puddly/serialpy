@@ -437,6 +437,9 @@ class BaseSerial(io.RawIOBase):
         do_not_open: bool | None = None,
         writeTimeout: float | None = None,
         inter_byte_timeout: int | None = None,
+        # Legacy kwargs
+        rtsdtr_on_open: PinState = PinState.UNDEFINED,
+        rtsdtr_on_close: PinState = PinState.UNDEFINED,
         # Internal pyserial compatibility signal
         _wrap_exceptions: bool = False,
     ) -> None:
@@ -466,10 +469,18 @@ class BaseSerial(io.RawIOBase):
         self._read_timeout = read_timeout
         self._write_timeout = write_timeout
 
-        self._dtr_on_open = dtr_on_open
-        self._rts_on_open = rts_on_open
-        self._dtr_on_close = dtr_on_close
-        self._rts_on_close = rts_on_close
+        self._rts_on_open: PinState = (
+            rts_on_open if rtsdtr_on_open is PinState.UNDEFINED else rtsdtr_on_open
+        )
+        self._rts_on_close: PinState = (
+            rts_on_close if rtsdtr_on_close is PinState.UNDEFINED else rtsdtr_on_close
+        )
+        self._dtr_on_open: PinState = (
+            dtr_on_open if rtsdtr_on_open is PinState.UNDEFINED else rtsdtr_on_open
+        )
+        self._dtr_on_close: PinState = (
+            dtr_on_close if rtsdtr_on_close is PinState.UNDEFINED else rtsdtr_on_close
+        )
 
         # Last-written DTR/RTS output state, for readback on backends that can't
         # report output lines from hardware
