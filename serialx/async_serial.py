@@ -7,9 +7,10 @@ from collections.abc import Callable, Iterable
 import logging
 from typing import Any, Generic, TypeVar, cast
 
-from typing_extensions import Self
+from typing_extensions import Self, Unpack
 
 from .common import (
+    AllConnectKwargs,
     BaseSerialTransport,
     ModemPins,
     Parity,
@@ -17,6 +18,7 @@ from .common import (
     SerialException,
     StopBits,
     get_uri_handler,
+    route_backend_kwargs,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -41,7 +43,7 @@ class AsyncSerial:
         url: str | None,
         *,
         transport_cls: type[BaseSerialTransport] | None = None,
-        **kwargs: Any,
+        **kwargs: Unpack[AllConnectKwargs],
     ) -> None:
         """Initialize an unopened serial port.
 
@@ -50,7 +52,7 @@ class AsyncSerial:
         """
 
         self._url = url
-        self._connect_kwargs: dict[str, Any] = kwargs
+        self._connect_kwargs: dict[str, Any] = dict(kwargs)
         self._transport_cls = transport_cls
 
         self._reader: asyncio.StreamReader | None = None
@@ -282,6 +284,7 @@ async def create_serial_connection(
             None, get_uri_handler, url
         )
         resolved_cls = handler.async_transport_cls
+        kwargs = route_backend_kwargs(handler, kwargs)  # pylint: disable=serialx-reassigned-parameter
 
     protocol = protocol_factory()
     transport = resolved_cls(loop=loop, protocol=protocol)
@@ -322,7 +325,7 @@ def async_serial_for_url(
     url: str | None,
     *,
     transport_cls: type[BaseSerialTransport] | None = None,
-    **kwargs: Any,
+    **kwargs: Unpack[AllConnectKwargs],
 ) -> AsyncSerial:
     """Build an unopened AsyncSerial. Use `async with` or `await serial.open()`."""
     return AsyncSerial(url, transport_cls=transport_cls, **kwargs)

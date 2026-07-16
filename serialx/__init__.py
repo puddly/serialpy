@@ -8,8 +8,10 @@ from .async_serial import (
     open_serial_connection,
 )
 from .common import (
+    AllConnectKwargs,
     BaseSerial,
     BaseSerialTransport,
+    ConnectKwargs,
     ModemPins,
     Parity,
     PinState,
@@ -57,8 +59,10 @@ __all__ = [
     "Parity",
     "PinState",
     "Platform",
+    "AllConnectKwargs",
     "BaseSerial",
     "BaseSerialTransport",
+    "ConnectKwargs",
     "Serial",
     "SerialException",
     "UnsupportedSetting",

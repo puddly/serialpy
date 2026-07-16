@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+import logging
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -16,11 +18,14 @@ from serialx import (
 )
 from serialx.common import (
     _REGISTERED_URI_HANDLERS,
+    BACKEND_CONNECT_KWARGS,
+    AllConnectKwargs,
     BaseSerial,
     BaseSerialTransport,
     SerialPortInfo,
     UnknownUriScheme,
     get_uri_handler,
+    route_backend_kwargs,
 )
 
 
@@ -126,6 +131,86 @@ def test_register_uri_handler_dispatch_and_unregister() -> None:
 
     with pytest.raises(UnknownUriScheme):
         get_uri_handler("test-shared-2://")
+
+
+def test_backend_connect_kwargs_match_typed_dict() -> None:
+    """Every kwarg in the runtime table is also declared on `AllConnectKwargs`."""
+    declared: set[str] = set()
+
+    for extras in BACKEND_CONNECT_KWARGS.values():
+        declared |= extras
+
+    assert declared <= set(AllConnectKwargs.__optional_keys__)
+
+
+class _StubSerial(BaseSerial):
+    """A concrete `BaseSerial` whose abstract methods are inert stubs."""
+
+    def _open(self) -> None: ...
+    def _close(self) -> None: ...
+    def _configure_port(self) -> None: ...
+    def _flush(self) -> None: ...
+    def _readinto(self, buf: Any) -> int: ...  # type:ignore[empty-body, override]
+    def _write(self, data: Any) -> int: ...  # type:ignore[empty-body, override]
+    def _reset_read_buffer(self) -> None: ...
+    def _reset_write_buffer(self) -> None: ...
+    def _get_modem_pins(self) -> Any: ...
+    def _set_modem_pins(self, modem_pins: Any) -> None: ...
+
+    @property
+    def is_open(self) -> bool: ...  # type:ignore[empty-body]
+
+    @property
+    def num_unread_bytes(self) -> int: ...  # type:ignore[empty-body, override]
+
+    @property
+    def num_unwritten_bytes(self) -> int: ...  # type:ignore[empty-body, override]
+
+
+def test_serial_kwarg_forwarding(caplog: pytest.LogCaptureFixture) -> None:
+    """."""
+
+    class TestSerialBackend(_StubSerial):
+        def __init__(self, *args: Any, test_opt: int = 1, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+
+    unregister = register_uri_handler(
+        scheme="test-backend://",
+        unique_scheme="test-backend://",
+        sync_cls=TestSerialBackend,
+        async_transport_cls=BaseSerialTransport,  # type: ignore[type-abstract]
+        connect_kwargs=frozenset({"test_opt"}),
+    )
+
+    try:
+        handler = get_uri_handler("test-backend://")
+
+        # The chosen backend's own kwarg and common kwargs are forwarded
+        assert route_backend_kwargs(handler, {"test_opt": 5, "baudrate": 115200}) == {
+            "test_opt": 5,
+            "baudrate": 115200,
+        }
+
+        # A built-in backend-specific kwarg is dropped (not raised) for other backends
+        with caplog.at_level(logging.DEBUG, logger="serialx.common"):
+            assert route_backend_kwargs(handler, {"low_latency": False}) == {}
+
+        assert "low_latency" in caplog.text
+
+        # A typo isn't backend-specific, so it's forwarded for the backend to reject
+        assert route_backend_kwargs(handler, {"test_opt": 1}) == {"test_opt": 1}
+
+        # `from_url` drops other-backend kwargs; a real typo raises from the backend
+        instance = BaseSerial.from_url(
+            "test-backend://dev", low_latency=False, baudrate=4800
+        )
+        assert isinstance(instance, TestSerialBackend)
+        assert instance.baudrate == 4800
+
+        with pytest.raises(TypeError, match="nonsense"):
+            BaseSerial.from_url("test-backend://dev", nonsense=1)  # type: ignore[call-arg]
+    finally:
+        unregister()
 
 
 @pytest.mark.parametrize(
