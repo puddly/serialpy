@@ -13,6 +13,7 @@ description = "Serial library with native sync and async support for Windows, Li
 authors = [{ name = "puddly", email = "puddly3@gmail.com" }]
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
   "typing-extensions>=4.13.0",
