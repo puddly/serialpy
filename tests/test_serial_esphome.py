@@ -211,25 +211,24 @@ async def test_connect_plaintext_to_encrypted_server() -> None:
 
 
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
-async def test_connect_encrypted_plaintext_to_server() -> None:
-    """Test that connecting with encryption to an unencrypted server raises."""
+async def test_connect_with_invalid_key() -> None:
+    """Test that connecting with the wrong encryption key raises."""
     with create_socat_pair() as (socat_left, socat_right, _, _):
         with create_esphome_pair(
             socat_left,
             socat_right,
+            noise_psk=base64(b"The real noise PSK of the device"),
         ) as (left, _right):
             parsed = urllib.parse.urlparse(left)
-            noise_psk = base64(b"An unnecessary noise PSK we use.")
+            wrong_key = base64(b"A different, incorrect noise PSK")
 
             url = (
                 f"esphome://{parsed.hostname}:{parsed.port}"
                 f"?port_name=Serial+Proxy+Left"
-                f"&key={noise_psk}"
+                f"&key={wrong_key}"
             )
 
-            with pytest.raises(
-                SerialException, match="The device is using plaintext protocol"
-            ):
+            with pytest.raises(SerialException, match="Invalid encryption key"):
                 async with async_serial_for_url(url=url, baudrate=115200):
                     pass
 
