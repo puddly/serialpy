@@ -247,9 +247,15 @@ class _CommonConnectKwargs(TypedDict, total=False):
     byte_size: int
     read_timeout: float | None
     write_timeout: float | None
+    dtr_on_open: PinState
+    rts_on_open: PinState
+    dtr_on_close: PinState
+    rts_on_close: PinState
+    exclusive: bool
+
+    # backwards compatibility kwargs
     rtsdtr_on_open: PinState
     rtsdtr_on_close: PinState
-    exclusive: bool
 
     # pyserial compatibility kwargs
     port: str | None
