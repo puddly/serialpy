@@ -220,15 +220,21 @@ class PosixSerial(BaseSerial):
         # Ignore modem control lines
         cflag |= termios.CLOCAL
 
-        # Lower modem control lines after last process closes the device (hang up)
-        if self._rtsdtr_on_close is PinState.UNDEFINED:
+        # Lower modem control lines after last process closes the device (hang up).
+        # HUPCL is all-or-nothing: it lowers both DTR and RTS together, so POSIX can
+        # only honor uniform close states.
+        if (
+            self._dtr_on_close is PinState.UNDEFINED
+            and self._rts_on_close is PinState.UNDEFINED
+        ):
             pass
-        elif self._rtsdtr_on_close is PinState.HIGH:
-            raise UnsupportedSetting(
-                "POSIX only supports setting RTS/DTR to LOW on close"
-            )
-        else:
+        elif self._dtr_on_close is PinState.LOW and self._rts_on_close is PinState.LOW:
             cflag |= termios.HUPCL
+        else:
+            raise UnsupportedSetting(
+                "POSIX only supports lowering both DTR and RTS together on close"
+                " (dtr_on_close=rts_on_close=LOW) or leaving both untouched"
+            )
 
         cflag |= self._build_character_size_flags()
         cflag |= self._build_parity_flags()
@@ -312,7 +318,7 @@ class PosixSerial(BaseSerial):
 
         self._after_configure_port()
 
-        self.set_modem_pins(dtr=self._rtsdtr_on_open, rts=self._rtsdtr_on_open)
+        self.set_modem_pins(self._modem_pins_on_open())
 
         # Flush input and output buffers to discard stale data
         termios.tcflush(self._fileno, termios.TCIOFLUSH)
@@ -547,7 +553,7 @@ class PosixSerialTransport(DescriptorTransport):
     async def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits, internal."""
         assert self._serial is not None
-        await self._loop.run_in_executor(None, self._serial._set_modem_pins, modem_pins)
+        await self._loop.run_in_executor(None, self._serial.set_modem_pins, modem_pins)
 
 
 register_uri_handler(

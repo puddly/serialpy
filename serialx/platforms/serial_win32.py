@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pywintypes
 from typing_extensions import Buffer, Unpack
 from win32con import (
+    DTR_CONTROL_DISABLE,
     DTR_CONTROL_ENABLE,
     DTR_CONTROL_HANDSHAKE,
     EVENPARITY,
@@ -26,6 +27,7 @@ from win32con import (
     ONE5STOPBITS,
     ONESTOPBIT,
     OPEN_EXISTING,
+    RTS_CONTROL_DISABLE,
     RTS_CONTROL_ENABLE,
     RTS_CONTROL_HANDSHAKE,
     SPACEPARITY,
@@ -252,6 +254,9 @@ class Win32Serial(BaseSerial):
             if self._rtscts:
                 dcb.fRtsControl = RTS_CONTROL_HANDSHAKE
                 dcb.fOutxCtsFlow = 1
+            elif self._rts_on_open is PinState.LOW:
+                dcb.fRtsControl = RTS_CONTROL_DISABLE
+                dcb.fOutxCtsFlow = 0
             else:
                 dcb.fRtsControl = RTS_CONTROL_ENABLE
                 dcb.fOutxCtsFlow = 0
@@ -266,6 +271,9 @@ class Win32Serial(BaseSerial):
             if self._dsrdtr:
                 dcb.fDtrControl = DTR_CONTROL_HANDSHAKE
                 dcb.fOutxDsrFlow = 1
+            elif self._dtr_on_open is PinState.LOW:
+                dcb.fDtrControl = DTR_CONTROL_DISABLE
+                dcb.fOutxDsrFlow = 0
             else:
                 dcb.fDtrControl = DTR_CONTROL_ENABLE
                 dcb.fOutxDsrFlow = 0
@@ -277,12 +285,8 @@ class Win32Serial(BaseSerial):
 
             SetCommState(self._handle, dcb)
 
-            # RTS cannot be manually set when hardware flow control is enabled
-            if not self._rtscts:
-                self.set_modem_pins(
-                    dtr=self._rtsdtr_on_open,
-                    rts=self._rtsdtr_on_open,
-                )
+            # Driver-owned lines (RTS under rtscts, DTR under dsrdtr) are skipped
+            self.set_modem_pins(self._modem_pins_on_open())
 
             # Clear any errors
             ClearCommError(self._handle)
@@ -298,16 +302,13 @@ class Win32Serial(BaseSerial):
     def _close(self) -> None:
         """Close the serial port and release all handles."""
         if self._handle is not None:
-            # Windows has no way to automatically do this on close, we do it manually
-            if not self._rtscts:
-                # RTS cannot be manually set when hardware flow control is enabled
-                try:
-                    self.set_modem_pins(
-                        dtr=self._rtsdtr_on_close,
-                        rts=self._rtsdtr_on_close,
-                    )
-                except OSError:
-                    LOGGER.debug("Failed to set modem pins on close", exc_info=True)
+            # Windows has no way to automatically do this on close, we do it manually. A
+            # driver-owned line (RTS under rtscts, DTR under dsrdtr) cannot be adjusted
+            # via EscapeCommFunction, so those are skipped.
+            try:
+                self.set_modem_pins(self._modem_pins_on_close())
+            except OSError:
+                LOGGER.debug("Failed to set modem pins on close", exc_info=True)
 
             try:
                 CancelIo(self._handle)

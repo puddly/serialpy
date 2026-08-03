@@ -247,9 +247,15 @@ class _CommonConnectKwargs(TypedDict, total=False):
     byte_size: int
     read_timeout: float | None
     write_timeout: float | None
+    dtr_on_open: PinState
+    rts_on_open: PinState
+    dtr_on_close: PinState
+    rts_on_close: PinState
+    exclusive: bool
+
+    # backwards compatibility kwargs
     rtsdtr_on_open: PinState
     rtsdtr_on_close: PinState
-    exclusive: bool
 
     # pyserial compatibility kwargs
     port: str | None
@@ -410,7 +416,13 @@ def maybe_wrap_exceptions(
 
 
 class BaseSerial(io.RawIOBase):
-    """Base class for serial port communication."""
+    """Base class for serial port communication.
+
+    .. deprecated:: 1.9.0
+        The ``rtsdtr_on_open`` and ``rtsdtr_on_close`` constructor kwargs are
+        deprecated; use the per-pin ``dtr_on_open``, ``rts_on_open``,
+        ``dtr_on_close``, and ``rts_on_close`` instead.
+    """
 
     def __init__(
         self,
@@ -425,8 +437,10 @@ class BaseSerial(io.RawIOBase):
         byte_size: int = 8,
         read_timeout: float | None = None,
         write_timeout: float | None = None,
-        rtsdtr_on_open: PinState = PinState.HIGH,
-        rtsdtr_on_close: PinState = PinState.LOW,
+        dtr_on_open: PinState = PinState.HIGH,
+        rts_on_open: PinState = PinState.HIGH,
+        dtr_on_close: PinState = PinState.LOW,
+        rts_on_close: PinState = PinState.LOW,
         exclusive: bool = True,
         # pyserial compatibility kwargs
         port: str | None = None,
@@ -435,6 +449,9 @@ class BaseSerial(io.RawIOBase):
         do_not_open: bool | None = None,
         writeTimeout: float | None = None,
         inter_byte_timeout: int | None = None,
+        # Legacy kwargs
+        rtsdtr_on_open: PinState = PinState.UNDEFINED,
+        rtsdtr_on_close: PinState = PinState.UNDEFINED,
         # Internal pyserial compatibility signal
         _wrap_exceptions: bool = False,
     ) -> None:
@@ -464,8 +481,34 @@ class BaseSerial(io.RawIOBase):
         self._read_timeout = read_timeout
         self._write_timeout = write_timeout
 
-        self._rtsdtr_on_open = rtsdtr_on_open
-        self._rtsdtr_on_close = rtsdtr_on_close
+        if (
+            rtsdtr_on_open is not PinState.UNDEFINED
+            or rtsdtr_on_close is not PinState.UNDEFINED
+        ):
+            warnings.warn(
+                "`rtsdtr_on_open`/`rtsdtr_on_close` are deprecated; use the per-pin"
+                " `dtr_on_open`/`rts_on_open`/`dtr_on_close`/`rts_on_close` instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
+        self._rts_on_open: PinState = (
+            rts_on_open if rtsdtr_on_open is PinState.UNDEFINED else rtsdtr_on_open
+        )
+        self._rts_on_close: PinState = (
+            rts_on_close if rtsdtr_on_close is PinState.UNDEFINED else rtsdtr_on_close
+        )
+        self._dtr_on_open: PinState = (
+            dtr_on_open if rtsdtr_on_open is PinState.UNDEFINED else rtsdtr_on_open
+        )
+        self._dtr_on_close: PinState = (
+            dtr_on_close if rtsdtr_on_close is PinState.UNDEFINED else rtsdtr_on_close
+        )
+
+        # Last-written DTR/RTS output state, for readback on backends that can't
+        # report output lines from hardware
+        self._dtr_state = PinState.UNDEFINED
+        self._rts_state = PinState.UNDEFINED
 
         self._auto_close = False
 
@@ -562,7 +605,26 @@ class BaseSerial(io.RawIOBase):
     def get_modem_pins(self) -> ModemPins:
         """Get modem control bits."""
         self._check_broken()
-        return self._get_modem_pins()
+        pins = self._get_modem_pins()
+        return dataclasses.replace(
+            pins,
+            dtr=pins.dtr if pins.dtr is not PinState.UNDEFINED else self._dtr_state,
+            rts=pins.rts if pins.rts is not PinState.UNDEFINED else self._rts_state,
+        )
+
+    def _modem_pins_on_open(self) -> ModemPins:
+        """DTR/RTS to apply on open."""
+        return ModemPins(
+            dtr=self._dtr_on_open if not self._dsrdtr else PinState.UNDEFINED,
+            rts=self._rts_on_open if not self._rtscts else PinState.UNDEFINED,
+        )
+
+    def _modem_pins_on_close(self) -> ModemPins:
+        """DTR/RTS to apply on close."""
+        return ModemPins(
+            dtr=self._dtr_on_close if not self._dsrdtr else PinState.UNDEFINED,
+            rts=self._rts_on_close if not self._rtscts else PinState.UNDEFINED,
+        )
 
     @maybe_wrap_exceptions
     def set_modem_pins(
@@ -596,7 +658,13 @@ class BaseSerial(io.RawIOBase):
                 dsr=PinState.convert(dsr),
             )
 
-        return self._set_modem_pins(pins)
+        self._set_modem_pins(pins)
+
+        if pins.dtr is not PinState.UNDEFINED:
+            self._dtr_state = pins.dtr
+
+        if pins.rts is not PinState.UNDEFINED:
+            self._rts_state = pins.rts
 
     @abstractmethod
     def _get_modem_pins(self) -> ModemPins:
@@ -674,14 +742,24 @@ class BaseSerial(io.RawIOBase):
         return self._stopbits
 
     @property
-    def rtsdtr_on_open(self) -> PinState:
-        """Get the RTS/DTR pin state (on open) setting."""
-        return self._rtsdtr_on_open
+    def dtr_on_open(self) -> PinState:
+        """Get the DTR pin state (on open) setting."""
+        return self._dtr_on_open
 
     @property
-    def rtsdtr_on_close(self) -> PinState:
-        """Get the RTS/DTR pin state (on close) setting."""
-        return self._rtsdtr_on_close
+    def rts_on_open(self) -> PinState:
+        """Get the RTS pin state (on open) setting."""
+        return self._rts_on_open
+
+    @property
+    def dtr_on_close(self) -> PinState:
+        """Get the DTR pin state (on close) setting."""
+        return self._dtr_on_close
+
+    @property
+    def rts_on_close(self) -> PinState:
+        """Get the RTS pin state (on close) setting."""
+        return self._rts_on_close
 
     @property
     def exclusive(self) -> bool:
@@ -963,21 +1041,31 @@ class BaseSerial(io.RawIOBase):
     @property
     def dtr(self) -> bool | None:
         """Get DTR modem bit."""
+        if not self.is_open:
+            return self._dtr_on_open.to_bool()
         return self.get_modem_pins().dtr.to_bool()
 
     @dtr.setter
     def dtr(self, value: bool) -> None:
         """Set DTR modem bit."""
+        if not self.is_open:
+            self._dtr_on_open = PinState.convert(value)
+            return
         self.set_modem_pins(dtr=bool(value))
 
     @property
     def rts(self) -> bool | None:
         """Get RTS modem bit."""
+        if not self.is_open:
+            return self._rts_on_open.to_bool()
         return self.get_modem_pins().rts.to_bool()
 
     @rts.setter
     def rts(self, value: bool) -> None:
         """Set RTS modem bit."""
+        if not self.is_open:
+            self._rts_on_open = PinState.convert(value)
+            return
         self.set_modem_pins(rts=bool(value))
 
     @property

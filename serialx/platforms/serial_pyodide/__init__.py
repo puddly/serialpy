@@ -164,6 +164,11 @@ class PyodideSerialTransport(BaseSerialTransport):
         self._reader_task: asyncio.Task[None] | None = None
         self._writer_task: asyncio.Task[None] | None = None
 
+        # Last-written DTR/RTS output state; Web Serial `getSignals` only reports
+        # input lines, so output readback comes from this cache.
+        self._dtr_state = PinState.UNDEFINED
+        self._rts_state = PinState.UNDEFINED
+
     async def _connect(  # type: ignore[override]
         self,
         *,
@@ -233,11 +238,10 @@ class PyodideSerialTransport(BaseSerialTransport):
         self._js_port = port
         assert self._js_port is not None
 
-        if self._serial.rtsdtr_on_open is not PinState.UNDEFINED:
-            await self.set_modem_pins(
-                rts=self._serial.rtsdtr_on_open,
-                dtr=self._serial.rtsdtr_on_open,
-            )
+        await self.set_modem_pins(
+            rts=self._serial.rts_on_open,
+            dtr=self._serial.dtr_on_open,
+        )
 
         readable = self._js_port.readable
         assert readable is not None
@@ -286,7 +290,10 @@ class PyodideSerialTransport(BaseSerialTransport):
         assert self._js_port is not None
         result = await self._js_port.getSignals()
 
+        # `getSignals` only reports input lines; DTR/RTS come from the cache
         return ModemPins(
+            dtr=self._dtr_state,
+            rts=self._rts_state,
             cts=PinState.convert(result.clearToSend),
             car=PinState.convert(result.dataCarrierDetect),
             rng=PinState.convert(result.ringIndicator),
@@ -304,6 +311,11 @@ class PyodideSerialTransport(BaseSerialTransport):
         if signals:
             assert self._js_port is not None
             await self._js_port.setSignals(**signals)
+
+        if modem_pins.dtr is not PinState.UNDEFINED:
+            self._dtr_state = modem_pins.dtr
+        if modem_pins.rts is not PinState.UNDEFINED:
+            self._rts_state = modem_pins.rts
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the transport."""
@@ -356,12 +368,11 @@ class PyodideSerialTransport(BaseSerialTransport):
             self._js_writer = None
 
         if self._js_port is not None:
-            if self._serial.rtsdtr_on_close is not PinState.UNDEFINED:
-                with contextlib.suppress(Exception):
-                    await self.set_modem_pins(
-                        rts=self._serial.rtsdtr_on_close,
-                        dtr=self._serial.rtsdtr_on_close,
-                    )
+            with contextlib.suppress(Exception):
+                await self.set_modem_pins(
+                    rts=self._serial.rts_on_close,
+                    dtr=self._serial.dtr_on_close,
+                )
             await self._js_port.close()
             self._js_port = None
 

@@ -992,8 +992,8 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
         async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_open=PinState.HIGH,
-            rtsdtr_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
         ) as right:
             await right.set_modem_pins(rts=True)
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
@@ -1005,8 +1005,8 @@ async def test_async_deassert_on_open(serial_pair: SerialPair) -> None:
         async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_open=PinState.LOW,
-            rtsdtr_on_close=PinState.HIGH,
+            rts_on_open=PinState.LOW,
+            rts_on_close=PinState.HIGH,
         ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await left.get_modem_pins()).cts is PinState.LOW
@@ -1032,8 +1032,8 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
         async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_close=PinState.HIGH,
-            rtsdtr_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
         ) as right:
             await right.set_modem_pins(rts=True)
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
@@ -1045,8 +1045,8 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
         async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_close=PinState.HIGH,
-            rtsdtr_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
         ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await left.get_modem_pins()).cts is PinState.HIGH
@@ -1057,8 +1057,8 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
         async with serialx.async_serial_for_url(
             serial_pair.right,
             baudrate=115200,
-            rtsdtr_on_close=PinState.LOW,
-            rtsdtr_on_open=PinState.HIGH,
+            rts_on_close=PinState.LOW,
+            rts_on_open=PinState.HIGH,
         ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await left.get_modem_pins()).cts is PinState.HIGH
@@ -1070,7 +1070,7 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
 @pytest.mark.skipif(sys.platform == "win32", reason="CloseHandle resets modem signals")
 @pytest.mark.skip_quirks(SerialQuirk.NO_RTS_CTS, SerialQuirk.NO_DTR_DSR)
 @pytest.mark.parametrize(
-    ("rtscts", "rtsdtr_on_open", "expected_state"),
+    ("rtscts", "rts_on_open", "expected_state"),
     [
         (False, PinState.HIGH, PinState.HIGH),
         (False, PinState.LOW, PinState.LOW),
@@ -1081,10 +1081,10 @@ async def test_async_hang_up_on_close(serial_pair: SerialPair) -> None:
 async def test_async_deassert_on_open_with_rtscts(
     serial_pair: SerialPair,
     rtscts: bool,
-    rtsdtr_on_open: PinState,
+    rts_on_open: PinState,
     expected_state: PinState,
 ) -> None:
-    """Test interaction of rtsdtr_on_open with rtscts."""
+    """Test interaction of rts_on_open with rtscts."""
 
     if serial_pair.uri_scheme in (
         "linux://",
@@ -1099,8 +1099,8 @@ async def test_async_deassert_on_open_with_rtscts(
             serial_pair.right,
             baudrate=115200,
             rtscts=False,
-            rtsdtr_on_open=PinState.HIGH,
-            rtsdtr_on_close=PinState.HIGH,
+            rts_on_open=PinState.HIGH,
+            rts_on_close=PinState.HIGH,
         ) as right:
             await right.set_modem_pins(rts=True)
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
@@ -1113,7 +1113,7 @@ async def test_async_deassert_on_open_with_rtscts(
             serial_pair.right,
             baudrate=115200,
             rtscts=rtscts,
-            rtsdtr_on_open=rtsdtr_on_open,
+            rts_on_open=rts_on_open,
         ) as right:
             await asyncio.sleep(serial_pair.modem_line_propagation_delay)
             assert (await left.get_modem_pins()).cts is expected_state
