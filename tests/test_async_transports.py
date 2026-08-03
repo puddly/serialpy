@@ -1351,6 +1351,7 @@ async def test_async_unplug_raises_on_streamreader_readline(
             await writer.wait_closed()
 
 
+@pytest.mark.skip_quirks(SerialQuirk.NO_GRACEFUL_PEER_CLOSE)
 async def test_async_graceful_peer_close_does_not_raise(
     serial_pair: SerialPair,
 ) -> None:

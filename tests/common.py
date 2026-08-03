@@ -75,6 +75,7 @@ class SerialQuirk(str, enum.Enum):
     NO_BUFFER_CONTROL = "no-buffer-control"
     NO_PAUSE_WRITING_CALLBACKS = "no-pause-writing-callbacks"
     NO_EXCLUSIVITY = "no-exclusivity"
+    NO_GRACEFUL_PEER_CLOSE = "no-graceful-peer-close"
 
 
 SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
@@ -104,6 +105,9 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_RESET_WRITE_BUFFER,
             SerialQuirk.NO_WRITE_TIMEOUT,
             SerialQuirk.NO_EXCLUSIVITY,
+            # ESPHome has no orderly API close at runtime, so a dropped
+            # connection is always abrupt
+            SerialQuirk.NO_GRACEFUL_PEER_CLOSE,
         }
     ),
     SerialBackend.ESPHOME_HOST: frozenset(
@@ -115,6 +119,7 @@ SERIAL_PAIR_DEFAULT_QUIRKS: dict[SerialBackend, frozenset[SerialQuirk]] = {
             SerialQuirk.NO_DTR_DSR,
             SerialQuirk.NO_RTS_CTS,
             SerialQuirk.NO_EXCLUSIVITY,
+            SerialQuirk.NO_GRACEFUL_PEER_CLOSE,
         }
     ),
     SerialBackend.RFC2217: frozenset(
@@ -167,6 +172,9 @@ class UnresolvedSerialPair:
 
     uri_scheme: str | None = None
     modem_line_propagation_delay: float = 0.05
+
+    # Largest payload a close()-time drain can carry through this pair, in bytes
+    max_drain_payload: int = 4096
 
     def chain(self, *backends: SerialBackend) -> Self:
         """Chain another backend layer on top of this one, accumulating quirks."""
@@ -337,7 +345,7 @@ def create_esphome_pair(
     right_tty: str,
     *,
     noise_psk: str = "",
-) -> Iterator[tuple[str, str]]:
+) -> Iterator[tuple[str, str, Callable[[], None] | None, Callable[[], None] | None]]:
     """Create an esphome:// pair."""
     assert ESPHOME_HOST_BINARY is not None
 
@@ -364,9 +372,18 @@ def create_esphome_pair(
 
         api_port = _get_listening_ports(process.pid)[0]
 
+        def unplug_abrupt() -> None:
+            """Kill the daemon so the API connection drops mid-session."""
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+
         yield (
             f"esphome://127.0.0.1:{api_port}?port_name=Serial+Proxy+Left",
             f"esphome://127.0.0.1:{api_port}?port_name=Serial+Proxy+Right",
+            # No graceful flavor; see SerialQuirk.NO_GRACEFUL_PEER_CLOSE
+            None,
+            unplug_abrupt,
         )
     finally:
         if process.poll() is None:
