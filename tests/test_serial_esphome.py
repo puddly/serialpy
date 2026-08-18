@@ -164,6 +164,30 @@ async def test_externally_passed_api_close_after_disconnect() -> None:
 
 
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
+async def test_daemon_death_propagates_connection_lost() -> None:
+    """Test that losing the API connection unblocks readers and closes the port."""
+    with create_socat_pair() as (socat_left, socat_right, _, _):
+        with contextlib.ExitStack() as stack:
+            left, _right = stack.enter_context(
+                create_esphome_pair(socat_left, socat_right)
+            )
+
+            serial = async_serial_for_url(url=left, baudrate=115200)
+            await serial.open()
+
+            # Simulate the ESPHome device restarting mid-connection
+            stack.close()
+
+            # The reader unblocks: an unexpected disconnect surfaces as a
+            # SerialException, a clean device-initiated disconnect as EOF.
+            with pytest.raises((SerialException, asyncio.IncompleteReadError)):
+                await asyncio.wait_for(serial.readexactly(1), timeout=10)
+
+            assert not serial.is_open
+            await serial.close()
+
+
+@pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
 async def test_connect_by_instance_id() -> None:
     """Test connecting to an ESPHome serial proxy by instance ID."""
     with create_socat_pair() as (socat_left, socat_right, _, _):

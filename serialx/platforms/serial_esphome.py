@@ -182,6 +182,8 @@ class ESPHomeSerial(BaseSerial):
         self._read_event = asyncio.Event()
         self._unsub: Callable[[], None] | None = None
         self._instance_subscribed = False
+        # Invoked (on the client's loop) when an API connection we own stops
+        self._on_stop_cb: Callable[[bool], None] | None = None
 
         self._last_line_state = LineStateFlag(0)
 
@@ -317,10 +319,17 @@ class ESPHomeSerial(BaseSerial):
             self._client_loop = self._api.loop
 
             self._disconnect_api = True
-            await self._call_on_client_loop(self._api.connect(login=True))
+            await self._call_on_client_loop(
+                self._api.connect(on_stop=self._api_stopped, login=True)
+            )
         else:
             # Don't disconnect an externally-passed API
             self._disconnect_api = False
+
+    async def _api_stopped(self, expected_disconnect: bool) -> None:
+        """Handle the API connection stopping; runs on the client's loop."""
+        if self._on_stop_cb is not None:
+            self._on_stop_cb(expected_disconnect)
 
     @translate_esphome_errors
     async def _async_list_serial_ports(self) -> list[SerialPortInfo]:
@@ -636,6 +645,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._extra["serial"] = self._serial
 
         assert self._serial is not None
+        self._serial._on_stop_cb = self._on_api_stop
         await self._serial._async_open()
 
         assert self._serial._api is not None
@@ -667,6 +677,37 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._protocol.data_received(msg.data)
         else:
             self._loop.call_soon_threadsafe(self._protocol.data_received, msg.data)
+
+    def _on_api_stop(self, expected_disconnect: bool) -> None:
+        """Dispatch an API connection stop to the transport's loop."""
+        assert self._serial is not None
+        client_loop = self._serial._client_loop
+        if client_loop is None or client_loop is self._loop:
+            self._handle_api_stop(expected_disconnect)
+        else:
+            self._loop.call_soon_threadsafe(self._handle_api_stop, expected_disconnect)
+
+    def _handle_api_stop(self, expected_disconnect: bool) -> None:
+        """Handle the API connection stopping without a local `close()`."""
+        if self._closing:
+            return
+        self._closing = True
+
+        # The data subscription and instance subscription died with the
+        # connection; there is nothing left to unsubscribe or disconnect.
+        self._unsub = None
+
+        serial = self._serial
+        exc: Exception | None = None
+        if not expected_disconnect:
+            exc = SerialException("ESPHome API connection lost")
+            self._mark_broken(exc)
+
+        if serial is not None:
+            serial._instance_subscribed = False
+            serial._api = None
+
+        self._call_protocol_connection_lost(exc)
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial proxy."""
