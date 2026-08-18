@@ -123,6 +123,7 @@ class ESPHomeSerial(BaseSerial):
         key: str | None = None,
         password: str | None = None,
         noise_psk: str | None = None,
+        on_stop: Callable[[bool], Coroutine[Any, Any, None]] | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize ESPHome serial port.
@@ -147,6 +148,10 @@ class ESPHomeSerial(BaseSerial):
             password: The API password to use when creating an `aioesphomeapi.APIClient`
                 instance.
             noise_psk: An alias for `key`. Both cannot be passed at once.
+            on_stop: Coroutine callback invoked (on the client's loop) when an
+                API connection we own stops; receives `expected_disconnect`.
+                Ignored for an externally-passed `api`, whose owner already
+                controls `APIClient.connect`.
             *args: Passed through to `BaseSerial`.
             **kwargs: Passed through to `BaseSerial`.
 
@@ -182,8 +187,7 @@ class ESPHomeSerial(BaseSerial):
         self._read_event = asyncio.Event()
         self._unsub: Callable[[], None] | None = None
         self._instance_subscribed = False
-        # Invoked (on the client's loop) when an API connection we own stops
-        self._on_stop_cb: Callable[[bool], None] | None = None
+        self._on_stop = on_stop
 
         self._last_line_state = LineStateFlag(0)
 
@@ -320,16 +324,11 @@ class ESPHomeSerial(BaseSerial):
 
             self._disconnect_api = True
             await self._call_on_client_loop(
-                self._api.connect(on_stop=self._api_stopped, login=True)
+                self._api.connect(on_stop=self._on_stop, login=True)
             )
         else:
             # Don't disconnect an externally-passed API
             self._disconnect_api = False
-
-    async def _api_stopped(self, expected_disconnect: bool) -> None:
-        """Handle the API connection stopping; runs on the client's loop."""
-        if self._on_stop_cb is not None:
-            self._on_stop_cb(expected_disconnect)
 
     @translate_esphome_errors
     async def _async_list_serial_ports(self) -> list[SerialPortInfo]:
@@ -641,11 +640,12 @@ class ESPHomeSerialTransport(BaseSerialTransport):
     async def _connect(
         self, *, path: str | None = None, **kwargs: Unpack[ConnectKwargs]
     ) -> None:
-        self._serial = self._serial_cls(loop=self._loop, path=path, **kwargs)
+        self._serial = self._serial_cls(
+            loop=self._loop, path=path, on_stop=self._on_api_stop, **kwargs
+        )
         self._extra["serial"] = self._serial
 
         assert self._serial is not None
-        self._serial._on_stop_cb = self._on_api_stop
         await self._serial._async_open()
 
         assert self._serial._api is not None
@@ -678,17 +678,12 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         else:
             self._loop.call_soon_threadsafe(self._protocol.data_received, msg.data)
 
-    def _on_api_stop(self, expected_disconnect: bool) -> None:
-        """Dispatch an API connection stop to the transport's loop."""
-        assert self._serial is not None
-        client_loop = self._serial._client_loop
-        if client_loop is None or client_loop is self._loop:
-            self._handle_api_stop(expected_disconnect)
-        else:
-            self._loop.call_soon_threadsafe(self._handle_api_stop, expected_disconnect)
+    async def _on_api_stop(self, expected_disconnect: bool) -> None:
+        """Handle the API connection stopping without a local `close()`.
 
-    def _handle_api_stop(self, expected_disconnect: bool) -> None:
-        """Handle the API connection stopping without a local `close()`."""
+        Only wired for API connections the serial owns, which are created on
+        the transport's loop, so this always runs on `self._loop`.
+        """
         if self._closing:
             return
         self._closing = True
