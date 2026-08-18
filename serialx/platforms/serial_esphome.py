@@ -679,11 +679,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             self._loop.call_soon_threadsafe(self._protocol.data_received, msg.data)
 
     async def _on_api_stop(self, expected_disconnect: bool) -> None:
-        """Handle the API connection stopping without a local `close()`.
-
-        Only wired for API connections the serial owns, which are created on
-        the transport's loop, so this always runs on `self._loop`.
-        """
+        """Handle the API connection stopping."""
         if self._closing:
             return
         self._closing = True
