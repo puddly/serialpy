@@ -357,6 +357,8 @@ class ESPHomeSerial(BaseSerial):
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
                 password=self._password,
                 noise_psk=self._noise_psk,
+                # A serial proxy client is not the device's time source
+                provide_time=False,
             )
             self._client_loop = self._api.loop
 
