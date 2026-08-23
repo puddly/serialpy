@@ -212,7 +212,11 @@ class SerialPair(UnresolvedSerialPair):
 def _snapshot_fds() -> set[int]:
     """Return the set of open fd numbers for this process."""
     if sys.platform == "linux":
-        return {int(e) for e in os.listdir(f"/proc/{os.getpid()}/fd")}
+        # `listdir` holds an fd that shows up in its own listing
+        fd_dir = f"/proc/{os.getpid()}/fd"
+        entries = os.listdir(fd_dir)
+
+        return {int(e) for e in entries if os.path.lexists(f"{fd_dir}/{e}")}
 
     if sys.platform == "emscripten":
         return set()
