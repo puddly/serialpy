@@ -118,19 +118,22 @@ async def test_externally_passed_api() -> None:
             )
             await api.connect(login=True)
 
-            for _attempt in range(10):
-                async with async_serial_for_url(
-                    url=None,
-                    transport_cls=ESPHomeSerialTransport,
-                    api=api,
-                    port_name="Serial Proxy Left",
-                    baudrate=115200,
-                ) as serial:
-                    serial.write_nowait(b"test")
-                    await serial.drain()
+            try:
+                for _attempt in range(10):
+                    async with async_serial_for_url(
+                        url=None,
+                        transport_cls=ESPHomeSerialTransport,
+                        api=api,
+                        port_name="Serial Proxy Left",
+                        baudrate=115200,
+                    ) as serial:
+                        serial.write_nowait(b"test")
+                        await serial.drain()
 
-            # The API is still connected
-            await api.device_info()
+                # The API is still connected
+                await api.device_info()
+            finally:
+                await api.disconnect()
 
 
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
