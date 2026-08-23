@@ -395,6 +395,10 @@ def create_esphome_pair(
                 process.kill()
                 process.wait(timeout=5)
 
+        # The unplug callables hold references to the Popen objects
+        if process.stderr is not None:
+            process.stderr.close()
+
 
 @contextlib.contextmanager
 def create_socat_pair() -> Iterator[
