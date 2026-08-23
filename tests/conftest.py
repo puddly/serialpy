@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator, Callable, Generator
 import contextlib
 import dataclasses
@@ -9,6 +10,11 @@ import sys
 import urllib.parse
 
 import pytest
+
+try:
+    from aioesphomeapi.timezone import get_local_timezone
+except ImportError:
+    get_local_timezone = None  # type: ignore[assignment]
 
 from serialx.common import get_uri_handler
 from tests.common import (
@@ -354,6 +360,13 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
         )
     finally:
         stack.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _warm_lazy_timezone_import() -> None:
+    """Resolve the ESPHome timezone once, before any fd snapshotting."""
+    if get_local_timezone is not None:
+        asyncio.run(get_local_timezone())
 
 
 @pytest.fixture(autouse=True)
