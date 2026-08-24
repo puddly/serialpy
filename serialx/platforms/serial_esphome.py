@@ -291,17 +291,14 @@ class ESPHomeSerial(BaseSerial):
             self._loop.call_soon_threadsafe(self._handle_connection_closed, event)
 
     def _handle_connection_closed(self, event: ConnectionClosedEvent) -> None:
-        """Apply the closed event on `self._loop` after cross-loop marshalling."""
-        # The subscription died with the connection, and the callback would
-        # otherwise stay registered on an externally-owned client forever.
+        """Handle the connection being closed."""
         self._instance_subscribed = False
-        if self._closed_unsub is not None:
-            self._schedule_on_client_loop(self._closed_unsub)
-            self._closed_unsub = None
-
         self._mark_broken(connection_closed_error(event))
+
         # Wake a blocked reader so it raises instead of waiting out its timeout.
         self._read_event.set()
+
+        self._unsubscribe_connection_closed()
 
     def _open(self) -> None:
         """Open the serial port."""
@@ -747,17 +744,16 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             return
 
         self._closing = True
-        if self._closed_unsub is not None:
-            # The callback would otherwise stay registered on an externally
-            # owned client for as long as that client lives.
-            self._schedule_unsub(self._closed_unsub)
-            self._closed_unsub = None
 
         if not self._user_initiated_close:
             self._mark_broken(connection_closed_error(event))
 
         exc = None if event.expected_disconnect else connection_closed_error(event)
         self._call_protocol_connection_lost(exc)
+
+        if self._closed_unsub is not None:
+            self._schedule_unsub(self._closed_unsub)
+            self._closed_unsub = None
 
     def _schedule_unsub(self, unsub: Callable[[], None]) -> None:
         """Run an unsub on the client's loop, or inline if the serial is gone."""
@@ -903,6 +899,8 @@ async def async_esphome_list_serial_ports(
     try:
         return await serial._async_list_serial_ports()
     finally:
+        serial._unsubscribe_connection_closed()
+
         if serial._disconnect_api and serial._api is not None:
             await serial._api.disconnect()
             serial._api = None
