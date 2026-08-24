@@ -26,6 +26,7 @@ import asyncio
 from collections.abc import Callable, Coroutine
 from contextlib import suppress
 from enum import IntFlag
+import errno
 import functools
 import logging
 import threading
@@ -40,7 +41,12 @@ from aioesphomeapi.core import (  # type: ignore[attr-defined]
     PingResponse,
     TimeoutAPIError,
 )
-from aioesphomeapi.model import SerialProxyDataReceived, SerialProxyParity
+from aioesphomeapi.model import (
+    ConnectionClosedEvent,
+    DisconnectReason,
+    SerialProxyDataReceived,
+    SerialProxyParity,
+)
 from typing_extensions import Buffer, Unpack
 
 from serialx import SerialException, UnsupportedSetting
@@ -94,6 +100,21 @@ def translate_esphome_errors(
             raise SerialException(str(exc)) from exc
 
     return cast(Callable[_P, Coroutine[Any, Any, _T]], wrapper)
+
+
+def connection_closed_error(event: ConnectionClosedEvent) -> OSError:
+    """Translate a closed ESPHome API connection into a broken-link error."""
+    if event.error is not None:
+        exc = OSError(errno.EIO, f"ESPHome API connection closed: {event.error}")
+        exc.__cause__ = event.error
+        return exc
+
+    if event.reason is not None and event.reason is not DisconnectReason.UNSPECIFIED:
+        return OSError(
+            errno.EIO, f"ESPHome device closed the connection: {event.reason.name}"
+        )
+
+    return OSError(errno.EIO, "ESPHome API connection closed")
 
 
 class LineStateFlag(IntFlag):
@@ -181,6 +202,7 @@ class ESPHomeSerial(BaseSerial):
         self._read_buffer = bytearray()
         self._read_event = asyncio.Event()
         self._unsub: Callable[[], None] | None = None
+        self._closed_unsub: Callable[[], None] | None = None
         self._instance_subscribed = False
 
         self._last_line_state = LineStateFlag(0)
@@ -259,6 +281,25 @@ class ESPHomeSerial(BaseSerial):
         self._read_buffer.extend(data)
         self._read_event.set()
 
+    def _on_connection_closed(self, event: ConnectionClosedEvent) -> None:
+        """Handle the API connection closing, called on the client's loop."""
+        client_loop = self._client_loop
+        if client_loop is None or client_loop is self._loop:
+            self._handle_connection_closed(event)
+        else:
+            assert self._loop is not None
+            self._loop.call_soon_threadsafe(self._handle_connection_closed, event)
+
+    def _handle_connection_closed(self, event: ConnectionClosedEvent) -> None:
+        """Handle the connection being closed."""
+        self._instance_subscribed = False
+        self._mark_broken(connection_closed_error(event))
+
+        # Wake a blocked reader so it raises instead of waiting out its timeout.
+        self._read_event.set()
+
+        self._unsubscribe_connection_closed()
+
     def _open(self) -> None:
         """Open the serial port."""
         self._maybe_start_new_event_loop()
@@ -313,6 +354,8 @@ class ESPHomeSerial(BaseSerial):
                 port=parsed.port or ESPHOME_DEFAULT_PORT,
                 password=self._password,
                 noise_psk=self._noise_psk,
+                # A serial proxy client is not the device's time source
+                provide_time=False,
             )
             self._client_loop = self._api.loop
 
@@ -321,6 +364,16 @@ class ESPHomeSerial(BaseSerial):
         else:
             # Don't disconnect an externally-passed API
             self._disconnect_api = False
+
+        if self._closed_unsub is None:
+            self._closed_unsub = await self._call_on_client_loop(
+                self._register_closed_handler()
+            )
+
+    async def _register_closed_handler(self) -> Callable[[], None]:
+        """Register `_on_connection_closed` on the client's loop and return the unsub."""
+        assert self._api is not None
+        return self._api.add_connection_closed_callback(self._on_connection_closed)
 
     @translate_esphome_errors
     async def _async_list_serial_ports(self) -> list[SerialPortInfo]:
@@ -584,6 +637,7 @@ class ESPHomeSerial(BaseSerial):
     async def _async_readinto(self, b: Buffer, timeout: float | None) -> int:
         async with asyncio.timeout(timeout):  # type:ignore[unused-ignore,attr-defined]
             while not self._read_buffer:
+                self._check_broken()
                 self._read_event.clear()
                 await self._read_event.wait()
 
@@ -593,11 +647,32 @@ class ESPHomeSerial(BaseSerial):
         del self._read_buffer[:n]
         return n
 
-    def _close(self) -> None:
-        """Close the serial port."""
+    def _unsubscribe_connection_closed(self) -> None:
+        """Drop this serial's API close-event subscription, if it has one."""
+        if self._closed_unsub is not None:
+            self._schedule_on_client_loop(self._closed_unsub)
+            self._closed_unsub = None
+
+    def _unsubscribe_callbacks(self) -> None:
+        """Drop every callback `_async_open` registered on the API client."""
         if self._unsub is not None:
             self._schedule_on_client_loop(self._unsub)
             self._unsub = None
+
+        self._unsubscribe_connection_closed()
+
+    async def _async_close(self) -> None:
+        """Close the serial port from a caller that already has a running loop."""
+        self._unsubscribe_callbacks()
+
+        if self._disconnect_api and self._api is not None:
+            self._unsubscribe_instance()
+            await self._call_on_client_loop(self._api.disconnect())
+            self._api = None
+
+    def _close(self) -> None:
+        """Close the serial port."""
+        self._unsubscribe_callbacks()
 
         if self._disconnect_api and self._api is not None:
             self._unsubscribe_instance()
@@ -626,6 +701,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         """Initialize the ESPHome serial transport."""
         super().__init__(loop, protocol)
         self._unsub: Callable[[], None] | None = None
+        self._closed_unsub: Callable[[], None] | None = None
         self._close_task: asyncio.Task[None] | None = None
 
     @translate_esphome_errors
@@ -643,8 +719,62 @@ class ESPHomeSerialTransport(BaseSerialTransport):
         self._unsub = await self._serial._call_on_client_loop(
             self._register_transport_data_handler()
         )
+        self._closed_unsub = await self._serial._call_on_client_loop(
+            self._register_transport_closed_handler()
+        )
+
+        # Nothing is replayed for a connection that closed while we were setting
+        # up, so the state has to be re-checked once the callback is installed.
+        if not self._serial._api.is_connected:
+            raise SerialException("ESPHome API connection closed while connecting")
 
         self._call_protocol_connection_made()
+
+    async def _register_transport_closed_handler(self) -> Callable[[], None]:
+        """Register `_on_api_connection_closed` on the client's loop, return the unsub."""
+        assert self._serial is not None
+        assert self._serial._api is not None
+
+        # This isn't a coroutine but needs to be run in the target loop
+        unsub: Callable[[], None] = self._serial._api.add_connection_closed_callback(
+            self._on_api_connection_closed
+        )
+        return unsub
+
+    def _on_api_connection_closed(self, event: ConnectionClosedEvent) -> None:
+        """Handle the API connection closing, called on the client's loop."""
+        assert self._serial is not None
+
+        client_loop = self._serial._client_loop
+        if client_loop is None or client_loop is self._loop:
+            self._api_connection_lost(event)
+        else:
+            self._loop.call_soon_threadsafe(self._api_connection_lost, event)
+
+    def _api_connection_lost(self, event: ConnectionClosedEvent) -> None:
+        """Tear down the transport after the API connection closed."""
+        if self._connection_lost_called:
+            return
+
+        self._closing = True
+
+        if not self._user_initiated_close:
+            self._mark_broken(connection_closed_error(event))
+
+        exc = None if event.expected_disconnect else connection_closed_error(event)
+        self._call_protocol_connection_lost(exc)
+
+        if self._closed_unsub is not None:
+            self._schedule_unsub(self._closed_unsub)
+            self._closed_unsub = None
+
+    def _schedule_unsub(self, unsub: Callable[[], None]) -> None:
+        """Run an unsub on the client's loop, or inline if the serial is gone."""
+        serial = self._serial
+        if serial is not None:
+            serial._schedule_on_client_loop(unsub)
+        else:
+            unsub()
 
     async def _register_transport_data_handler(self) -> Callable[[], None]:
         """Register `_on_data` on the client's loop and return the unsub."""
@@ -670,6 +800,9 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
     def write(self, data: bytes | bytearray | memoryview) -> None:
         """Write data to the serial proxy."""
+        # Before the _closing check: a broken link must raise rather than
+        # silently drop the write, while a user-requested close stays quiet.
+        self._check_broken()
         if self._closing:
             return
         assert self._serial is not None
@@ -688,17 +821,19 @@ class ESPHomeSerialTransport(BaseSerialTransport):
 
         serial = self._serial
         if self._unsub is not None:
-            if serial is not None:
-                serial._schedule_on_client_loop(self._unsub)
-            else:
-                self._unsub()
+            self._schedule_unsub(self._unsub)
             self._unsub = None
+
+        if self._closed_unsub is not None:
+            self._schedule_unsub(self._closed_unsub)
+            self._closed_unsub = None
 
         if serial is None:
             self._call_protocol_connection_lost(None)
             return
 
         serial._unsubscribe_instance()
+        serial._unsubscribe_callbacks()
 
         if not serial._disconnect_api:
             # Transport does not own the external API lifecycle.
@@ -777,9 +912,7 @@ async def async_esphome_list_serial_ports(
     try:
         return await serial._async_list_serial_ports()
     finally:
-        if serial._disconnect_api and serial._api is not None:
-            await serial._api.disconnect()
-            serial._api = None
+        await serial._async_close()
 
 
 register_uri_handler(

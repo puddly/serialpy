@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator, Callable, Generator
 import contextlib
 import dataclasses
@@ -9,6 +10,11 @@ import sys
 import urllib.parse
 
 import pytest
+
+try:
+    from aioesphomeapi.timezone import get_local_timezone
+except ImportError:
+    get_local_timezone = None  # type: ignore[assignment]
 
 from serialx.common import get_uri_handler
 from tests.common import (
@@ -206,7 +212,16 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
                 )
 
             if sys.version_info >= (3, 11) and ESPHOME_HOST_BINARY is not None:
-                specs.append(adapter_spec.chain(SerialBackend.ESPHOME_HOST))
+                specs.append(
+                    dataclasses.replace(
+                        adapter_spec.chain(SerialBackend.ESPHOME_HOST),
+                        # The host build pushes a write to the PTY with a single
+                        # blocking write(2); anything larger than the PTY plus the
+                        # socat bridge buffers (see create_socat_pair) blocks the
+                        # single-threaded daemon before it can drain them.
+                        max_drain_payload=2048,
+                    )
+                )
 
         # For POSIX, we should test base classes on platforms that extend them
         for uri_scheme in _get_forced_posix_uri_schemes():
@@ -279,11 +294,12 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             # Wrapped backends require one
             case SerialBackend.ESPHOME_HOST:
                 assert left is not None and right is not None
-                left, right = stack.enter_context(create_esphome_pair(left, right))
                 # The esphome daemon sits between the client and the inner PTY,
-                # so an inner unplug doesn't surface as a client disconnect.
-                unplug_left_graceful = None
-                unplug_left_abrupt = None
+                # so an inner unplug doesn't surface as a client disconnect;
+                # killing the daemon closes the API connection instead.
+                left, right, unplug_left_graceful, unplug_left_abrupt = (
+                    stack.enter_context(create_esphome_pair(left, right))
+                )
 
             case SerialBackend.SER2NET:
                 assert left is not None and right is not None
@@ -337,11 +353,20 @@ def serial_pair(request: pytest.FixtureRequest) -> Generator[SerialPair]:
             backends=spec.backends,
             quirks=spec.quirks,
             uri_scheme=effective_scheme,
+            modem_line_propagation_delay=spec.modem_line_propagation_delay,
+            max_drain_payload=spec.max_drain_payload,
             unplug_left_graceful=unplug_left_graceful,
             unplug_left_abrupt=unplug_left_abrupt,
         )
     finally:
         stack.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _warm_lazy_timezone_import() -> None:
+    """Resolve the ESPHome timezone once, before any fd snapshotting."""
+    if get_local_timezone is not None:
+        asyncio.run(get_local_timezone())
 
 
 @pytest.fixture(autouse=True)

@@ -292,7 +292,7 @@ async def test_lifecycle_close_drains_pending_writes(
 ) -> None:
     """close() with buffered data delivers all bytes to the peer."""
     loop = asyncio.get_running_loop()
-    payload = bytes(range(256)) * 16  # 4 KiB
+    payload = (bytes(range(256)) * 16)[: serial_pair.max_drain_payload]
     sender_proto = RecordingProtocol()
     receiver_proto = RecordingProtocol()
 
@@ -732,6 +732,10 @@ def test_lifecycle_close_without_wait_closed_no_warnings(
         )
         transport.close()
         # Intentionally NOT awaiting `wait_closed`
+
+    # Finalize garbage from earlier tests in this worker, whose ResourceWarnings
+    # would otherwise surface from the gc.collect() below and count as ours.
+    gc.collect()
 
     with warnings.catch_warnings(record=True) as caught_warnings:
         warnings.simplefilter("always")

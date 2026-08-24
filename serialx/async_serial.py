@@ -260,7 +260,7 @@ class AsyncSerial:
         return self.transport.exclusive
 
 
-async def create_serial_connection(
+async def create_serial_connection(  # noqa: PLR0917
     loop: asyncio.AbstractEventLoop,
     protocol_factory: Callable[[], asyncio.Protocol],
     url: str | None,
