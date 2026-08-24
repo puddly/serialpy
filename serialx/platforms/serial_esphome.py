@@ -650,15 +650,19 @@ class ESPHomeSerial(BaseSerial):
         del self._read_buffer[:n]
         return n
 
+    def _unsubscribe_connection_closed(self) -> None:
+        """Drop this serial's API close-event subscription, if it has one."""
+        if self._closed_unsub is not None:
+            self._schedule_on_client_loop(self._closed_unsub)
+            self._closed_unsub = None
+
     def _close(self) -> None:
         """Close the serial port."""
         if self._unsub is not None:
             self._schedule_on_client_loop(self._unsub)
             self._unsub = None
 
-        if self._closed_unsub is not None:
-            self._schedule_on_client_loop(self._closed_unsub)
-            self._closed_unsub = None
+        self._unsubscribe_connection_closed()
 
         if self._disconnect_api and self._api is not None:
             self._unsubscribe_instance()
@@ -820,6 +824,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             return
 
         serial._unsubscribe_instance()
+        serial._unsubscribe_connection_closed()
 
         if not serial._disconnect_api:
             # Transport does not own the external API lifecycle.
