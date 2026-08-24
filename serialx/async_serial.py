@@ -260,17 +260,17 @@ class AsyncSerial:
         return self.transport.exclusive
 
 
-async def create_serial_connection(
+async def create_serial_connection(  # noqa: PLR0917
     loop: asyncio.AbstractEventLoop,
     protocol_factory: Callable[[], asyncio.Protocol],
     url: str | None,
-    *,
     baudrate: int,
     parity: Parity = Parity.NONE,
     stopbits: StopBits = StopBits.ONE,
     xonxoff: bool = False,
     rtscts: bool = False,
     exclusive: bool = True,
+    *,
     transport_cls: type[BaseSerialTransport] | None = None,
     **kwargs: Any,
 ) -> tuple[BaseSerialTransport, asyncio.Protocol]:
