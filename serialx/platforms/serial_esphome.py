@@ -653,13 +653,26 @@ class ESPHomeSerial(BaseSerial):
             self._schedule_on_client_loop(self._closed_unsub)
             self._closed_unsub = None
 
-    def _close(self) -> None:
-        """Close the serial port."""
+    def _unsubscribe_callbacks(self) -> None:
+        """Drop every callback `_async_open` registered on the API client."""
         if self._unsub is not None:
             self._schedule_on_client_loop(self._unsub)
             self._unsub = None
 
         self._unsubscribe_connection_closed()
+
+    async def _async_close(self) -> None:
+        """Close the serial port from a caller that already has a running loop."""
+        self._unsubscribe_callbacks()
+
+        if self._disconnect_api and self._api is not None:
+            self._unsubscribe_instance()
+            await self._call_on_client_loop(self._api.disconnect())
+            self._api = None
+
+    def _close(self) -> None:
+        """Close the serial port."""
+        self._unsubscribe_callbacks()
 
         if self._disconnect_api and self._api is not None:
             self._unsubscribe_instance()
@@ -820,7 +833,7 @@ class ESPHomeSerialTransport(BaseSerialTransport):
             return
 
         serial._unsubscribe_instance()
-        serial._unsubscribe_connection_closed()
+        serial._unsubscribe_callbacks()
 
         if not serial._disconnect_api:
             # Transport does not own the external API lifecycle.
@@ -899,11 +912,7 @@ async def async_esphome_list_serial_ports(
     try:
         return await serial._async_list_serial_ports()
     finally:
-        serial._unsubscribe_connection_closed()
-
-        if serial._disconnect_api and serial._api is not None:
-            await serial._api.disconnect()
-            serial._api = None
+        await serial._async_close()
 
 
 register_uri_handler(
