@@ -9,6 +9,7 @@ import bisect
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
+import copy
 import dataclasses
 from enum import Enum
 import functools
@@ -538,8 +539,22 @@ class BaseSerial(io.RawIOBase):
             self._broken = exc
 
     def _check_broken(self) -> None:
-        if self._broken is not None:
-            raise self._broken
+        if self._broken is None:
+            return
+
+        exc = self._broken
+
+        # Re-raising the same instance grows its `__traceback__` on every raise
+        try:
+            fresh = copy.copy(exc)
+        except Exception:  # noqa: BLE001
+            LOGGER.debug("Failed to clone exception %r", exc)
+        else:
+            raise fresh from exc
+
+        # Raised outside of the `except` so the copy failure isn't attached to the
+        # shared instance as its `__context__`
+        raise exc.with_traceback(None)
 
     @classmethod
     def from_url(

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+import errno
 import logging
+import traceback
 from typing import Any
 from unittest.mock import Mock
 
@@ -165,6 +167,70 @@ class _StubSerial(BaseSerial):
 
     @property
     def num_unwritten_bytes(self) -> int: ...  # type:ignore[empty-body, override]
+
+
+def test_check_broken_raises_fresh_instance() -> None:
+    """The stored exception is not re-raised, so its traceback cannot grow."""
+    serial = _StubSerial("/dev/null", do_not_open=True)
+    original = OSError(errno.EIO, "device disconnected", "/dev/ttyUSB0")
+    original.marked_during = "read"  # type: ignore[attr-defined]
+    serial._mark_broken(original)
+
+    raised: list[OSError] = []
+
+    for _ in range(3):
+        with pytest.raises(OSError, match="device disconnected") as excinfo:
+            serial._check_broken()
+
+        raised.append(excinfo.value)
+
+    assert len({id(exc) for exc in raised}) == len(raised)
+
+    for exc in raised:
+        assert exc is not original
+        assert exc.__cause__ is original
+        assert exc.errno == errno.EIO
+        assert exc.strerror == "device disconnected"
+        assert exc.filename == "/dev/ttyUSB0"
+        assert exc.marked_during == "read"  # type: ignore[attr-defined]
+
+    assert original.__traceback__ is None
+    assert len({len(traceback.extract_tb(exc.__traceback__)) for exc in raised}) == 1
+
+
+def test_check_broken_unreconstructible_exception(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Exceptions that `copy.copy` cannot rebuild still get a bounded traceback."""
+
+    class CustomError(Exception):
+        def __init__(self, code: int, *, detail: str) -> None:
+            super().__init__(code, detail)
+            self.code = code
+            self.detail = detail
+
+    serial = _StubSerial("/dev/null", do_not_open=True)
+    original = CustomError(1, detail="boom")
+    serial._mark_broken(original)
+
+    lengths: list[int] = []
+
+    for _ in range(3):
+        with (
+            caplog.at_level(logging.DEBUG, logger="serialx.common"),
+            pytest.raises(CustomError) as excinfo,
+        ):
+            serial._check_broken()
+
+        assert excinfo.value is original
+        assert excinfo.value.__context__ is None
+        lengths.append(len(traceback.extract_tb(excinfo.value.__traceback__)))
+
+    assert len(set(lengths)) == 1
+
+    records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+    assert len(records) == 3
+    assert "Failed to clone exception" in records[0].getMessage()
 
 
 def test_serial_kwarg_forwarding(caplog: pytest.LogCaptureFixture) -> None:
