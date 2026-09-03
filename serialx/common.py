@@ -9,6 +9,7 @@ import bisect
 from collections import defaultdict
 from collections.abc import Awaitable, Callable, Iterator
 from contextlib import contextmanager
+import copy
 import dataclasses
 from enum import Enum
 import functools
@@ -543,22 +544,17 @@ class BaseSerial(io.RawIOBase):
 
         exc = self._broken
 
-        # Re-raising the stored instance appends the current frames to its
-        # `__traceback__` on every raise, so a caller that keeps retrying a broken
-        # port ends up with an unbounded traceback that is quadratic to format.
-        # Raise a fresh instance instead and chain the original as its cause.
+        # Re-raising the same instance grows its `__traceback__` on every raise
         try:
-            fresh: Exception | None = type(exc)(*exc.args)
+            fresh = copy.copy(exc)
         except Exception:  # noqa: BLE001
-            # Exception types with custom constructors cannot be rebuilt from
-            # `args` alone. Fall back to resetting the traceback, which still bounds
-            # its growth.
-            fresh = None
+            LOGGER.debug("Failed to clone exception %r", exc)
+        else:
+            raise fresh from exc
 
-        if fresh is None:
-            raise exc.with_traceback(None)
-
-        raise fresh from exc
+        # Raised outside of the `except` so the copy failure isn't attached to the
+        # shared instance as its `__context__`
+        raise exc.with_traceback(None)
 
     @classmethod
     def from_url(
