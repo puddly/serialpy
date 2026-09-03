@@ -538,8 +538,27 @@ class BaseSerial(io.RawIOBase):
             self._broken = exc
 
     def _check_broken(self) -> None:
-        if self._broken is not None:
-            raise self._broken
+        if self._broken is None:
+            return
+
+        exc = self._broken
+
+        # Re-raising the stored instance appends the current frames to its
+        # `__traceback__` on every raise, so a caller that keeps retrying a broken
+        # port ends up with an unbounded traceback that is quadratic to format.
+        # Raise a fresh instance instead and chain the original as its cause.
+        try:
+            fresh: Exception | None = type(exc)(*exc.args)
+        except Exception:  # noqa: BLE001
+            # Exception types with custom constructors cannot be rebuilt from
+            # `args` alone. Fall back to resetting the traceback, which still bounds
+            # its growth.
+            fresh = None
+
+        if fresh is None:
+            raise exc.with_traceback(None)
+
+        raise fresh from exc
 
     @classmethod
     def from_url(
