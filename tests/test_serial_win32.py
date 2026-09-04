@@ -43,4 +43,4 @@ def test_close_tolerates_failing_win32_calls() -> None:
     port._handle = INVALID_HANDLE
     port.close()
 
-    assert not port.is_open()
+    assert not port.is_open
