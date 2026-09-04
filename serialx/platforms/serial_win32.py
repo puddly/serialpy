@@ -8,7 +8,6 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any, cast
 
-import pywintypes
 from typing_extensions import Buffer, Unpack
 from win32con import (
     DTR_CONTROL_DISABLE,
@@ -33,34 +32,13 @@ from win32con import (
     SPACEPARITY,
     TWOSTOPBITS,
 )
-from win32event import (
-    INFINITE,
-    WAIT_TIMEOUT,
-    CreateEvent,
-    ResetEvent,
-    WaitForSingleObject,
-)
+from win32event import INFINITE, WAIT_TIMEOUT
 from win32file import (
     OVERLAPPED,
     PURGE_RXABORT,
     PURGE_RXCLEAR,
     PURGE_TXABORT,
     PURGE_TXCLEAR,
-    CancelIo,
-    ClearCommError,
-    CloseHandle,
-    CreateFile,
-    EscapeCommFunction,
-    FlushFileBuffers,
-    GetCommModemStatus,
-    GetCommState,
-    GetOverlappedResult,
-    PurgeComm,
-    ReadFile,
-    SetCommState,
-    SetCommTimeouts,
-    SetupComm,
-    WriteFile,
 )
 from winerror import ERROR_IO_PENDING
 
@@ -76,6 +54,26 @@ from ..common import (
     PinState,
     StopBits,
     register_uri_handler,
+)
+from ._win32api import (
+    CancelIo,
+    ClearCommError,
+    CloseHandle,
+    CreateEvent,
+    CreateFile,
+    EscapeCommFunction,
+    FlushFileBuffers,
+    GetCommModemStatus,
+    GetCommState,
+    GetOverlappedResult,
+    PurgeComm,
+    ReadFile,
+    ResetEvent,
+    SetCommState,
+    SetCommTimeouts,
+    SetupComm,
+    WaitForSingleObject,
+    WriteFile,
 )
 
 if TYPE_CHECKING:
@@ -125,7 +123,7 @@ def _safe_close_handle(handle: int) -> None:
     """Close a Win32 handle, suppressing and logging errors."""
     try:
         CloseHandle(handle)
-    except pywintypes.error:
+    except OSError:
         LOGGER.debug("Failed to close handle %r", handle, exc_info=True)
 
 
@@ -195,8 +193,9 @@ class Win32Serial(BaseSerial):
                 creation_disposition=OPEN_EXISTING,
                 flags_and_attributes=FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
             )
-        except pywintypes.error as e:
-            raise OSError(e.winerror, e.strerror, path) from e
+        except OSError as e:
+            e.filename = path
+            raise
 
         self._overlapped_read = OVERLAPPED()
         self._overlapped_read.hEvent = CreateEvent(None, 1, 0, None)
@@ -290,9 +289,9 @@ class Win32Serial(BaseSerial):
 
             # Clear any errors
             ClearCommError(self._handle)
-        except pywintypes.error as e:
+        except OSError:
             LOGGER.debug("Failed to configure port", exc_info=True)
-            raise OSError(e.winerror, e.strerror) from e
+            raise
 
     def fileno(self) -> int:
         """Return the file descriptor."""
@@ -312,7 +311,7 @@ class Win32Serial(BaseSerial):
 
             try:
                 CancelIo(self._handle)
-            except pywintypes.error:
+            except OSError:
                 LOGGER.debug("Failed to cancel IO on close", exc_info=True)
 
             _safe_close_handle(self._handle)
@@ -385,10 +384,7 @@ class Win32Serial(BaseSerial):
         assert self._handle is not None
         ResetEvent(self._overlapped_read.hEvent)
 
-        try:
-            rc, _ = ReadFile(self._handle, b, self._overlapped_read)  # type:ignore[call-overload]
-        except pywintypes.error as e:
-            raise OSError(e.winerror, e.strerror) from e
+        rc, _ = ReadFile(self._handle, b, self._overlapped_read)  # type:ignore[call-overload]
 
         if rc == ERROR_IO_PENDING:
             # IO is pending, wait for it
@@ -402,12 +398,7 @@ class Win32Serial(BaseSerial):
                 return 0
 
         # Get the actual number of bytes read
-        try:
-            n = GetOverlappedResult(self._handle, self._overlapped_read, True)
-        except pywintypes.error as e:
-            raise OSError(e.winerror, e.strerror) from e
-
-        return n
+        return GetOverlappedResult(self._handle, self._overlapped_read, True)
 
     def _write(self, data: Buffer, *, timeout: float | None) -> int:
         """Write data to the serial port synchronously."""
@@ -415,10 +406,7 @@ class Win32Serial(BaseSerial):
         assert self._handle is not None
         ResetEvent(self._overlapped_write.hEvent)
 
-        try:
-            err, n = WriteFile(self._handle, data, self._overlapped_write)  # type:ignore[arg-type]
-        except pywintypes.error as e:
-            raise OSError(e.winerror, e.strerror) from e
+        err, n = WriteFile(self._handle, data, self._overlapped_write)  # type:ignore[arg-type]
 
         if err == ERROR_IO_PENDING:
             if timeout == 0:
@@ -436,12 +424,7 @@ class Win32Serial(BaseSerial):
                 raise TimeoutError("Write timeout") from None
 
         # Get the actual number of bytes written
-        try:
-            n = GetOverlappedResult(self._handle, self._overlapped_write, True)
-        except pywintypes.error as e:
-            raise OSError(e.winerror, e.strerror) from e
-
-        return n
+        return GetOverlappedResult(self._handle, self._overlapped_write, True)
 
 
 class _MethodProxy:
@@ -619,9 +602,10 @@ class Win32SerialTransport(BaseSerialTransport):
         except asyncio.CancelledError:
             self._open_fut.add_done_callback(self._on_cancelled_open_done)
             raise
-        except pywintypes.error as e:
+        except OSError as e:
             self._open_fut = None
-            raise OSError(e.winerror, e.strerror, normalized_path) from e
+            e.filename = normalized_path
+            raise
 
         self._open_fut = None
         self._handle = handle
