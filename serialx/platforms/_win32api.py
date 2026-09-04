@@ -1,24 +1,12 @@
-"""Win32 API calls that fail with `OSError` instead of `pywintypes.error`.
-
-`pywintypes.error` derives from `Exception`, not from `OSError`, so it slips
-through any `except OSError` a caller has written -- including the ones this
-package writes around its own teardown paths. Translating it at each call site
-means every new call has to remember to do it; translating it here means no
-call site can forget.
-
-`serial_win32` imports its Win32 entry points from this module rather than from
-`win32event`/`win32file` directly. Signatures are preserved, so the typeshed
-stubs still apply at the call site.
-"""
+"""pywin32 entry points re-raising `pywintypes.error` as `OSError`."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 import functools
-from typing import TypeVar
+from typing import ParamSpec, TypeVar
 
 import pywintypes
-from typing_extensions import ParamSpec
 import win32event
 import win32file
 
@@ -27,20 +15,14 @@ _R = TypeVar("_R")
 
 
 def _translated(fn: Callable[_P, _R]) -> Callable[_P, _R]:
-    """Wrap a pywin32 call so that it raises `OSError`."""
-
-    # Only the identifying attributes are copied. The default set includes
-    # `__type_params__`, which is not a tuple on the stand-ins Sphinx installs
-    # for pywin32 when it builds the docs off-Windows, and copying it there
-    # fails the import.
+    # The default `assigned` includes `__type_params__`, which is not a tuple on the
+    # Sphinx autodoc mocks that stand in for pywin32 when building docs off-Windows.
     @functools.wraps(fn, assigned=("__module__", "__name__", "__qualname__", "__doc__"))
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         try:
             return fn(*args, **kwargs)
         except pywintypes.error as e:
-            # Letting `OSError` map the Win32 code itself keeps `winerror`
-            # intact and picks the matching `errno`, rather than passing the
-            # Win32 code off as one.
+            # Passing the Win32 code as `winerror` lets CPython derive `errno`
             raise OSError(None, e.strerror, None, e.winerror) from e
 
     return wrapper
