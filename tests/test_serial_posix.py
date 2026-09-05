@@ -115,3 +115,15 @@ def test_partial_set_modem_pins_uses_native_int_ioctl_buffer() -> None:
         serial.set_modem_pins(dtr=True, rts=False)
 
     assert seen_requests == [termios.TIOCMBIS, termios.TIOCMBIC]
+
+
+def test_termios_error_raised_as_os_error_bad_descriptor() -> None:
+    """`termios.error` are re-raised as `OSError` with the errno from the C call."""
+
+    # Pass bad file descriptor directly, _open() would raise ValueError
+    serial = PosixSerial(fileno=1)
+    with pytest.raises(OSError) as raised:
+        serial._configure_port()
+
+    assert raised.value.errno is not None
+    assert raised.value.strerror is not None
