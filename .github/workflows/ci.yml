@@ -202,7 +202,7 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv venv esphome-venv
           . esphome-venv/bin/activate
-          uv pip install 'esphome>=2026.3.2'
+          uv pip install 'esphome>=2026.8.2'
           esphome compile tests/esphome/host_daemon.yaml
       - name: Cache ESPHome binary
         if: steps.cache-esphome.outputs.cache-hit != 'true'
