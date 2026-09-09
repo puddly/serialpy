@@ -1438,8 +1438,8 @@ esphome = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aioesphomeapi", marker = "python_full_version >= '3.11' and extra == 'dev'", specifier = ">=46.1.0" },
-    { name = "aioesphomeapi", marker = "python_full_version >= '3.11' and extra == 'esphome'", specifier = ">=46.1.0" },
+    { name = "aioesphomeapi", marker = "python_full_version >= '3.11' and extra == 'dev'", specifier = ">=46.3.0" },
+    { name = "aioesphomeapi", marker = "python_full_version >= '3.11' and extra == 'esphome'", specifier = ">=46.3.0" },
     { name = "async-timeout", marker = "python_full_version < '3.11'", specifier = ">=3.0.0" },
     { name = "async-timeout", marker = "extra == 'dev'", specifier = ">=5.0.1" },
     { name = "codespell", marker = "extra == 'dev'", specifier = ">=2.4.2" },
