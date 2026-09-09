@@ -11,6 +11,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  ESPHOME_VERSION: "2026.9.0b3"
+
 jobs:
   prepare-base:
     name: Prepare base dependencies
@@ -188,7 +191,7 @@ jobs:
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            2-esphome-daemon-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+            2-esphome-daemon-${{ env.ESPHOME_VERSION }}-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Set up Python 3.13
         if: steps.cache-esphome.outputs.cache-hit != 'true'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
@@ -202,7 +205,7 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           uv venv esphome-venv
           . esphome-venv/bin/activate
-          uv pip install 'esphome>=2026.8.2'
+          uv pip install --prerelease=allow "esphome>=${ESPHOME_VERSION}"
           esphome compile tests/esphome/host_daemon.yaml
       - name: Cache ESPHome binary
         if: steps.cache-esphome.outputs.cache-hit != 'true'
@@ -245,7 +248,7 @@ jobs:
         with:
           path: tests/esphome/.esphome/build/serialx-host-daemon/.pioenvs/serialx-host-daemon/program
           key: >-
-            2-esphome-daemon-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
+            2-esphome-daemon-${{ env.ESPHOME_VERSION }}-${{ hashFiles('tests/esphome/host_daemon.yaml', 'tests/esphome/external_components/**') }}
       - name: Restore cached ser2net binary
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
