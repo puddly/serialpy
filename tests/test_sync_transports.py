@@ -424,6 +424,9 @@ def test_sync_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> None:
     if rtscts and serial_pair.uri_scheme == "posix://":
         pytest.xfail("Strict POSIX backend does not support RTS/CTS flow control")
 
+    if rtscts and SerialBackend.ESPHOME_HOST in serial_pair.backends:
+        pytest.xfail("ESPHome host does not support RTS/CTS flow control")
+
     # Open both sides: on com0com, opening right asserts DTR which raises CTS on left
     with Serial.from_url(serial_pair.right, baudrate=115200):
         with Serial.from_url(serial_pair.left, baudrate=115200, rtscts=rtscts) as left:
@@ -462,6 +465,9 @@ def test_sync_exclusive_disabled(serial_pair: SerialPair) -> None:
 
     if SerialBackend.SER2NET in serial_pair.backends:
         pytest.skip("ser2net only allows one connection per port")
+
+    if SerialBackend.ESPHOME_HOST in serial_pair.backends:
+        pytest.skip("ESPHome Host only allows one connection per port")
 
     with Serial.from_url(serial_pair.left, baudrate=115200, exclusive=False) as serial1:
         assert serial1.exclusive is False
