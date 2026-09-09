@@ -31,6 +31,7 @@ from ..common import (
     register_uri_handler,
 )
 from ..descriptor_transport import DescriptorTransport
+from ._termios_api import tcdrain, tcflush, tcgetattr, tcsetattr
 
 LOGGER = logging.getLogger(__name__)
 
@@ -283,7 +284,7 @@ class PosixSerial(BaseSerial):
         if self._fileno is None:
             raise ValueError("Cannot configure, serial port is not open")
 
-        tcsetattr = self._build_tcsetattr_flags()
+        tcsetattr_flags = self._build_tcsetattr_flags()
 
         # We need to overwrite VMIN and VTIME in the CC array
         (
@@ -294,24 +295,24 @@ class PosixSerial(BaseSerial):
             _ispeed,
             _ospeed,
             cc,
-        ) = termios.tcgetattr(self._fileno)
+        ) = tcgetattr(self._fileno)
 
-        cc[termios.VMIN] = tcsetattr.cc_vmin
-        cc[termios.VTIME] = tcsetattr.cc_vtime
+        cc[termios.VMIN] = tcsetattr_flags.cc_vmin
+        cc[termios.VTIME] = tcsetattr_flags.cc_vtime
 
-        LOGGER.debug("Configuring serial port: %r + cc=%r", tcsetattr, cc)
+        LOGGER.debug("Configuring serial port: %r + cc=%r", tcsetattr_flags, cc)
 
         # Finally, set up the serial port
-        termios.tcsetattr(
+        tcsetattr(
             self._fileno,
             termios.TCSANOW,  # TODO: should we use TCSADRAIN or TCSAFLUSH instead?
             [
-                tcsetattr.iflag,
-                tcsetattr.oflag,
-                tcsetattr.cflag,
-                tcsetattr.lflag,
-                tcsetattr.ispeed,
-                tcsetattr.ospeed,
+                tcsetattr_flags.iflag,
+                tcsetattr_flags.oflag,
+                tcsetattr_flags.cflag,
+                tcsetattr_flags.lflag,
+                tcsetattr_flags.ispeed,
+                tcsetattr_flags.ospeed,
                 cc,
             ],
         )
@@ -321,7 +322,7 @@ class PosixSerial(BaseSerial):
         self.set_modem_pins(self._modem_pins_on_open())
 
         # Flush input and output buffers to discard stale data
-        termios.tcflush(self._fileno, termios.TCIOFLUSH)
+        tcflush(self._fileno, termios.TCIOFLUSH)
 
     def _get_modem_pins(self) -> ModemPins:
         """Get current modem control bits."""
@@ -383,7 +384,7 @@ class PosixSerial(BaseSerial):
         """Flush write buffers, waiting until all data is written."""
         assert self._fileno is not None
         LOGGER.debug("Flushing file descriptor %r", self._fileno)
-        termios.tcdrain(self._fileno)
+        tcdrain(self._fileno)
 
     def _close(self) -> None:
         """Close the serial port."""
@@ -485,12 +486,12 @@ class PosixSerial(BaseSerial):
     def _reset_read_buffer(self) -> None:
         """Reset the read buffer."""
         assert self._fileno is not None
-        termios.tcflush(self._fileno, termios.TCIFLUSH)
+        tcflush(self._fileno, termios.TCIFLUSH)
 
     def _reset_write_buffer(self) -> None:
         """Reset the write buffer."""
         assert self._fileno is not None
-        termios.tcflush(self._fileno, termios.TCOFLUSH)
+        tcflush(self._fileno, termios.TCOFLUSH)
 
 
 class PosixSerialTransport(DescriptorTransport):
