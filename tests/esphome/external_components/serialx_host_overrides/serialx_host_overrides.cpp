@@ -62,7 +62,11 @@ void SerialxHostOverridesComponent::setup() {
     } else {
       // Base64-encoded PSK
       auto decoded = base64_decode(noise_psk_value);
+#ifdef USE_NOISE
       noise::psk_t psk{};
+#else
+      api::psk_t psk{};
+#endif
       std::copy_n(decoded.begin(), std::min(decoded.size(), psk.size()), psk.begin());
       api::global_api_server->set_noise_psk(psk);
       ESP_LOGI(TAG, "Overrode noise PSK from %s", this->noise_psk_env_.c_str());
