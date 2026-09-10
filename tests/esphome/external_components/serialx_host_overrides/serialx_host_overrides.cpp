@@ -62,9 +62,15 @@ void SerialxHostOverridesComponent::setup() {
     } else {
       // Base64-encoded PSK
       auto decoded = base64_decode(noise_psk_value);
+#ifdef USE_NOISE
+      // NoiseContext stores the pointer instead of copying, so the PSK must outlive setup()
+      std::copy_n(decoded.begin(), std::min(decoded.size(), this->noise_psk_.size()), this->noise_psk_.begin());
+      api::global_api_server->set_noise_psk(this->noise_psk_.data());
+#else
       api::psk_t psk{};
       std::copy_n(decoded.begin(), std::min(decoded.size(), psk.size()), psk.begin());
       api::global_api_server->set_noise_psk(psk);
+#endif
       ESP_LOGI(TAG, "Overrode noise PSK from %s", this->noise_psk_env_.c_str());
     }
   }

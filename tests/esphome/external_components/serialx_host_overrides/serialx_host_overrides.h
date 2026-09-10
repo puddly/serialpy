@@ -4,6 +4,11 @@
 
 #include "esphome/components/uart/uart_component_host.h"
 #include "esphome/core/component.h"
+#include "esphome/core/defines.h"
+
+#ifdef USE_NOISE
+#include "esphome/components/noise/noise.h"
+#endif
 
 #include <string>
 
@@ -29,6 +34,9 @@ class SerialxHostOverridesComponent : public Component {
   std::string right_uart_env_;
   std::string api_port_env_;
   std::string noise_psk_env_;
+#ifdef USE_NOISE
+  noise::psk_t noise_psk_{};
+#endif
   bool ready_printed_{false};
 };
 

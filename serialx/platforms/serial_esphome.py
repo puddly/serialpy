@@ -34,7 +34,7 @@ from typing import Any, ParamSpec, TypeVar, cast
 import urllib.parse
 import warnings
 
-from aioesphomeapi.client import APIClient
+from aioesphomeapi.client import MIN_VERSION_PROXY_ACK, APIClient
 from aioesphomeapi.core import (  # type: ignore[attr-defined]
     APIConnectionError,
     PingRequest,
@@ -46,6 +46,8 @@ from aioesphomeapi.model import (
     DisconnectReason,
     SerialProxyDataReceived,
     SerialProxyParity,
+    SerialProxyRequestResponse,
+    SerialProxyStatus,
 )
 from typing_extensions import Buffer, Unpack
 
@@ -63,6 +65,7 @@ from serialx.common import (
 )
 
 _T = TypeVar("_T")
+_S = TypeVar("_S", bound=SerialProxyRequestResponse | None)
 _P = ParamSpec("_P")
 
 LOGGER = logging.getLogger(__name__)
@@ -78,6 +81,25 @@ PARITY_MAP = {
 STOP_BITS_MAP = {
     StopBits.ONE: 1,
     StopBits.TWO: 2,
+}
+
+STATUS_TO_ERROR_MAP: dict[
+    SerialProxyStatus, None | Callable[[str], SerialException | OSError]
+] = {
+    SerialProxyStatus.OK: None,
+    SerialProxyStatus.ASSUMED_SUCCESS: None,
+    SerialProxyStatus.TIMEOUT: lambda msg: SerialException(
+        f"Operation timed out: {msg}"
+    ),
+    SerialProxyStatus.NOT_SUPPORTED: lambda msg: SerialException(
+        f"Operation is not supported: {msg}"
+    ),
+    SerialProxyStatus.PORT_IN_USE: lambda msg: OSError(
+        errno.EBUSY, f"Serial proxy port is already in use: {msg}"
+    ),
+    SerialProxyStatus.INVALID_ARGUMENT: lambda msg: SerialException(
+        f"Operation is invalid: {msg}"
+    ),
 }
 
 
@@ -205,7 +227,7 @@ class ESPHomeSerial(BaseSerial):
         self._closed_unsub: Callable[[], None] | None = None
         self._instance_subscribed = False
 
-        self._last_line_state = LineStateFlag(0)
+        self._last_line_states = LineStateFlag(0)
 
     def _in_event_loop(self) -> bool:
         """Check if we are currently running in the event loop."""
@@ -241,6 +263,26 @@ class ESPHomeSerial(BaseSerial):
         return await asyncio.wrap_future(
             asyncio.run_coroutine_threadsafe(coro, client_loop)
         )
+
+    async def _call_on_client_loop_validated(self, coro: Coroutine[Any, Any, _S]) -> _S:
+        """Await a serial proxy `coro` on the `APIClient`'s loop, bridging if needed."""
+        result = await self._call_on_client_loop(coro)
+
+        # Earlier ESPHome versions did not provide responses for many serial proxy
+        # requests. To work around this, we enqueue a request with a response
+        # immediately after and wait for _that_ to finish.
+        assert self._api is not None
+        version = self._api.api_version
+
+        if version is None or version < MIN_VERSION_PROXY_ACK:
+            await self._ping(timeout=self._connect_timeout)
+
+        if result is not None and result.status is not None:
+            error_factory = STATUS_TO_ERROR_MAP.get(result.status)
+            if error_factory is not None:
+                raise error_factory(result.error_message)
+
+        return result
 
     def _schedule_on_client_loop(
         self,
@@ -476,12 +518,9 @@ class ESPHomeSerial(BaseSerial):
         await self._resolve_instance_id()
         assert self._instance_id is not None
 
-        self._schedule_on_client_loop(
-            self._api.serial_proxy_subscribe, self._instance_id
+        await self._call_on_client_loop_validated(
+            self._api.serial_proxy_subscribe_await_response(self._instance_id)
         )
-
-        # Ping to ensure the daemon has processed the subscribe
-        await self._ping(timeout=self._connect_timeout)
 
         self._instance_subscribed = True
 
@@ -508,28 +547,24 @@ class ESPHomeSerial(BaseSerial):
         assert self._api is not None
         await self._resolve_instance_id()
         assert self._instance_id is not None
-        self._schedule_on_client_loop(
-            self._api.serial_proxy_configure,
-            instance=self._instance_id,
-            baudrate=self._baudrate,
-            flow_control=self._rtscts,
-            parity=PARITY_MAP[self._parity],
-            stop_bits=STOP_BITS_MAP[self._stopbits],
-            data_size=self._byte_size,
-        )
 
-        # Ping to ensure the daemon has processed the configure
-        await self._ping(timeout=self._connect_timeout)
+        await self._call_on_client_loop_validated(
+            self._api.serial_proxy_configure_await_response(
+                instance=self._instance_id,
+                baudrate=self._baudrate,
+                flow_control=self._rtscts,
+                parity=PARITY_MAP[self._parity],
+                stop_bits=STOP_BITS_MAP[self._stopbits],
+                data_size=self._byte_size,
+            )
+        )
 
         # Subscribe after configure has landed so we don't stream bytes
         # under stale UART settings. Idempotent on reconfigure.
         await self._subscribe_instance()
 
-    def _send_set_modem_pins(self, modem_pins: ModemPins) -> None:
-        """Send a signal to set modem control bits, without waiting for a response."""
-        assert self._api is not None
-        assert self._instance_id is not None
-        line_states = self._last_line_state
+    def _compute_line_states(self, modem_pins: ModemPins) -> LineStateFlag:
+        line_states = self._last_line_states
 
         if modem_pins.rts is PinState.HIGH:
             line_states |= LineStateFlag.RTS
@@ -541,12 +576,25 @@ class ESPHomeSerial(BaseSerial):
         elif modem_pins.dtr is PinState.LOW:
             line_states &= ~LineStateFlag.DTR
 
-        self._last_line_state = line_states
-        self._schedule_on_client_loop(
-            self._api.serial_proxy_set_modem_pins,
-            instance=self._instance_id,
-            line_states=line_states,
+        self._last_line_states = line_states
+
+        return line_states
+
+    @translate_esphome_errors
+    async def _async_set_modem_pins(self, modem_pins: ModemPins) -> None:
+        """Send a signal to set modem control bits, without waiting for a response."""
+        assert self._api is not None
+        assert self._instance_id is not None
+
+        line_states = self._compute_line_states(modem_pins)
+        await self._call_on_client_loop_validated(
+            self._api.serial_proxy_set_modem_pins_await_response(
+                instance=self._instance_id,
+                line_states=line_states,
+            )
         )
+
+        await self._async_get_modem_pins()
 
     def _set_modem_pins(self, modem_pins: ModemPins) -> None:
         """Set modem control bits."""
@@ -560,17 +608,19 @@ class ESPHomeSerial(BaseSerial):
                 DeprecationWarning,
                 stacklevel=2,
             )
-            self._send_set_modem_pins(modem_pins)
+
+            assert self._api is not None
+            assert self._instance_id is not None
+
+            line_states = self._compute_line_states(modem_pins)
+            self._schedule_on_client_loop(
+                self._api.serial_proxy_set_modem_pins,
+                instance=self._instance_id,
+                line_states=line_states,
+            )
             return
 
         self._call_on_loop(self._async_set_modem_pins(modem_pins))
-
-    @translate_esphome_errors
-    async def _async_set_modem_pins(self, modem_pins: ModemPins) -> None:
-        assert self._api is not None
-        self._send_set_modem_pins(modem_pins)
-
-        await self._async_get_modem_pins()
 
     def _get_modem_pins(self) -> ModemPins:
         return self._call_on_loop(self._async_get_modem_pins())
@@ -582,7 +632,7 @@ class ESPHomeSerial(BaseSerial):
         rsp = await self._call_on_client_loop(
             self._api.serial_proxy_get_modem_pins(instance=self._instance_id)
         )
-        self._last_line_state = LineStateFlag(rsp.line_states)
+        self._last_line_states = LineStateFlag(rsp.line_states)
 
         return ModemPins(
             dtr=PinState.convert(bool(rsp.line_states & LineStateFlag.DTR)),

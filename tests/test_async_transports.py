@@ -433,6 +433,9 @@ async def test_async_rtscts_setting(serial_pair: SerialPair, rtscts: bool) -> No
     if rtscts and serial_pair.uri_scheme == "posix://":
         pytest.xfail("Strict POSIX backend does not support RTS/CTS flow control")
 
+    if rtscts and SerialBackend.ESPHOME_HOST in serial_pair.backends:
+        pytest.xfail("ESPHome host does not support RTS/CTS flow control")
+
     async with serialx.async_serial_for_url(serial_pair.right, baudrate=115200):
         async with serialx.async_serial_for_url(
             serial_pair.left, baudrate=115200, rtscts=rtscts
