@@ -3,7 +3,7 @@
 import pytest
 
 try:
-    from aioesphomeapi.client import APIClient
+    from aioesphomeapi.client import MIN_VERSION_PROXY_ACK, APIClient
 except ImportError:
     pytest.skip(
         "aioesphomeapi is required to run esphome transport tests",
@@ -12,12 +12,22 @@ except ImportError:
 
 import asyncio
 from base64 import b64encode
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 import contextlib
+import errno
 import threading
-from unittest.mock import patch
+from unittest.mock import ANY, AsyncMock, MagicMock, call, patch
 import urllib.parse
 import warnings
+
+from aioesphomeapi.model import (
+    DeviceInfo,
+    SerialProxyMode,
+    SerialProxyParity,
+    SerialProxyRequestResponse,
+    SerialProxyStatus,
+    SerialProxyUsbInfo,
+)
 
 from serialx import (
     AsyncSerial,
@@ -32,6 +42,7 @@ from serialx.platforms.serial_esphome import (
     ESPHOME_DEFAULT_PORT,
     ESPHomeSerial,
     ESPHomeSerialTransport,
+    InvalidSettingsError,
 )
 
 from .common import ESPHOME_HOST_BINARY, create_esphome_pair, create_socat_pair
@@ -100,6 +111,55 @@ def base64(key: bytes) -> str:
     assert len(key) == 32
 
     return b64encode(key).decode("ascii")
+
+
+# Serial proxy calls whose ordering the transport is expected to guarantee
+PROXY_CALL_NAMES = (
+    "subscribe_serial_proxy_data",
+    "serial_proxy_configure_await_response",
+    "serial_proxy_set_mode_await_response",
+    "serial_proxy_subscribe_await_response",
+)
+
+
+def mock_api_client(*port_names: str) -> MagicMock:
+    """Create a mock `APIClient` recording the serial proxy calls made on it."""
+    device_info = DeviceInfo.from_dict(
+        {
+            "serial_proxies": [{"name": name} for name in port_names],
+            "mac_address": "98:35:69:AB:F6:79",
+            "manufacturer": "Host",
+            "model": "host",
+        }
+    )
+
+    api = MagicMock()
+    api.loop = asyncio.get_running_loop()
+    api.address = "127.0.0.1"
+    api.port = ESPHOME_DEFAULT_PORT
+    api.attach_mock(AsyncMock(), "connect")
+    api.attach_mock(AsyncMock(), "disconnect")
+    api.attach_mock(AsyncMock(return_value=device_info), "device_info")
+    api.attach_mock(
+        AsyncMock(return_value=None), "serial_proxy_configure_await_response"
+    )
+    api.attach_mock(
+        AsyncMock(return_value=None), "serial_proxy_subscribe_await_response"
+    )
+    api.attach_mock(
+        AsyncMock(return_value=SerialProxyRequestResponse(status=SerialProxyStatus.OK)),
+        "serial_proxy_set_mode_await_response",
+    )
+    # Recent enough that the validated helper does not fall back to a flushing ping
+    api.api_version = MIN_VERSION_PROXY_ACK
+    api._get_connection.return_value.send_messages_await_response_complex = AsyncMock()
+
+    return api
+
+
+def proxy_calls(api: MagicMock) -> list[object]:
+    """Return only the ordering-relevant serial proxy calls made on `api`."""
+    return [c for c in api.mock_calls if c[0] in PROXY_CALL_NAMES]
 
 
 @pytest.mark.skipif(not ESPHOME_HOST_BINARY, reason="esphome host binary not available")
@@ -607,3 +667,311 @@ async def test_cross_loop_api_disconnect_breaks_transport() -> None:
                         await serial.read(1)
 
                     assert serial.transport.is_closing()
+
+
+async def test_mode_protocol_set_before_subscribe() -> None:
+    """`mode=protocol` sets the proxy mode after resolving, before subscribing."""
+    api = mock_api_client("Serial Proxy Left", "Zigbee")
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&mode=protocol"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(url=url, baudrate=115200):
+            pass
+
+    assert proxy_calls(api) == [
+        # The data handler is installed before anything can stream
+        call.subscribe_serial_proxy_data(ANY),
+        call.serial_proxy_subscribe_await_response(1, timeout=ANY),
+        call.serial_proxy_set_mode_await_response(
+            instance=1, mode=SerialProxyMode.PROTOCOL, timeout=ANY
+        ),
+        call.serial_proxy_configure_await_response(
+            instance=1,
+            baudrate=115200,
+            flow_control=False,
+            parity=SerialProxyParity.NONE,
+            stop_bits=1,
+            data_size=8,
+        ),
+    ]
+
+
+async def test_mode_protocol_kwarg_with_external_api() -> None:
+    """The `mode` kwarg is honored when the API client is passed in externally."""
+    api = mock_api_client("Zigbee")
+
+    async with async_serial_for_url(
+        url=None,
+        transport_cls=ESPHomeSerialTransport,
+        api=api,
+        port_name="Zigbee",
+        mode="protocol",
+        baudrate=115200,
+    ):
+        pass
+
+    assert proxy_calls(api) == [
+        call.subscribe_serial_proxy_data(ANY),
+        call.serial_proxy_subscribe_await_response(0, timeout=ANY),
+        call.serial_proxy_set_mode_await_response(
+            instance=0, mode=SerialProxyMode.PROTOCOL, timeout=ANY
+        ),
+        call.serial_proxy_configure_await_response(
+            instance=0,
+            baudrate=115200,
+            flow_control=False,
+            parity=SerialProxyParity.NONE,
+            stop_bits=1,
+            data_size=8,
+        ),
+    ]
+
+
+@pytest.mark.parametrize("query", ["", "&mode=raw"])
+async def test_mode_raw_is_sent_explicitly(query: str) -> None:
+    """`raw` is sent too, so a client can turn a tap off that was left on."""
+    api = mock_api_client("Zigbee")
+    url = f"esphome://127.0.0.1:6053/?port_name=Zigbee{query}"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(url=url, baudrate=115200):
+            pass
+
+    assert proxy_calls(api) == [
+        call.subscribe_serial_proxy_data(ANY),
+        call.serial_proxy_subscribe_await_response(0, timeout=ANY),
+        call.serial_proxy_set_mode_await_response(
+            instance=0, mode=SerialProxyMode.RAW, timeout=ANY
+        ),
+        call.serial_proxy_configure_await_response(
+            instance=0,
+            baudrate=115200,
+            flow_control=False,
+            parity=SerialProxyParity.NONE,
+            stop_bits=1,
+            data_size=8,
+        ),
+    ]
+
+
+async def test_invalid_mode_in_url() -> None:
+    """An unknown `mode` in the URL is rejected before any connection is made."""
+    api = mock_api_client("Zigbee")
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&mode=ezsp"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        with pytest.raises(InvalidSettingsError, match="Invalid serial proxy mode"):
+            async with async_serial_for_url(url=url, baudrate=115200):
+                pass
+
+    assert len(api.mock_calls) == 0
+
+
+def test_invalid_mode_kwarg() -> None:
+    """An unknown `mode` kwarg is rejected immediately."""
+    with pytest.raises(InvalidSettingsError, match="Invalid serial proxy mode"):
+        ESPHomeSerial(port_name="Zigbee", mode="zigbee", baudrate=115200)
+
+
+def _usb_info(**overrides: object) -> SerialProxyUsbInfo:
+    fields = {
+        "instance": 0,
+        "status": SerialProxyStatus.OK,
+        "connected": True,
+        "vendor_id": 0x303A,
+        "product_id": 0x4001,
+        "bcd_device": 0x0101,
+        "interface_number": 0,
+        "manufacturer": "Nabu Casa",
+        "product": "ZBT-2",
+        "serial_number": "AABBCCDDEEFF",
+    }
+    fields.update(overrides)
+    return SerialProxyUsbInfo(**fields)
+
+
+async def test_usb_serial_number_match_allows_connection() -> None:
+    """A port whose USB device reports the expected serial number is used."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(AsyncMock(return_value=_usb_info()), "serial_proxy_get_usb_info")
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&usb_serial=AABBCCDDEEFF"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(url=url, baudrate=115200):
+            pass
+
+    assert api.serial_proxy_get_usb_info.mock_calls == [call(0)]
+
+
+async def test_usb_serial_number_mismatch_is_rejected() -> None:
+    """A different stick in the socket fails before the port is claimed."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(
+        AsyncMock(return_value=_usb_info(serial_number="112233445566")),
+        "serial_proxy_get_usb_info",
+    )
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&usb_serial=AABBCCDDEEFF"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        with pytest.raises(SerialException, match="112233445566"):
+            async with async_serial_for_url(url=url, baudrate=115200):
+                pass
+
+    assert proxy_calls(api) == [call.subscribe_serial_proxy_data(ANY)]
+
+
+async def test_usb_serial_number_with_nothing_attached_is_rejected() -> None:
+    """An empty socket is a mismatch, not a silent success."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(
+        AsyncMock(return_value=_usb_info(connected=False, serial_number="")),
+        "serial_proxy_get_usb_info",
+    )
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&usb_serial=AABBCCDDEEFF"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        with pytest.raises(SerialException, match="No USB device is attached"):
+            async with async_serial_for_url(url=url, baudrate=115200):
+                pass
+
+
+async def test_usb_serial_number_on_non_usb_port_is_rejected() -> None:
+    """NOT_SUPPORTED means the port cannot answer for its identity."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(
+        AsyncMock(return_value=_usb_info(status=SerialProxyStatus.NOT_SUPPORTED)),
+        "serial_proxy_get_usb_info",
+    )
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&usb_serial=AABBCCDDEEFF"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        with pytest.raises(SerialException, match="not supported"):
+            async with async_serial_for_url(url=url, baudrate=115200):
+                pass
+
+
+def _usb_info_handlers(api: MagicMock) -> list[Callable[[SerialProxyUsbInfo], None]]:
+    """Return the handlers subscribed to USB identity messages on the mock client."""
+    return [c.args[0] for c in api.subscribe_serial_proxy_usb_info.mock_calls]
+
+
+async def test_usb_device_removed_breaks_transport() -> None:
+    """Pulling the USB device ends the session like a vanished device node."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(AsyncMock(return_value=_usb_info()), "serial_proxy_get_usb_info")
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&usb_serial=AABBCCDDEEFF"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(url=url, baudrate=115200) as serial:
+            handlers = _usb_info_handlers(api)
+            assert len(handlers) == 2  # the serial and the transport
+
+            # Another port's device is not our business
+            for handler in handlers:
+                handler(_usb_info(instance=1, connected=False, serial_number=""))
+            assert not serial.transport.is_closing()
+
+            for handler in handlers:
+                handler(_usb_info(connected=False, serial_number=""))
+
+            with pytest.raises(OSError) as excinfo:
+                await serial.read(1)
+            assert excinfo.value.errno == errno.ENXIO
+
+            with pytest.raises(OSError):
+                serial.write_nowait(b"x")
+
+            assert serial.transport.is_closing()
+
+    # Torn down like a close: the port released, the handlers dropped, and the
+    # connection this transport opened for itself closed
+    await asyncio.sleep(0)
+    assert len(api.subscribe_serial_proxy_usb_info.return_value.mock_calls) == 2
+    assert len(api.serial_proxy_unsubscribe.mock_calls) == 1
+    assert len(api.disconnect.mock_calls) == 1
+
+
+async def test_usb_device_removed_leaves_external_api_alone() -> None:
+    """With a shared client, losing the device releases the port but not the client."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(AsyncMock(return_value=_usb_info()), "serial_proxy_get_usb_info")
+
+    async with async_serial_for_url(
+        url=None,
+        transport_cls=ESPHomeSerialTransport,
+        api=api,
+        port_name="Zigbee",
+        usb_serial_number="AABBCCDDEEFF",
+        baudrate=115200,
+    ) as serial:
+        for handler in _usb_info_handlers(api):
+            handler(_usb_info(connected=False, serial_number=""))
+
+        with pytest.raises(OSError):
+            await serial.read(1)
+        assert serial.transport.is_closing()
+
+    await asyncio.sleep(0)
+    assert len(api.subscribe_serial_proxy_usb_info.return_value.mock_calls) == 2
+    assert len(api.serial_proxy_unsubscribe.mock_calls) == 1
+    assert len(api.disconnect.mock_calls) == 0
+
+
+async def test_usb_device_swapped_breaks_transport() -> None:
+    """A different device appearing in the socket is not the one this session claimed."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(AsyncMock(return_value=_usb_info()), "serial_proxy_get_usb_info")
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&usb_serial=AABBCCDDEEFF"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(url=url, baudrate=115200) as serial:
+            for handler in _usb_info_handlers(api):
+                handler(_usb_info(serial_number="112233445566"))
+
+            with pytest.raises(OSError) as excinfo:
+                await serial.read(1)
+            assert excinfo.value.errno == errno.ENXIO
+            assert "112233445566" in str(excinfo.value)
+
+
+async def test_usb_device_reattached_is_not_a_change() -> None:
+    """The expected device reporting itself again leaves the session alone."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(AsyncMock(return_value=_usb_info()), "serial_proxy_get_usb_info")
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee&usb_serial=AABBCCDDEEFF"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(url=url, baudrate=115200) as serial:
+            for handler in _usb_info_handlers(api):
+                handler(_usb_info())
+            assert not serial.transport.is_closing()
+
+
+async def test_usb_device_removed_without_expected_serial() -> None:
+    """Removal breaks the session even when no particular device was required."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(AsyncMock(), "serial_proxy_get_usb_info")
+    url = "esphome://127.0.0.1:6053/?port_name=Zigbee"
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(url=url, baudrate=115200) as serial:
+            for handler in _usb_info_handlers(api):
+                handler(_usb_info(connected=False, serial_number=""))
+
+            with pytest.raises(OSError):
+                await serial.read(1)
+            assert serial.transport.is_closing()
+
+
+async def test_no_usb_serial_number_skips_the_check() -> None:
+    """Without the setting nothing asks the device for its USB identity."""
+    api = mock_api_client("Zigbee")
+    api.attach_mock(AsyncMock(), "serial_proxy_get_usb_info")
+
+    with patch("serialx.platforms.serial_esphome.APIClient", return_value=api):
+        async with async_serial_for_url(
+            url="esphome://127.0.0.1:6053/?port_name=Zigbee", baudrate=115200
+        ):
+            pass
+
+    assert len(api.serial_proxy_get_usb_info.mock_calls) == 0
